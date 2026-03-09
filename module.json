@@ -1,7 +1,7 @@
 {
   "id": "coffee-pub-curator",
   "title": "Coffee Pub Curator",
-  "description": "Token and portrait image replacement, dead tokens, and loot pile image. Requires Coffee Pub Blacksmith.",
+  "description": "Token and portrait image replacement fro dropped tokens, dead tokens, and loot piles.",
   "version": "13.0.0",
 
   "manifest": "https://github.com/Drowbe/coffee-pub-curator/releases/latest/download/module.json",
