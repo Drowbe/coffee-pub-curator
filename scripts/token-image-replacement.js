@@ -3701,6 +3701,22 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     /**
+     * Switch between token and portrait mode when the window is already open.
+     * @param {string} mode - 'token' or 'portrait'
+     */
+    async _switchMode(mode) {
+        this.mode = mode;
+        await game.settings.set(MODULE.ID, 'tokenImageReplacementLastMode', mode);
+        this.selectedToken = null;
+        this.matches = [];
+        this.allMatches = [];
+        this._cachedSearchTerms = null;
+        this.scanStatusText = this.mode === ImageCacheManager.MODES.PORTRAIT ? "Scanning Portrait Images..." : "Scanning Token Images...";
+        await this._checkForSelectedToken();
+        this.render(true);
+    }
+
+    /**
      * Open the Token Image Replacement window
      * @param {Object} opts - Options
      * @param {string} [opts.mode] - The mode to open the window in ('token' or 'portrait')
@@ -3715,9 +3731,22 @@ export class TokenImageReplacementWindow extends Application {
         const existingWindow = Object.values(ui.windows).find(w => w instanceof TokenImageReplacementWindow);
         if (existingWindow) {
             if (opts.mode && existingWindow.mode !== opts.mode) {
-                await existingWindow._switchMode(opts.mode);
+                if (typeof existingWindow._switchMode === 'function') {
+                    await existingWindow._switchMode(opts.mode);
+                } else {
+                    // Fallback: set mode and re-render (e.g. if window is from a different context)
+                    existingWindow.mode = opts.mode;
+                    await game.settings.set(MODULE.ID, 'tokenImageReplacementLastMode', opts.mode);
+                    existingWindow.selectedToken = null;
+                    existingWindow.matches = [];
+                    existingWindow.allMatches = [];
+                    existingWindow._cachedSearchTerms = null;
+                    await existingWindow._checkForSelectedToken();
+                    existingWindow.render(true);
+                }
+            } else {
+                existingWindow.render(true);
             }
-            existingWindow.render(true);
             return;
         }
         
