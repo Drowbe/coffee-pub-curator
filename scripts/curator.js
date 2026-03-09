@@ -49,16 +49,37 @@ function initializeCurator(blacksmith) {
     ImageCacheManager.initialize();
     TokenImageUtilities.initialize();
 
-    blacksmith.registerMenubarTool('imagereplace', {
+    blacksmith.registerMenubarTool('replacetoken', {
         icon: 'fa-solid fa-images',
-        name: 'imagereplace',
-        title: 'Replace Image',
+        name: 'replacetoken',
+        title: 'Replace Token',
         tooltip: null,
-        onClick: () => TokenImageReplacementWindow.openWindow(),
+        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'token' }),
         zone: 'middle',
         group: 'utility',
         groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
         order: 2,
+        moduleId: MODULE.ID,
+        gmOnly: true,
+        leaderOnly: false,
+        visible: true,
+        toggleable: false,
+        active: false,
+        iconColor: null,
+        buttonNormalTint: null,
+        buttonSelectedTint: null
+    });
+
+    blacksmith.registerMenubarTool('replaceportrait', {
+        icon: 'fa-solid fa-portrait',
+        name: 'replaceportrait',
+        title: 'Replace Portrait',
+        tooltip: null,
+        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'portrait' }),
+        zone: 'middle',
+        group: 'utility',
+        groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
+        order: 3,
         moduleId: MODULE.ID,
         gmOnly: true,
         leaderOnly: false,

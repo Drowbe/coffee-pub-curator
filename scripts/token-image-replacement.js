@@ -3702,8 +3702,10 @@ export class TokenImageReplacementWindow extends Application {
 
     /**
      * Open the Token Image Replacement window
+     * @param {Object} opts - Options
+     * @param {string} [opts.mode] - The mode to open the window in ('token' or 'portrait')
      */
-    static async openWindow() {
+    static async openWindow(opts = {}) {
         if (!game.user.isGM) {
             ui.notifications.warn("Only GMs can use the Token Image Replacement window");
             return;
@@ -3712,12 +3714,20 @@ export class TokenImageReplacementWindow extends Application {
         // Check if there's already an open window
         const existingWindow = Object.values(ui.windows).find(w => w instanceof TokenImageReplacementWindow);
         if (existingWindow) {
+            if (opts.mode && existingWindow.mode !== opts.mode) {
+                await existingWindow._switchMode(opts.mode);
+            }
             existingWindow.render(true);
             return;
         }
         
         // Create new window
         const window = new TokenImageReplacementWindow();
+        
+        if (opts.mode) {
+            window.mode = opts.mode;
+            await game.settings.set(MODULE.ID, 'tokenImageReplacementLastMode', opts.mode);
+        }
         
         // Check for selected token before rendering
         await window._checkForSelectedToken();
