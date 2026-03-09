@@ -8,7 +8,6 @@ import { ImageCacheManager } from './manager-image-cache.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { registerSettings } from './settings.js';
-import { getSettingSafely } from './api-helpers.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
 Hooks.once('ready', async function () {
@@ -91,16 +90,50 @@ function initializeCurator(blacksmith) {
         buttonSelectedTint: null
     });
 
+    // Right-click context menus for Replace Token / Replace Portrait menubar tools (Blacksmith API)
+    const ContextMenu = blacksmith?.uiContextMenu;
+    if (ContextMenu && typeof ContextMenu.show === 'function') {
+        document.addEventListener('contextmenu', (event) => {
+            const tokenBtn = event.target?.closest?.('[title="Replace Token"]');
+            const portraitBtn = event.target?.closest?.('[title="Replace Portrait"]');
+            const mode = tokenBtn ? 'token' : (portraitBtn ? 'portrait' : null);
+            if (!mode) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const label = mode === 'token' ? 'Token' : 'Portrait';
+            ContextMenu.show({
+                id: `${MODULE.ID}-menubar-context-${mode}`,
+                x: event.clientX,
+                y: event.clientY,
+                zones: [
+                    {
+                        name: `Open Replace ${label} Images`,
+                        icon: mode === 'token' ? 'fa-solid fa-images' : 'fa-solid fa-portrait',
+                        callback: () => TokenImageReplacementWindow.openWindow({ mode })
+                    },
+                    {
+                        name: `Replace Canvas ${label} Images`,
+                        icon: 'fa-solid fa-sync',
+                        callback: () => TokenImageReplacementWindow.runUpdateCanvas(mode, label)
+                    }
+                ],
+                zoneClass: 'core'
+            });
+        }, true);
+    }
+
     if (typeof blacksmith.registerToolbarTool === 'function') {
         blacksmith.registerToolbarTool('token-replacement', {
             icon: 'fa-solid fa-images',
             name: 'token-replacement',
             title: 'Token Image Replacement',
             button: true,
-            visible: () => getSettingSafely(MODULE.ID, 'tokenImageReplacementShowInCoffeePubToolbar', true),
+            visible: () => BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementShowInCoffeePubToolbar', true),
             gmOnly: true,
             onCoffeePub: true,
-            onFoundry: () => getSettingSafely(MODULE.ID, 'tokenImageReplacementShowInFoundryToolbar', false),
+            onFoundry: () => BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementShowInFoundryToolbar', false),
             onClick: () => TokenImageReplacementWindow.openWindow(),
             moduleId: MODULE.ID,
             zone: 'gmtools',

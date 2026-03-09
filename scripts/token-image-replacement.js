@@ -3,7 +3,7 @@
 // ================================================================== 
 
 import { MODULE } from './const.js';
-import { postConsoleAndNotification, getSettingSafely } from './api-helpers.js';
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { ImageMatching } from './manager-image-matching.js';
@@ -52,7 +52,7 @@ export class TokenImageReplacementWindow extends Application {
         this.selectedTags = new Set(); // Track which tags are currently selected as filters
         
         // Tag sort mode
-        this.tagSortMode = getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'); // Current tag sort mode
+        this.tagSortMode = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'); // Current tag sort mode
         
         // Search result caching (Phase 1.1 Optimization)
         this._searchResultCache = new Map(); // Cache: searchKey â†’ {results, timestamp}
@@ -231,7 +231,7 @@ export class TokenImageReplacementWindow extends Application {
             try {
                 disposer();
             } catch (error) {
-                postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error clearing DOM event: ${error.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error clearing DOM event: ${error.message}`, "", false, false);
             }
         }
     }
@@ -365,7 +365,7 @@ export class TokenImageReplacementWindow extends Application {
     _getFilteredFiles() {
         // Safety check for cache
         if (!ImageCacheManager.getCache(this.mode) || !ImageCacheManager.getCache(this.mode).files) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache not available in _getFilteredFiles`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache not available in _getFilteredFiles`, "", true, false);
             return [];
         }
         
@@ -592,7 +592,7 @@ export class TokenImageReplacementWindow extends Application {
             isSearching: this.isSearching,
             currentFilter: this.currentFilter,
             sortOrder: this.sortOrder,
-            categoryStyle: getSettingSafely(MODULE.ID, 'tokenImageReplacementCategoryStyle', 'buttons'),
+            categoryStyle: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementCategoryStyle', 'buttons'),
             categories: this._getCategories(),
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
@@ -609,16 +609,16 @@ export class TokenImageReplacementWindow extends Application {
             currentPath: ImageCacheManager.getCache(this.mode).currentPath,
             currentFileName: ImageCacheManager.getCache(this.mode).currentFileName,
             cacheStatus: this._getCacheStatus(),
-            updateDropped: getSettingSafely(MODULE.ID, this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementUpdateDropped' : 'tokenImageReplacementUpdateDropped', true),
-            fuzzySearch: getSettingSafely(MODULE.ID, this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementFuzzySearch' : 'tokenImageReplacementFuzzySearch', false),
-            tagSortMode: getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'),
-            convertDeadToLoot: getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false),
-            deadTokenReplacement: getSettingSafely(MODULE.ID, 'enableDeadTokenReplacement', false),
+            updateDropped: BlacksmithUtils.getSettingSafely(MODULE.ID, this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementUpdateDropped' : 'tokenImageReplacementUpdateDropped', true),
+            fuzzySearch: BlacksmithUtils.getSettingSafely(MODULE.ID, this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementFuzzySearch' : 'tokenImageReplacementFuzzySearch', false),
+            tagSortMode: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'),
+            convertDeadToLoot: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false),
+            deadTokenReplacement: BlacksmithUtils.getSettingSafely(MODULE.ID, 'enableDeadTokenReplacement', false),
             itemPilesInstalled: game.modules.get("item-piles")?.active || false,
             mode: this.mode,
             isTokenMode: this.mode === ImageCacheManager.MODES.TOKEN,
             isPortraitMode: this.mode === ImageCacheManager.MODES.PORTRAIT,
-            portraitEnabled: getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false)
+            portraitEnabled: BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false)
         };
     }
 
@@ -788,7 +788,7 @@ export class TokenImageReplacementWindow extends Application {
 
         // Check cache status
         if (!ImageCacheManager.getCache(this.mode)) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache not initialized in _findMatches`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache not initialized in _findMatches`, "", true, false);
             this.notificationIcon = 'fas fa-exclamation-triangle';
             this.notificationText = 'Cache not initialized. Please wait for cache to load.';
             this._updateResults();
@@ -802,7 +802,7 @@ export class TokenImageReplacementWindow extends Application {
             this.notificationIcon = 'fas fa-sync-alt';
             this.notificationText = 'Images are being scanned to build the image cache and may impact performance.';
         } else if (ImageCacheManager.getCache(this.mode).files.size === 0) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache check - files.size: ${ImageCacheManager.getCache(this.mode).files.size}, cache exists: ${!!ImageCacheManager.getCache(this.mode)}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache check - files.size: ${ImageCacheManager.getCache(this.mode).files.size}, cache exists: ${!!ImageCacheManager.getCache(this.mode)}`, "", true, false);
             this.notificationIcon = 'fas fa-exclamation-triangle';
             this.notificationText = 'No Image Cache Found - Please scan for images.';
         } else {
@@ -913,7 +913,7 @@ export class TokenImageReplacementWindow extends Application {
         // Update results to show proper tags
         this._updateResults();
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error in _findMatches: ${error.message}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error in _findMatches: ${error.message}`, "", true, false);
             console.error(`${this._getModePrefix()} Error in _findMatches:`, error);
             // Show error state in UI
             this.notificationIcon = 'fas fa-exclamation-triangle';
@@ -1381,25 +1381,56 @@ export class TokenImageReplacementWindow extends Application {
             return;
         }
 
-        if (this._canvasUpdateInProgress) {
+        if (TokenImageReplacementWindow._staticCanvasUpdateInProgress) {
             ui.notifications.warn('Token Image Replacement: Canvas update already in progress.');
             return;
         }
 
         const button = event?.currentTarget;
-        const modeLabel = this._getModeLabel();
-        this._canvasUpdateInProgress = true;
         if (button) button.disabled = true;
 
         try {
-            ui.notifications.info(`${modeLabel} Image Replacement: Updating canvas...`);
+            await TokenImageReplacementWindow.runUpdateCanvas(this.mode, this._getModeLabel());
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    /**
+     * Run canvas update for a given mode (token or portrait). Callable without an open window.
+     * @param {string} mode - ImageCacheManager.MODES.TOKEN or ImageCacheManager.MODES.PORTRAIT
+     * @param {string} [modeLabel] - Optional label for messages ('Token' or 'Portrait')
+     */
+    static async runUpdateCanvas(mode, modeLabel = null) {
+        const label = modeLabel ?? (mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token');
+
+        if (!game.user.isGM) {
+            ui.notifications.warn('Token Image Replacement: Only GMs can update the canvas.');
+            return;
+        }
+
+        const canvasTokens = canvas?.tokens?.placeables ?? [];
+        if (canvasTokens.length === 0) {
+            ui.notifications.info('Token Image Replacement: No tokens on the canvas to update.');
+            return;
+        }
+
+        if (TokenImageReplacementWindow._staticCanvasUpdateInProgress) {
+            ui.notifications.warn('Token Image Replacement: Canvas update already in progress.');
+            return;
+        }
+
+        TokenImageReplacementWindow._staticCanvasUpdateInProgress = true;
+
+        try {
+            ui.notifications.info(`${label} Image Replacement: Updating canvas...`);
 
             let processed = 0;
-            if (this.mode === ImageCacheManager.MODES.TOKEN) {
-                const tokenEnabled = getSettingSafely(MODULE.ID, 'tokenImageReplacementEnabled', false);
-                const updateDroppedTokens = getSettingSafely(MODULE.ID, 'tokenImageReplacementUpdateDropped', true);
+            if (mode === ImageCacheManager.MODES.TOKEN) {
+                const tokenEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementEnabled', false);
+                const updateDroppedTokens = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementUpdateDropped', true);
                 if (!tokenEnabled || !updateDroppedTokens) {
-                    ui.notifications.info(`${modeLabel} Image Replacement: Token updates are disabled in settings.`);
+                    ui.notifications.info(`${label} Image Replacement: Token updates are disabled in settings.`);
                     return;
                 }
 
@@ -1409,10 +1440,10 @@ export class TokenImageReplacementWindow extends Application {
                     processed++;
                 }
             } else {
-                const portraitEnabled = getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false);
-                const updateDroppedPortraits = getSettingSafely(MODULE.ID, 'portraitImageReplacementUpdateDropped', true);
+                const portraitEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false);
+                const updateDroppedPortraits = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementUpdateDropped', true);
                 if (!portraitEnabled || !updateDroppedPortraits) {
-                    ui.notifications.info(`${modeLabel} Image Replacement: Portrait updates are disabled in settings.`);
+                    ui.notifications.info(`${label} Image Replacement: Portrait updates are disabled in settings.`);
                     return;
                 }
 
@@ -1428,15 +1459,14 @@ export class TokenImageReplacementWindow extends Application {
             }
 
             if (processed === 0) {
-                ui.notifications.info(`${modeLabel} Image Replacement: No ${modeLabel.toLowerCase()}s on the canvas needed updating.`);
+                ui.notifications.info(`${label} Image Replacement: No ${label.toLowerCase()}s on the canvas needed updating.`);
             } else {
-                ui.notifications.info(`${modeLabel} Image Replacement: Updated ${processed} ${modeLabel.toLowerCase()}${processed === 1 ? '' : 's'} on the canvas.`);
+                ui.notifications.info(`${label} Image Replacement: Updated ${processed} ${label.toLowerCase()}${processed === 1 ? '' : 's'} on the canvas.`);
             }
         } catch (error) {
-            ui.notifications.error(`${modeLabel} Image Replacement: Canvas update failed: ${error.message}`);
+            ui.notifications.error(`${label} Image Replacement: Canvas update failed: ${error.message}`);
         } finally {
-            this._canvasUpdateInProgress = false;
-            if (button) button.disabled = false;
+            TokenImageReplacementWindow._staticCanvasUpdateInProgress = false;
         }
     }
 
@@ -1579,7 +1609,7 @@ export class TokenImageReplacementWindow extends Application {
             this._hookRegistrationTimeoutId = this._scheduleTrackedTimeout(async () => {
                 this._hookRegistrationTimeoutId = null;
                 if (!this._tokenHookRegistered) {
-                    postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Registering controlToken hook`, 'token-image-replacement-selection', true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Registering controlToken hook`, 'token-image-replacement-selection', true, false);
                     this._tokenHookId = HookManager.registerHook({
                         name: 'controlToken',
                         description: `${this._getModePrefix()} Handle token selection changes`,
@@ -1617,7 +1647,7 @@ export class TokenImageReplacementWindow extends Application {
         // Tear down DOM, listeners, and cached references
         this._teardownWindowResources();
         
-        postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Window closed, memory cleaned up`, '', true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Window closed, memory cleaned up`, '', true, false);
         
         return super.close(options);
     }
@@ -1660,7 +1690,7 @@ export class TokenImageReplacementWindow extends Application {
                 
                 // Prevent processing the same actor multiple times
                 if (newActorId === this._lastProcessedTokenId) {
-                    postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Skipping duplicate actor selection for ${newActorId}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Skipping duplicate actor selection for ${newActorId}`, "", true, false);
                     return;
                 }
                 
@@ -1701,7 +1731,7 @@ export class TokenImageReplacementWindow extends Application {
                 
                 // Prevent processing the same token multiple times
                 if (newTokenId === this._lastProcessedTokenId) {
-                    postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Skipping duplicate token selection for ${newTokenId}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Skipping duplicate token selection for ${newTokenId}`, "", true, false);
                     return;
                 }
                 
@@ -1737,7 +1767,7 @@ export class TokenImageReplacementWindow extends Application {
             this._hideSearchSpinner();
             
             // Log the error for debugging
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error during token selection: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error during token selection: ${error.message}`, "", false, false);
         }
     }
 
@@ -1876,7 +1906,7 @@ export class TokenImageReplacementWindow extends Application {
             
             // Ensure cache is initialized
             if (!cache || cache.files.size === 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache not initialized, initializing...`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache not initialized, initializing...`, "", true, false);
                 await ImageCacheManager._initializeCache(this.mode);
             }
             
@@ -1947,7 +1977,7 @@ export class TokenImageReplacementWindow extends Application {
             }
         } catch (error) {
             const modeLabel = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error during selection check: ${error.message}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error during selection check: ${error.message}`, "", true, false);
             console.error(`${modeLabel} Image Replacement: Error during selection check:`, error);
         }
     }
@@ -2039,12 +2069,12 @@ export class TokenImageReplacementWindow extends Application {
      */
     _invalidateSearchCache() {
         this._searchResultCache.clear();
-        postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Search cache cleared`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Search cache cleared`, "", true, false);
     }
 
     async _performSearch(searchTerm) {
         if (ImageCacheManager.getCache(this.mode).files.size === 0) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache empty, cannot perform search`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Cache empty, cannot perform search`, "", true, false);
             this.matches = [];
             this.allMatches = [];
             this.currentPage = 0;
@@ -2059,7 +2089,7 @@ export class TokenImageReplacementWindow extends Application {
         const cachedResults = this._getCachedSearchResults(cacheKey);
         if (cachedResults) {
             console.time(`${this._getModePrefix()} Search (cached)`);
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Using cached results for search`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Using cached results for search`, "", true, false);
             
             this.allMatches = cachedResults;
             this.currentPage = 0;
@@ -2120,14 +2150,14 @@ export class TokenImageReplacementWindow extends Application {
         
         // In exact search mode (fuzzy search OFF), filter out 0% matches
         const fuzzySearchSettingKey = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementFuzzySearch' : 'tokenImageReplacementFuzzySearch';
-        const fuzzySearch = getSettingSafely(MODULE.ID, fuzzySearchSettingKey, false);
+        const fuzzySearch = BlacksmithUtils.getSettingSafely(MODULE.ID, fuzzySearchSettingKey, false);
         if (!fuzzySearch) {
             // Exact search mode: only show files that actually match the search term
             const exactMatches = filteredResults.filter(result => 
                 result.searchScore !== null && result.searchScore > 0
             );
             this.allMatches.push(...exactMatches);
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Exact search found ${exactMatches.length} matches out of ${filteredResults.length} files`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Exact search found ${exactMatches.length} matches out of ${filteredResults.length} files`, "", true, false);
         } else {
             // Fuzzy search mode: show all results (including 0% matches)
         this.allMatches.push(...filteredResults);
@@ -2318,7 +2348,7 @@ export class TokenImageReplacementWindow extends Application {
         if (this.matches.length === 0) {
             // Check if we're in search mode with no results
             const fuzzySearchSettingKey = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementFuzzySearch' : 'tokenImageReplacementFuzzySearch';
-        const fuzzySearch = getSettingSafely(MODULE.ID, fuzzySearchSettingKey, false);
+        const fuzzySearch = BlacksmithUtils.getSettingSafely(MODULE.ID, fuzzySearchSettingKey, false);
             
             let message = "No alternative images found for this token";
             let tag = "NO MATCHES";
@@ -2742,7 +2772,7 @@ export class TokenImageReplacementWindow extends Application {
         await game.settings.set(MODULE.ID, updateDroppedSettingKey, isEnabled);
         
         const modeLabel = this._getModeLabel().toLowerCase();
-        postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Update Dropped ${modeLabel === 'portrait' ? 'Portraits' : 'Tokens'} ${isEnabled ? 'enabled' : 'disabled'}`, 
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Update Dropped ${modeLabel === 'portrait' ? 'Portraits' : 'Tokens'} ${isEnabled ? 'enabled' : 'disabled'}`, 
             isEnabled ? `${modeLabel === 'portrait' ? 'Portraits' : 'Tokens'} will be automatically updated when ${modeLabel === 'portrait' ? 'actors are created' : 'tokens are dropped'}` : 'Only manual updates via this window will work', 
             false, false);
     }
@@ -2755,7 +2785,7 @@ export class TokenImageReplacementWindow extends Application {
         const fuzzySearchSettingKey = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementFuzzySearch' : 'tokenImageReplacementFuzzySearch';
         await game.settings.set(MODULE.ID, fuzzySearchSettingKey, isEnabled);
         
-        postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Fuzzy Search ${isEnabled ? 'enabled' : 'disabled'}`, 
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Fuzzy Search ${isEnabled ? 'enabled' : 'disabled'}`, 
             isEnabled ? 'Searching for individual words independently' : 'Searching for exact string matches', 
             false, false);
         
@@ -2780,7 +2810,7 @@ export class TokenImageReplacementWindow extends Application {
         // Update scan status text
         this.scanStatusText = newMode === ImageCacheManager.MODES.PORTRAIT ? "Scanning Portrait Images..." : "Scanning Token Images...";
         
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Switched to ${modeLabel} mode`, 
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Switched to ${modeLabel} mode`, 
             `Now searching for ${modeLabel.toLowerCase()} images`, 
             false, false);
         
@@ -2863,7 +2893,7 @@ export class TokenImageReplacementWindow extends Application {
         const isEnabled = event.target.checked;
         await game.settings.set(MODULE.ID, 'tokenConvertDeadToLoot', isEnabled);
         
-        postConsoleAndNotification(MODULE.NAME, `Convert Dead To Loot ${isEnabled ? 'enabled' : 'disabled'}`, 
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Convert Dead To Loot ${isEnabled ? 'enabled' : 'disabled'}`, 
             isEnabled ? 'Dead tokens will be converted to loot piles' : 'Dead tokens will not be converted to loot piles', 
             false, true);
     }
@@ -2875,7 +2905,7 @@ export class TokenImageReplacementWindow extends Application {
         const isEnabled = event.target.checked;
         await game.settings.set(MODULE.ID, 'enableDeadTokenReplacement', isEnabled);
         
-        postConsoleAndNotification(MODULE.NAME, `Dead Token Replacement ${isEnabled ? 'enabled' : 'disabled'}`, 
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Dead Token Replacement ${isEnabled ? 'enabled' : 'disabled'}`, 
             isEnabled ? 'Tokens will change to dead versions at 0 HP' : 'Tokens will not change when dead', 
             false, true);
     }
@@ -3184,10 +3214,10 @@ export class TokenImageReplacementWindow extends Application {
 
     async _onCategoryFilterClick(event) {
         const category = event.currentTarget.dataset.category;
-        postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Category filter clicked: ${category}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Category filter clicked: ${category}`, "", true, false);
         
         if (!category || category === this.currentFilter) {
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Filter click ignored - category: ${category}, current: ${this.currentFilter}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Filter click ignored - category: ${category}, current: ${this.currentFilter}`, "", true, false);
             return;
         }
         
@@ -3215,7 +3245,7 @@ export class TokenImageReplacementWindow extends Application {
             this._cachedSearchTerms = null; // Clear cache when filter changes
             this._invalidateSearchCache(); // Invalidate search cache when filter changes
             
-            postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Filter changed to: ${category}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Filter changed to: ${category}`, "", true, false);
             
             // Re-run search with new filter
             await this._findMatches();
@@ -3786,11 +3816,11 @@ export class TokenImageReplacementWindow extends Application {
      * Hook for when tokens are created
      */
     static async _onTokenCreated(tokenDocument, options, userId) {
-        postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Hook fired for token: ${tokenDocument.name}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Hook fired for token: ${tokenDocument.name}`, "", true, false);
         
         // Only GMs can update tokens - skip for non-GM users
         if (!game.user.isGM) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - user is not GM", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - user is not GM", "", true, false);
             return;
         }
         
@@ -3800,24 +3830,24 @@ export class TokenImageReplacementWindow extends Application {
         // Get the actor from the token
         const actor = tokenDocument.actor;
         if (!actor) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - token has no actor", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - token has no actor", "", true, false);
             return;
         }
         
         // Check if token image replacement is enabled
-        if (!getSettingSafely(MODULE.ID, 'tokenImageReplacementEnabled', false)) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - feature disabled", "", true, false);
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementEnabled', false)) {
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - feature disabled", "", true, false);
             return;
         }
         
         // Check if Update Dropped Tokens is enabled
-        const updateDroppedTokens = getSettingSafely(MODULE.ID, 'tokenImageReplacementUpdateDropped', true);
+        const updateDroppedTokens = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementUpdateDropped', true);
         
         // Check if Update Dropped Portraits is enabled
-        const updateDroppedPortraits = getSettingSafely(MODULE.ID, 'portraitImageReplacementUpdateDropped', true);
+        const updateDroppedPortraits = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementUpdateDropped', true);
         
         // Check if portrait image replacement is enabled
-        const portraitEnabled = getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false);
+        const portraitEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false);
         
         // Process token image replacement if enabled
         if (updateDroppedTokens) {
@@ -3844,16 +3874,16 @@ export class TokenImageReplacementWindow extends Application {
         const settingPrefix = isPortrait ? 'portraitImageReplacement' : 'tokenImageReplacement';
         
         // Check if token is linked and we should skip linked tokens
-        const skipLinked = getSettingSafely(MODULE.ID, `${settingPrefix}SkipLinked`, true);
+        const skipLinked = BlacksmithUtils.getSettingSafely(MODULE.ID, `${settingPrefix}SkipLinked`, true);
         if (skipLinked) {
             // Check if token is linked to an actor (linked tokens share data with the actor)
             if (tokenDocument && tokenDocument.actorLink === true) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - token is linked to actor`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - token is linked to actor`, "", true, false);
                 return false;
             }
             // Also skip player characters (actors with player owners)
             if (actor.hasPlayerOwner) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - actor has player owner`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - actor has player owner`, "", true, false);
                 return false;
             }
         }
@@ -3883,27 +3913,27 @@ export class TokenImageReplacementWindow extends Application {
         
         // Check the appropriate setting for each type
         if (isMonster) {
-            const updateMonsters = getSettingSafely(MODULE.ID, `${settingPrefix}UpdateMonsters`, true);
+            const updateMonsters = BlacksmithUtils.getSettingSafely(MODULE.ID, `${settingPrefix}UpdateMonsters`, true);
             if (!updateMonsters) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Monsters disabled`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Monsters disabled`, "", true, false);
                 return false;
             }
         } else if (isNPC) {
-            const updateNPCs = getSettingSafely(MODULE.ID, `${settingPrefix}UpdateNPCs`, true);
+            const updateNPCs = BlacksmithUtils.getSettingSafely(MODULE.ID, `${settingPrefix}UpdateNPCs`, true);
             if (!updateNPCs) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update NPCs disabled`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update NPCs disabled`, "", true, false);
                 return false;
             }
         } else if (isVehicle) {
-            const updateVehicles = getSettingSafely(MODULE.ID, `${settingPrefix}UpdateVehicles`, true);
+            const updateVehicles = BlacksmithUtils.getSettingSafely(MODULE.ID, `${settingPrefix}UpdateVehicles`, true);
             if (!updateVehicles) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Vehicles disabled`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Vehicles disabled`, "", true, false);
                 return false;
             }
         } else if (isCharacter) {
-            const updateActors = getSettingSafely(MODULE.ID, `${settingPrefix}UpdateActors`, false);
+            const updateActors = BlacksmithUtils.getSettingSafely(MODULE.ID, `${settingPrefix}UpdateActors`, false);
             if (!updateActors) {
-                postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Actors disabled`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${isPortrait ? 'Portrait' : 'Token'} Image Replacement: Skipping - Update Actors disabled`, "", true, false);
                 return false;
             }
         }
@@ -3918,7 +3948,7 @@ export class TokenImageReplacementWindow extends Application {
         // Check if this actor should be updated based on type and settings
         const actor = tokenDocument.actor;
         if (!actor) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - token has no actor", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - token has no actor", "", true, false);
             return;
         }
         
@@ -3929,7 +3959,7 @@ export class TokenImageReplacementWindow extends Application {
         // Check if cache is ready
         const tokenMode = ImageCacheManager.MODES.TOKEN;
         if (ImageCacheManager.getCache(tokenMode).files.size === 0) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - cache not ready", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - cache not ready", "", true, false);
             return;
         }
         
@@ -3949,7 +3979,7 @@ export class TokenImageReplacementWindow extends Application {
         if (matchingImage) {
             // Validate and apply token image
             if (ImageCacheManager._isInvalidFilePath(matchingImage.fullPath)) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cannot apply invalid image path to ${tokenDocument.name}: ${matchingImage.fullPath}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cannot apply invalid image path to ${tokenDocument.name}: ${matchingImage.fullPath}`, "", true, false);
                 ImageCacheManager.getCache(tokenMode).files.delete(matchingImage.name.toLowerCase());
                 return;
             }
@@ -3959,12 +3989,12 @@ export class TokenImageReplacementWindow extends Application {
                     'texture.src': matchingImage.fullPath
                 });
                 const score = matchingImage.searchScore || matchingImage.score || 0;
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Applied ${matchingImage.name} to ${tokenDocument.name} (Score: ${(score * 100).toFixed(1)}%)`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Applied ${matchingImage.name} to ${tokenDocument.name} (Score: ${(score * 100).toFixed(1)}%)`, "", true, false);
             } catch (error) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error applying image: ${error.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error applying image: ${error.message}`, "", false, false);
             }
         } else {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: No matching image found for ${tokenDocument.name}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: No matching image found for ${tokenDocument.name}`, "", true, false);
         }
     }
     
@@ -3983,7 +4013,7 @@ export class TokenImageReplacementWindow extends Application {
         const variabilitySetting = mode === ImageCacheManager.MODES.PORTRAIT 
             ? 'portraitImageReplacementVariability' 
             : 'tokenImageReplacementVariability';
-        const variabilityEnabled = getSettingSafely(MODULE.ID, variabilitySetting, true);
+        const variabilityEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, variabilitySetting, true);
         
         if (!variabilityEnabled) {
             // Variability disabled: always return the best match (first one)
@@ -4008,7 +4038,7 @@ export class TokenImageReplacementWindow extends Application {
     static async _processPortraitImageReplacement(actor, tokenDocument = null) {
         // Check if this actor should be updated based on type and settings
         if (!actor) {
-            postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - no actor provided", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - no actor provided", "", true, false);
             return;
         }
         
@@ -4019,7 +4049,7 @@ export class TokenImageReplacementWindow extends Application {
         // Check if cache is ready
         const portraitMode = ImageCacheManager.MODES.PORTRAIT;
         if (ImageCacheManager.getCache(portraitMode).files.size === 0) {
-            postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - cache not ready", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - cache not ready", "", true, false);
             return;
         }
         
@@ -4054,7 +4084,7 @@ export class TokenImageReplacementWindow extends Application {
         if (matchingImage) {
             // Validate and apply portrait image
             if (ImageCacheManager._isInvalidFilePath(matchingImage.fullPath)) {
-                postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Cannot apply invalid image path to ${actor.name}: ${matchingImage.fullPath}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Cannot apply invalid image path to ${actor.name}: ${matchingImage.fullPath}`, "", true, false);
                 ImageCacheManager.getCache(portraitMode).files.delete(matchingImage.name.toLowerCase());
                 return;
             }
@@ -4064,12 +4094,12 @@ export class TokenImageReplacementWindow extends Application {
                     img: matchingImage.fullPath
                 });
                 const score = matchingImage.searchScore || matchingImage.score || 0;
-                postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Applied ${matchingImage.name} to ${actor.name} (Score: ${(score * 100).toFixed(1)}%)`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Applied ${matchingImage.name} to ${actor.name} (Score: ${(score * 100).toFixed(1)}%)`, "", true, false);
             } catch (error) {
-                postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Error applying image: ${error.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Error applying image: ${error.message}`, "", false, false);
             }
         } else {
-            postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: No matching image found for ${actor.name}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: No matching image found for ${actor.name}`, "", true, false);
         }
     }
 

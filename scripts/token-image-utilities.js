@@ -2,8 +2,8 @@
 // ===== TOKEN IMAGE UTILITIES ======================================
 // ================================================================== 
 
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
-import { postConsoleAndNotification, getSettingSafely, playSound } from './api-helpers.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { HookManager } from './manager-hooks.js';
 import { LootUtilities } from './loot-utilities.js';
@@ -73,28 +73,28 @@ export class TokenImageUtilities {
      */
     static _getTurnIndicatorSettings() {
         // Get color as hex string and convert to PIXI color integer
-        const colorHex = getSettingSafely(MODULE.ID, 'turnIndicatorCurrentBorderColor', '#00ff00');
+        const colorHex = BlacksmithUtils.getSettingSafely(MODULE.ID, 'turnIndicatorCurrentBorderColor', '#00ff00');
         const color = parseInt(colorHex.replace('#', '0x'));
         
         // Get inner fill color
-        const innerColorHex = getSettingSafely(MODULE.ID, 'turnIndicatorCurrentBackgroundColor', '#ff8100');
+        const innerColorHex = BlacksmithUtils.getSettingSafely(MODULE.ID, 'turnIndicatorCurrentBackgroundColor', '#ff8100');
         const innerColor = parseInt(innerColorHex.replace('#', '0x'));
         
         // Get user speed (1-10) and map to animation speed
-        const userSpeed = getSettingSafely(MODULE.ID, 'turnIndicatorCurrentAnimationSpeed', 5);
-        const animationType = getSettingSafely(MODULE.ID, 'turnIndicatorCurrentAnimation', 'pulse');
+        const userSpeed = BlacksmithUtils.getSettingSafely(MODULE.ID, 'turnIndicatorCurrentAnimationSpeed', 5);
+        const animationType = BlacksmithUtils.getSettingSafely(MODULE.ID, 'turnIndicatorCurrentAnimation', 'pulse');
         
         return {
-            style: getSettingSafely(MODULE.ID, 'turnIndicatorCurrentStyle', 'solid'),
+            style: BlacksmithUtils.getSettingSafely(MODULE.ID, 'turnIndicatorCurrentStyle', 'solid'),
             animation: animationType,
             color: color,
-            thickness: getSettingSafely(MODULE.ID, 'generalIndicatorsThickness', 3),
-            offset: getSettingSafely(MODULE.ID, 'generalIndicatorsOffset', 8),
+            thickness: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsThickness', 3),
+            offset: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOffset', 8),
             pulseSpeed: TokenImageUtilities._mapSpeedToAnimationSpeed(userSpeed, animationType),
-            pulseMin: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMin', 0.3),
-            pulseMax: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMax', 0.8),
+            pulseMin: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMin', 0.3),
+            pulseMax: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMax', 0.8),
             innerColor: innerColor,
-            innerOpacity: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityInner', 0.3)
+            innerOpacity: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityInner', 0.3)
         };
     }
     
@@ -103,28 +103,28 @@ export class TokenImageUtilities {
      */
     static _getTargetedIndicatorSettings() {
         // Get color as hex string and convert to PIXI color integer
-        const colorHex = getSettingSafely(MODULE.ID, 'targetedIndicatorBorderColor', '#a51214');
+        const colorHex = BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorBorderColor', '#a51214');
         const color = parseInt(colorHex.replace('#', '0x'));
         
         // Get inner fill color
-        const innerColorHex = getSettingSafely(MODULE.ID, 'targetedIndicatorBackgroundColor', '#a51214');
+        const innerColorHex = BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorBackgroundColor', '#a51214');
         const innerColor = parseInt(innerColorHex.replace('#', '0x'));
         
         // Get user speed (1-10) and map to animation speed
-        const userSpeed = getSettingSafely(MODULE.ID, 'targetedIndicatorAnimationSpeed', 5);
-        const animationType = getSettingSafely(MODULE.ID, 'targetedIndicatorAnimation', 'pulse');
+        const userSpeed = BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorAnimationSpeed', 5);
+        const animationType = BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorAnimation', 'pulse');
         
         return {
-            style: getSettingSafely(MODULE.ID, 'targetedIndicatorStyle', 'solid'),
+            style: BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorStyle', 'solid'),
             animation: animationType,
             color: color,
-            thickness: getSettingSafely(MODULE.ID, 'generalIndicatorsThickness', 3),
-            offset: getSettingSafely(MODULE.ID, 'generalIndicatorsOffset', 8),
+            thickness: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsThickness', 3),
+            offset: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOffset', 8),
             pulseSpeed: TokenImageUtilities._mapSpeedToAnimationSpeed(userSpeed, animationType),
-            pulseMin: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMin', 0.3),
-            pulseMax: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMax', 0.8),
+            pulseMin: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMin', 0.3),
+            pulseMax: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityMax', 0.8),
             innerColor: innerColor,
-            innerOpacity: getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityInner', 0.3)
+            innerOpacity: BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsOpacityInner', 0.3)
         };
     }
     
@@ -409,9 +409,9 @@ export class TokenImageUtilities {
                 await tokenDocument.update({ 'texture.src': previousImage.path });
                 // Clear dead token flag
                 await tokenDocument.unsetFlag(MODULE.ID, 'isDeadTokenApplied');
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Restored previous image for ${tokenDocument.name}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Restored previous image for ${tokenDocument.name}`, "", true, false);
             } catch (error) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error restoring previous image: ${error.message}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error restoring previous image: ${error.message}`, "", true, false);
             }
         }
     }
@@ -426,10 +426,10 @@ export class TokenImageUtilities {
         
         if (isPlayerCharacter) {
             // PC has failed 3 death saves - use PC-specific dead token from setting
-            deadTokenPath = getSettingSafely(MODULE.ID, 'deadTokenImagePathPC', 'modules/coffee-pub-blacksmith/images/tokens/death/pog-round-pc.webp');
+            deadTokenPath = BlacksmithUtils.getSettingSafely(MODULE.ID, 'deadTokenImagePathPC', 'modules/coffee-pub-blacksmith/images/tokens/death/pog-round-pc.webp');
         } else {
             // NPC/Monster - use existing setting
-            deadTokenPath = getSettingSafely(MODULE.ID, 'deadTokenImagePath', 'modules/coffee-pub-blacksmith/images/tokens/death/pog-round-npc.webp');
+            deadTokenPath = BlacksmithUtils.getSettingSafely(MODULE.ID, 'deadTokenImagePath', 'modules/coffee-pub-blacksmith/images/tokens/death/pog-round-npc.webp');
         }
         
         // Check if the file exists in our cache (only if cache is available)
@@ -459,15 +459,15 @@ export class TokenImageUtilities {
         if (mode === 'restore') {
             const currentImage = tokenDocument.getFlag(MODULE.ID, 'currentImage');
             if (currentImage) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - BEFORE update - current texture: ${tokenDocument.texture.src}`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - Attempting to restore to: ${currentImage}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - BEFORE update - current texture: ${tokenDocument.texture.src}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - Attempting to restore to: ${currentImage}`, "", true, false);
                 
                 try {
                     // Use the object form for the update to ensure it works with unlinked tokens
                     const updateData = { 'texture.src': currentImage };
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - BEFORE current image for ${tokenDocument.name} to: ${currentImage}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - BEFORE current image for ${tokenDocument.name} to: ${currentImage}`, "", true, false);
                     await tokenDocument.update(updateData, { render: true, diff: false });
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - AFTER update - new texture: ${tokenDocument.texture.src}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - AFTER update - new texture: ${tokenDocument.texture.src}`, "", true, false);
                     
                     // Clear all flags
                     await tokenDocument.unsetFlag(MODULE.ID, 'currentImage');
@@ -476,7 +476,7 @@ export class TokenImageUtilities {
                     await tokenDocument.unsetFlag(MODULE.ID, 'isDeadTokenApplied');
                     
                 } catch (error) {
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - ERROR restoring image: ${error.message}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: updateTokenImage - ERROR restoring image: ${error.message}`, "", false, false);
                 }
             }
             return;
@@ -488,10 +488,10 @@ export class TokenImageUtilities {
             const currentImage = tokenDocument.texture.src;
             await tokenDocument.setFlag(MODULE.ID, 'currentImage', currentImage);
             await tokenDocument.setFlag(MODULE.ID, 'currentImageStored', true);
-            postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Stored current image for ${tokenDocument.name}: ${currentImage}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Stored current image for ${tokenDocument.name}: ${currentImage}`, "", true, false);
         } else {
             const storedImage = tokenDocument.getFlag(MODULE.ID, 'currentImage');
-            postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Current image already stored for ${tokenDocument.name}: ${storedImage}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Current image already stored for ${tokenDocument.name}: ${storedImage}`, "", false, false);
         }
         
         // DEAD MODE
@@ -515,26 +515,26 @@ export class TokenImageUtilities {
                    
                     // Play death sound based on character type
                     const soundSetting = isPlayerCharacter ? 'deadTokenSoundPC' : 'deadTokenSoundNPC';
-                    const sound = getSettingSafely(MODULE.ID, soundSetting, 'none');
+                    const sound = BlacksmithUtils.getSettingSafely(MODULE.ID, soundSetting, 'none');
                     if (sound && sound !== 'none') {
-                        await playSound(sound, 0.7, false, true);
+                        await BlacksmithUtils.playSound(sound, 0.7, false, true);
                     }
                 } catch (error) {
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying dead token: ${error.message}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying dead token: ${error.message}`, "", false, false);
                 }
             }
         }
         
         // LOOT MODE
         if (mode === 'loot') {
-            const lootImagePath = getSettingSafely(MODULE.ID, 'tokenLootPileImage', 'modules/coffee-pub-blacksmith/images/tokens/death/splat-round-loot-sack.webp');
-            postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: LOOT MODE - updating ${tokenDocument.name} to: ${lootImagePath}`, "", true, false);
+            const lootImagePath = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootPileImage', 'modules/coffee-pub-blacksmith/images/tokens/death/splat-round-loot-sack.webp');
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: LOOT MODE - updating ${tokenDocument.name} to: ${lootImagePath}`, "", true, false);
             
             try {
                 await tokenDocument.update({ 'texture.src': lootImagePath });
                 await tokenDocument.setFlag(MODULE.ID, 'imageState', 'loot');
             } catch (error) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying loot token: ${error.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying loot token: ${error.message}`, "", false, false);
             }
         }
     }
@@ -551,12 +551,12 @@ export class TokenImageUtilities {
         // Check creature type filter (skip for player characters)
         if (!isPlayerCharacter) {
             const creatureType = actor?.system?.details?.type?.value?.toLowerCase() || '';
-            const allowedTypes = getSettingSafely(MODULE.ID, 'deadTokenCreatureTypeFilter', '');
+            const allowedTypes = BlacksmithUtils.getSettingSafely(MODULE.ID, 'deadTokenCreatureTypeFilter', '');
             
             if (allowedTypes && allowedTypes.trim() !== '') {
                 const types = allowedTypes.split(',').map(t => t.trim().toLowerCase());
                 if (!types.includes(creatureType)) {
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Skipping dead token for ${tokenDocument.name} - creature type ${creatureType} not in filter`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Skipping dead token for ${tokenDocument.name} - creature type ${creatureType} not in filter`, "", true, false);
                     return;
                 }
             }
@@ -573,13 +573,13 @@ export class TokenImageUtilities {
         try {
             // Check if user has permission to update tokens
             if (!game.user.isGM) {
-                postConsoleAndNotification(MODULE.NAME, "Only Game Masters can convert tokens to loot.", "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Only Game Masters can convert tokens to loot.", "", true, false);
                 return;
             }
             
             // Check if Item Piles module is installed and active
             if (!game.modules.get("item-piles")?.active) {
-                postConsoleAndNotification(MODULE.NAME, "Item Piles module not installed. Cannot convert token to loot.", "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Item Piles module not installed. Cannot convert token to loot.", "", true, false);
                 return;
             }
             
@@ -590,9 +590,9 @@ export class TokenImageUtilities {
                 await LootUtilities.addLootToActor(token.actor);
                 // Mark that loot has been added
                 await token.document.setFlag(MODULE.ID, 'blnLootAdded', true);
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Added loot to ${token.name}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Added loot to ${token.name}`, "", true, false);
             } else {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Loot already added to ${token.name}, skipping loot generation`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Loot already added to ${token.name}, skipping loot generation`, "", true, false);
             }
 
             // Epic loot roll is handled by addLootToActor when called above (first time); no second call here.
@@ -648,7 +648,7 @@ export class TokenImageUtilities {
                 });
             }
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Error converting token to loot: ${error.message}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error converting token to loot: ${error.message}`, "", true, false);
         }
     }
 
@@ -700,7 +700,7 @@ export class TokenImageUtilities {
 
                 // Token at 0 HP or below - check dead token settings
                 // DEAD TOKEN MODE CHECK
-                const deadTokenEnabled = getSettingSafely(MODULE.ID, 'enableDeadTokenReplacement', false);
+                const deadTokenEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'enableDeadTokenReplacement', false);
                 if (deadTokenEnabled) {
                     // For player characters, check death saves
                     let hasFailed3DeathSaves = false;
@@ -726,8 +726,8 @@ export class TokenImageUtilities {
                 
                 // LOOT MODE CHECK
                 // Check if loot conversion is enabled (NPCs only)
-                const lootEnabled = getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false);
-                const delay = getSettingSafely(MODULE.ID, 'tokenConvertDelay', 5) * 1000;
+                const lootEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false);
+                const delay = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDelay', 5) * 1000;
                 const tokenId = token.id; // Capture the specific token ID
 
                 // If NPC and loot conversion is enabled, schedule loot actions after delay
@@ -789,7 +789,7 @@ export class TokenImageUtilities {
                     try {
                         await game.itempiles.API.revertTokensFromItemPiles([token]);
                     } catch (error) {
-                        postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ERROR reverting from item pile: ${error.message}`, "", false, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ERROR reverting from item pile: ${error.message}`, "", false, false);
                     }
                 }
 
@@ -837,11 +837,11 @@ export class TokenImageUtilities {
                 const isActuallyStable = isStable || successes >= 3;
                 
                 // Debug logging
-                postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ${actor.name} - successes: ${successes}, failures: ${failures}, isStable: ${isStable}, isActuallyStable: ${isActuallyStable}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ${actor.name} - successes: ${successes}, failures: ${failures}, isStable: ${isStable}, isActuallyStable: ${isActuallyStable}`, "", true, false);
                 
                 if (failures >= 3) {
                     // Remove overlay - they're dead
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Removing overlay for ${actor.name} - dead`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Removing overlay for ${actor.name} - dead`, "", true, false);
                     this._removeDeathSaveOverlay(token.id);
                     // Update state
                     this._deathSaveStates.set(actor.id, { wasStable: false, wasAt0HP: true });
@@ -849,14 +849,14 @@ export class TokenImageUtilities {
                     // Check if they just became stable (wasn't stable before, is stable now)
                     if (isActuallyStable && !previousState.wasStable) {
                         // Play stable sound
-                        const stableSound = getSettingSafely(MODULE.ID, 'deadTokenSoundStable', 'none');
+                        const stableSound = BlacksmithUtils.getSettingSafely(MODULE.ID, 'deadTokenSoundStable', 'none');
                         if (stableSound && stableSound !== 'none') {
-                            playSound(stableSound, 0.7, false, true);
+                            BlacksmithUtils.playSound(stableSound, 0.7, false, true);
                         }
                     }
                     
                     // Show/update overlay (either dying or stable)
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Showing overlay for ${actor.name} - ${isActuallyStable ? 'stable' : 'dying'}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Showing overlay for ${actor.name} - ${isActuallyStable ? 'stable' : 'dying'}`, "", true, false);
                     this._createOrUpdateDeathSaveOverlay(token, successes, failures, isActuallyStable);
                     
                     // Update state
@@ -866,9 +866,9 @@ export class TokenImageUtilities {
                 // Check if they were just healed (was at 0 HP, now > 0)
                 if (previousState.wasAt0HP && currentHP > 0) {
                     // Play stable/heal sound
-                    const stableSound = getSettingSafely(MODULE.ID, 'deadTokenSoundStable', 'none');
+                    const stableSound = BlacksmithUtils.getSettingSafely(MODULE.ID, 'deadTokenSoundStable', 'none');
                     if (stableSound && stableSound !== 'none') {
-                        playSound(stableSound, 0.7, false, true);
+                        BlacksmithUtils.playSound(stableSound, 0.7, false, true);
                     }
                 }
                 
@@ -888,13 +888,13 @@ export class TokenImageUtilities {
         const existingGraphics = this._deathSaveOverlays.get(token.id);
         if (existingGraphics) {
             const isValid = !existingGraphics.destroyed && existingGraphics.parent;
-            postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: DEBUG - Existing overlay found for ${token.name}, destroyed: ${existingGraphics.destroyed}, hasParent: ${!!existingGraphics.parent}, isValid: ${isValid}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: DEBUG - Existing overlay found for ${token.name}, destroyed: ${existingGraphics.destroyed}, hasParent: ${!!existingGraphics.parent}, isValid: ${isValid}`, "", true, false);
             if (isValid) {
                 return;
             }
         }
         
-        postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: DEBUG - Creating overlay for ${token.name}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: DEBUG - Creating overlay for ${token.name}`, "", true, false);
         
         // Remove existing overlay if present (even if destroyed, to clean up the map)
         this._removeDeathSaveOverlay(token.id);
@@ -1208,8 +1208,8 @@ export class TokenImageUtilities {
      */
     static initializeTurnIndicator() {
         // Check if turn indicator is enabled
-        if (!getSettingSafely(MODULE.ID, 'generalIndicatorsEnabled', true)) {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Turn indicator disabled in settings", "", true, false);
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'generalIndicatorsEnabled', true)) {
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Turn indicator disabled in settings", "", true, false);
             return;
         }
         
@@ -1251,7 +1251,7 @@ export class TokenImageUtilities {
             callback: TokenImageUtilities._onTargetingChange
         });
         
-        postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Turn indicator hooks registered", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Turn indicator hooks registered", "", true, false);
         
         // Hide Foundry's default target indicators if enabled
         TokenImageUtilities._hideDefaultTargetIndicators();
@@ -1342,7 +1342,7 @@ export class TokenImageUtilities {
      * Hide Foundry's default target indicators using a more aggressive approach
      */
     static _hideDefaultTargetIndicators() {
-        if (!getSettingSafely(MODULE.ID, 'hideDefaultTargetIndicators', false)) {
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'hideDefaultTargetIndicators', false)) {
             return;
         }
         
@@ -1367,7 +1367,7 @@ export class TokenImageUtilities {
         // Apply to all existing tokens immediately
         TokenImageUtilities._hideAllTargetIndicators();
         
-        postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Target hiding hooks registered", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Target hiding hooks registered", "", true, false);
     }
     
     /**
@@ -1495,7 +1495,7 @@ export class TokenImageUtilities {
             TokenImageUtilities._refreshTokenHookId = null;
         }
         
-        postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: All hooks unregistered, Maps/Sets cleared, and cleaned up", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: All hooks unregistered, Maps/Sets cleared, and cleaned up", "", true, false);
     }
 
     /**
@@ -1529,7 +1529,7 @@ export class TokenImageUtilities {
         // Also clear our custom targeted indicators
         TokenImageUtilities._removeAllTargetedIndicators();
         
-        postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Cleared all targets after turn change", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Cleared all targets after turn change", "", true, false);
     }
 
     /**
@@ -1537,7 +1537,7 @@ export class TokenImageUtilities {
      */
     static _clearTargetsForUsersWithSetting() {
         // Check if the current user has the setting enabled
-        if (getSettingSafely(MODULE.ID, 'clearTargetsAfterTurn', false)) {
+        if (BlacksmithUtils.getSettingSafely(MODULE.ID, 'clearTargetsAfterTurn', false)) {
             TokenImageUtilities._clearAllTargets();
         }
     }
@@ -1648,7 +1648,7 @@ export class TokenImageUtilities {
         // Create animation based on selected style
         TokenImageUtilities._createTurnIndicatorCurrentAnimation(settings);
 
-        postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Turn indicator (${settings.style}, ${settings.animation}) added for ${token.name}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Turn indicator (${settings.style}, ${settings.animation}) added for ${token.name}`, "", true, false);
     }
     
     /**
@@ -1997,33 +1997,33 @@ export class TokenImageUtilities {
      * Handle targeting changes
      */
     static _onTargetingChange(user, token, targeted) {
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Targeting change - User: ${user.name}, Token: ${token.name}, Targeted: ${targeted}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Targeting change - User: ${user.name}, Token: ${token.name}, Targeted: ${targeted}`, "", true, false);
         
-        if (!getSettingSafely(MODULE.ID, 'targetedIndicatorEnabled', true)) {
-            postConsoleAndNotification(MODULE.NAME, "DEBUG: Targeted indicator disabled in settings", "", true, false);
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'targetedIndicatorEnabled', true)) {
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "DEBUG: Targeted indicator disabled in settings", "", true, false);
             return;
         }
         
         const tokenId = token.id;
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ID: ${tokenId}, Already targeted: ${TokenImageUtilities._targetedTokens.has(tokenId)}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ID: ${tokenId}, Already targeted: ${TokenImageUtilities._targetedTokens.has(tokenId)}`, "", true, false);
         
         if (targeted) {
             // Token was targeted - add indicator
             if (!TokenImageUtilities._targetedTokens.has(tokenId)) {
-                postConsoleAndNotification(MODULE.NAME, `DEBUG: Adding targeted indicator for ${token.name}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Adding targeted indicator for ${token.name}`, "", true, false);
                 TokenImageUtilities._addTargetedIndicator(token);
                 TokenImageUtilities._targetedTokens.add(tokenId);
             } else {
-                postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} already has targeted indicator`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} already has targeted indicator`, "", true, false);
             }
         } else {
             // Token was untargeted - remove indicator
             if (TokenImageUtilities._targetedTokens.has(tokenId)) {
-                postConsoleAndNotification(MODULE.NAME, `DEBUG: Removing targeted indicator for ${token.name}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Removing targeted indicator for ${token.name}`, "", true, false);
                 TokenImageUtilities._removeTargetedIndicator(tokenId);
                 TokenImageUtilities._targetedTokens.delete(tokenId);
             } else {
-                postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} was not targeted`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} was not targeted`, "", true, false);
             }
         }
     }
@@ -2032,30 +2032,30 @@ export class TokenImageUtilities {
      * Add targeted indicator to a token
      */
     static _addTargetedIndicator(tokenDocument) {
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: _addTargetedIndicator called for ${tokenDocument.name}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: _addTargetedIndicator called for ${tokenDocument.name}`, "", true, false);
         
         // Get the actual Token object from the canvas
         const token = canvas.tokens.get(tokenDocument.id);
         if (!token) {
-            postConsoleAndNotification(MODULE.NAME, `DEBUG: Token not found on canvas for ${tokenDocument.name}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token not found on canvas for ${tokenDocument.name}`, "", true, false);
             return;
         }
         if (!token.visible) {
-            postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} is not visible`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token ${token.name} is not visible`, "", true, false);
             return;
         }
         
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Token found - ${token.name}, Position: ${token.x}, ${token.y}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Token found - ${token.name}, Position: ${token.x}, ${token.y}`, "", true, false);
         
         const settings = TokenImageUtilities._getTargetedIndicatorSettings();
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Settings - Style: ${settings.style}, Color: ${settings.color}, Thickness: ${settings.thickness}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Settings - Style: ${settings.style}, Color: ${settings.color}, Thickness: ${settings.thickness}`, "", true, false);
         
         const tokenWidth = token.document.width * canvas.grid.size;
         const tokenHeight = token.document.height * canvas.grid.size;
         const tokenRadius = Math.max(tokenWidth, tokenHeight) / 2;
         const ringRadius = tokenRadius + settings.offset;
         
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Dimensions - Width: ${tokenWidth}, Height: ${tokenHeight}, Ring Radius: ${ringRadius}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Dimensions - Width: ${tokenWidth}, Height: ${tokenHeight}, Ring Radius: ${ringRadius}`, "", true, false);
         
         const graphics = new PIXI.Graphics();
         TokenImageUtilities._drawtargetedIndicatorStyle(graphics, settings, ringRadius);
@@ -2063,7 +2063,7 @@ export class TokenImageUtilities {
         const center = TokenImageUtilities._calculateTokenCenter(token);
         graphics.position.set(center.x, center.y);
         
-        postConsoleAndNotification(MODULE.NAME, `DEBUG: Adding graphics to canvas at position ${center.x}, ${center.y}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `DEBUG: Adding graphics to canvas at position ${center.x}, ${center.y}`, "", true, false);
         
         canvas.interface.addChild(graphics);
         TokenImageUtilities._targetedIndicators.set(tokenDocument.id, graphics);
@@ -2071,7 +2071,7 @@ export class TokenImageUtilities {
         // Create animation for this specific targeted indicator
         TokenImageUtilities._createTargetedIndicatorAnimation(tokenDocument.id, graphics, settings);
         
-        postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Targeted indicator (${settings.style}, ${settings.animation}) added for ${token.name}`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Targeted indicator (${settings.style}, ${settings.animation}) added for ${token.name}`, "", true, false);
     }
     
     /**
@@ -2147,7 +2147,7 @@ export class TokenImageUtilities {
      */
     static async _handleTokenFacing(tokenDocument, changes) {
         // Check if token facing is enabled
-        if (!getSettingSafely(MODULE.ID, 'enableTokenRotation', false)) {
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'enableTokenRotation', false)) {
             return;
         }
         
@@ -2173,7 +2173,7 @@ export class TokenImageUtilities {
         }
 
         // Check facing mode
-        const facingMode = getSettingSafely(MODULE.ID, 'tokenRotationMode', 'all');
+        const facingMode = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenRotationMode', 'all');
         if (!TokenImageUtilities._shouldApplyFacing(token, facingMode)) {
             return;
         }
@@ -2189,7 +2189,7 @@ export class TokenImageUtilities {
         const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
         // Check minimum distance threshold
-        const minDistance = getSettingSafely(MODULE.ID, 'tokenRotationMinDistance', 0.5);
+        const minDistance = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenRotationMinDistance', 0.5);
         const gridSize = canvas.grid.size;
         const minDistancePixels = minDistance * gridSize;
 
@@ -2209,7 +2209,7 @@ export class TokenImageUtilities {
         try {
             await tokenDocument.update({ rotation: normalizedAngle });
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, "Token Facing Error", `Failed to rotate ${token.name}: ${error.message}`, false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Facing Error", `Failed to rotate ${token.name}: ${error.message}`, false, false);
         }
     }
 
@@ -2245,7 +2245,7 @@ export class TokenImageUtilities {
                 return token.document.testUserVisibility(game.user);
             }
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Visibility check failed for ${token.name}: ${error.message}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Visibility check failed for ${token.name}: ${error.message}`, "", true, false);
         }
 
         // Fallback to generic visibility flag

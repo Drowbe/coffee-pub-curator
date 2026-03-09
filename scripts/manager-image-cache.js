@@ -3,7 +3,7 @@
 // ================================================================== 
 
 import { MODULE } from './const.js';
-import { postConsoleAndNotification, getSettingSafely } from './api-helpers.js';
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { HookManager } from './manager-hooks.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
@@ -352,7 +352,7 @@ export class ImageCacheManager {
      */
     static _isFolderIgnored(folderName, mode = 'token') {
         // Single setting for both token and portrait
-        const ignoredFoldersSetting = getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '_gsdata_,Build_a_Token,.DS_Store');
+        const ignoredFoldersSetting = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '_gsdata_,Build_a_Token,.DS_Store');
         const ignoredFolders = ignoredFoldersSetting.split(',').map(folder => folder.trim().toLowerCase());
         const folderNameLower = folderName.toLowerCase();
         const isIgnored = ignoredFolders.includes(folderNameLower);
@@ -411,9 +411,9 @@ export class ImageCacheManager {
                 const oldData = game.settings.get(MODULE.ID, oldSettingKey);
                 if (oldData && typeof oldData === 'object' && Object.keys(oldData).length > 0 && oldData.monsters) {
                     // This is monster mapping data in the wrong location - migrate it
-                    postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Migrating monster mapping data to new setting key...", "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Migrating monster mapping data to new setting key...", "", true, false);
                     await game.settings.set(MODULE.ID, newSettingKey, oldData);
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Migrated monster mapping data with ${Object.keys(oldData.monsters).length} monsters`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Migrated monster mapping data with ${Object.keys(oldData.monsters).length} monsters`, "", true, false);
                     return;
                 }
             } catch (migrationError) {
@@ -422,19 +422,19 @@ export class ImageCacheManager {
             }
             
             // No existing data found - load from resources
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Loading monster mapping data...", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Loading monster mapping data...", "", true, false);
             
             // Load monster mapping from resources
             const response = await fetch('modules/coffee-pub-curator/resources/monster-mapping.json');
             if (response.ok) {
                 const monsterData = await response.json();
                 await game.settings.set(MODULE.ID, newSettingKey, monsterData);
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Loaded monster mapping data with ${Object.keys(monsterData.monsters).length} monsters`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Loaded monster mapping data with ${Object.keys(monsterData.monsters).length} monsters`, "", true, false);
             } else {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Failed to load monster mapping data - HTTP ${response.status}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Failed to load monster mapping data - HTTP ${response.status}`, "", true, false);
             }
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error loading monster mapping data: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error loading monster mapping data: ${error.message}`, "", false, false);
             console.error('Monster mapping error:', error);
         }
     }
@@ -586,7 +586,7 @@ export class ImageCacheManager {
             }
 
             if (!matched) {
-                const filterGarbage = getSettingSafely(MODULE.ID, 'tokenImageReplacementFilterGarbageTags', true);
+                const filterGarbage = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementFilterGarbageTags', true);
                 if (filterGarbage && this._isGarbageTagPart(cleanPart)) {
                     continue;
                 }
@@ -969,7 +969,7 @@ export class ImageCacheManager {
             // Basic cache info
             info: () => {
                 const c = this.cache;
-                postConsoleAndNotification(MODULE.NAME, `ðŸ“Š Cache Stats:
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ“Š Cache Stats:
 - Files: ${c.files.size}
 - Folders: ${c.folders.size}
 - Creature Types: ${c.creatureTypes.size}
@@ -990,14 +990,14 @@ export class ImageCacheManager {
                         const decompressed = ImageCacheManager._decompressCacheData(cacheData);
                         const uncompressedSizeMB = (new Blob([decompressed]).size / (1024 * 1024)).toFixed(2);
                         const compressionRatio = ((1 - cacheData.length / decompressed.length) * 100).toFixed(1);
-                        postConsoleAndNotification(MODULE.NAME, `ðŸ’¾ Server Cache Size: ${uncompressedSizeMB}MB â†’ ${compressedSizeMB}MB (${compressionRatio}% compression)`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ’¾ Server Cache Size: ${uncompressedSizeMB}MB â†’ ${compressedSizeMB}MB (${compressionRatio}% compression)`, "", true, false);
                         return { compressed: compressedSizeMB, uncompressed: uncompressedSizeMB, ratio: compressionRatio };
                     } catch (error) {
-                        postConsoleAndNotification(MODULE.NAME, `ðŸ’¾ Server Cache Size: ${compressedSizeMB}MB (uncompressed data)`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ’¾ Server Cache Size: ${compressedSizeMB}MB (uncompressed data)`, "", true, false);
                         return { compressed: compressedSizeMB, uncompressed: compressedSizeMB, ratio: 0 };
                     }
                 } else {
-                    postConsoleAndNotification(MODULE.NAME, 'âŒ No cache in server settings', '', true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, 'âŒ No cache in server settings', '', true, false);
                     return 0;
                 }
             },
@@ -1006,12 +1006,12 @@ export class ImageCacheManager {
             version: () => {
                 try {
                     const cacheData = JSON.parse(game.settings.get(MODULE.ID, 'tokenImageReplacementCache'));
-                    postConsoleAndNotification(MODULE.NAME, `ðŸ”¢ Cache Version: ${cacheData.version}`, "", true, false);
-                    postConsoleAndNotification(MODULE.NAME, `ðŸ“ Files Count: ${cacheData.files ? cacheData.files.length : 'N/A'}`, "", true, false);
-                    postConsoleAndNotification(MODULE.NAME, `ðŸ“… Last Scan: ${cacheData.lastScan ? new Date(cacheData.lastScan).toLocaleString() : 'Never'}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ”¢ Cache Version: ${cacheData.version}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ“ Files Count: ${cacheData.files ? cacheData.files.length : 'N/A'}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `ðŸ“… Last Scan: ${cacheData.lastScan ? new Date(cacheData.lastScan).toLocaleString() : 'Never'}`, "", true, false);
                     return cacheData;
                 } catch (error) {
-                    postConsoleAndNotification(MODULE.NAME, `âŒ Error reading cache: ${error.message}`, '', true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `âŒ Error reading cache: ${error.message}`, '', true, false);
                     return null;
                 }
             },
@@ -1020,7 +1020,7 @@ export class ImageCacheManager {
             clear: async () => {
                 localStorage.removeItem('tokenImageReplacement_cache');
                 await game.settings.set(MODULE.ID, 'tokenImageReplacementCache', '');
-                postConsoleAndNotification(MODULE.NAME, 'ðŸ—‘ï¸ Cache cleared from localStorage and server settings', '', true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, 'ðŸ—‘ï¸ Cache cleared from localStorage and server settings', '', true, false);
             },
             
             // Show storage quota info
@@ -1029,37 +1029,37 @@ export class ImageCacheManager {
                     const testData = 'x'.repeat(1024 * 1024); // 1MB test
                     localStorage.setItem('quota_test', testData);
                     localStorage.removeItem('quota_test');
-                    postConsoleAndNotification(MODULE.NAME, 'âœ… localStorage is writable', '', true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, 'âœ… localStorage is writable', '', true, false);
                 } catch (error) {
-                    postConsoleAndNotification(MODULE.NAME, `âŒ localStorage error: ${error.message}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `âŒ localStorage error: ${error.message}`, "", true, false);
                 }
             },
             
             // Test word combination matching
             testMatch: (tokenName, filename) => {
-                postConsoleAndNotification(MODULE.NAME, `\nðŸ§ª Testing word combination matching:`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Token Name: "${tokenName}"`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Filename: "${filename}"`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `\n--- Processing ---`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `\nðŸ§ª Testing word combination matching:`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Name: "${tokenName}"`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Filename: "${filename}"`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `\n--- Processing ---`, "", true, false);
                 
                 const words = ImageMatching._extractWords(tokenName);
-                postConsoleAndNotification(MODULE.NAME, `Extracted words: [${words.join(', ')}]`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Extracted words: [${words.join(', ')}]`, "", true, false);
                 
                 const combinations = ImageMatching._generateCombinations(words);
-                postConsoleAndNotification(MODULE.NAME, `Generated combinations: [${combinations.join(', ')}]`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Generated combinations: [${combinations.join(', ')}]`, "", true, false);
                 
                 const result = ImageMatching._matchCombinations(words, filename, true);
-                postConsoleAndNotification(MODULE.NAME, `\n--- Result ---`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Matched: ${result.matched}`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Score: ${result.score}`, "", true, false);
-                postConsoleAndNotification(MODULE.NAME, `Match Type: ${result.matchType}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `\n--- Result ---`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Matched: ${result.matched}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Score: ${result.score}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Match Type: ${result.matchType}`, "", true, false);
                 
                 return result;
             },
             
         };
         
-        postConsoleAndNotification(MODULE.NAME, "Console commands added: coffeePubCache.info(), coffeePubCache.size(), coffeePubCache.version(), coffeePubCache.clear(), coffeePubCache.quota(), coffeePubCache.testMatch(tokenName, filename)", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Console commands added: coffeePubCache.info(), coffeePubCache.size(), coffeePubCache.version(), coffeePubCache.clear(), coffeePubCache.quota(), coffeePubCache.testMatch(tokenName, filename)", "", true, false);
     }
     
     static async initialize() {
@@ -1084,7 +1084,7 @@ export class ImageCacheManager {
         });
 
         // Log hook registration
-        postConsoleAndNotification(MODULE.NAME, "Hook Manager | createToken", "token-image-replacement-creation", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Hook Manager | createToken", "token-image-replacement-creation", true, false);
         
         // Register global controlToken hook for token selection detection
         const controlTokenHookId = HookManager.registerHook({
@@ -1096,7 +1096,7 @@ export class ImageCacheManager {
         });
 
         // Log hook registration
-        postConsoleAndNotification(MODULE.NAME, "Hook Manager | controlToken (global)", "token-image-replacement-global", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Hook Manager | controlToken (global)", "token-image-replacement-global", true, false);
         
         // Register updateActor hook for dead token replacement
         const updateActorHookId = HookManager.registerHook({
@@ -1108,7 +1108,7 @@ export class ImageCacheManager {
         });
 
         // Log hook registration
-        postConsoleAndNotification(MODULE.NAME, "Hook Manager | updateActor (dead tokens)", "token-image-replacement-dead-tokens", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Hook Manager | updateActor (dead tokens)", "token-image-replacement-dead-tokens", true, false);
         
         // Add double-middle-click handler for tokens using HookManager
         TokenImageReplacementWindow._addMiddleClickHandler();
@@ -1226,9 +1226,9 @@ export class ImageCacheManager {
         
         if (cleanedCount > 0) {
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cleaned up ${cleanedCount} invalid file paths from cache`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cleaned up ${cleanedCount} invalid file paths from cache`, "", true, false);
             if (invalidPaths.length > 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Invalid paths found: ${invalidPaths.join(', ')}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Invalid paths found: ${invalidPaths.join(', ')}`, "", true, false);
             }
         }
         
@@ -1277,13 +1277,13 @@ export class ImageCacheManager {
             });
             
             if (choice === false) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan cancelled by user`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan cancelled by user`, "", true, false);
                 return;
             }
             
             // Do incremental update if cache exists
             if (choice === 'incremental') {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting incremental update...`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting incremental update...`, "", true, false);
                 const basePaths = this.getTokenImagePathsForMode(mode);
                 if (basePaths.length > 0) {
                     // For incremental updates, process each path
@@ -1305,17 +1305,17 @@ export class ImageCacheManager {
                         cache.folders.delete(folderPath);
                     }
                     if (foldersToRemove.length > 0) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cleaned up ${foldersToRemove.length} empty folder(s)`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cleaned up ${foldersToRemove.length} empty folder(s)`, "", true, false);
                     }
                 }
                 return;
             }
         }
         
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting full scan...`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting full scan...`, "", true, false);
         
         if (cache.isScanning) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Stopping current scan and starting fresh...`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Stopping current scan and starting fresh...`, "", true, false);
             cache.isScanning = false; // Stop current scan
         }
         
@@ -1336,7 +1336,7 @@ export class ImageCacheManager {
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
         
         if (cache.isScanning) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Stopping current scan for incremental update...`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Stopping current scan for incremental update...`, "", true, false);
             cache.isScanning = false;
         }
         
@@ -1354,7 +1354,7 @@ export class ImageCacheManager {
         
         try {
             const originalFileCount = cache.files.size;
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting incremental update for ${basePath}...`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting incremental update for ${basePath}...`, "", true, false);
             
             // Get the source index for this path
             const basePaths = this.getTokenImagePathsForMode(mode);
@@ -1378,7 +1378,7 @@ export class ImageCacheManager {
             const files = await this._getDirectoryContents(basePath, sourceIndex, mode, basePaths.length, true);
             
             if (files.length === 0 && filesBeforeScan.size === 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No files found in ${basePath}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No files found in ${basePath}`, "", true, false);
                 cache.isScanning = false;
                 return;
             }
@@ -1524,10 +1524,10 @@ export class ImageCacheManager {
                 resultMessage += ` No changes detected.`;
             }
             resultMessage += ` Cache now contains ${finalFileCount} files.`;
-            postConsoleAndNotification(MODULE.NAME, resultMessage, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, resultMessage, "", false, false);
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error during incremental update: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error during incremental update: ${error.message}`, "", false, false);
         } finally {
             // Ensure scanning is false even if there was an error
             if (cache.isScanning) {
@@ -1551,7 +1551,7 @@ export class ImageCacheManager {
         if (cache.isScanning) {
             cache.isPaused = true;
             cache.isScanning = false;
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache scanning paused. You can resume by refreshing the cache.`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache scanning paused. You can resume by refreshing the cache.`, "", true, false);
             
             // Update window if it exists
             if (this.window && this.window.updateScanProgress) {
@@ -1572,7 +1572,7 @@ export class ImageCacheManager {
         const cacheSettingKey = this.getCacheSettingKey(mode);
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
         
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Deleting cache...`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Deleting cache...`, "", true, false);
         
         // Stop any ongoing scan
         if (cache.isScanning) {
@@ -1598,14 +1598,14 @@ export class ImageCacheManager {
             this.window.render();
         }
         
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache deleted successfully`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache deleted successfully`, "", true, false);
     }
     
     /**
      * Force cleanup of invalid paths and rebuild cache if needed
      */
     static async forceCleanupInvalidPaths() {
-        postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Starting forced cleanup of invalid paths...", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Starting forced cleanup of invalid paths...", "", true, false);
         
         const cleanedCount = this._cleanupInvalidPaths();
         
@@ -1616,9 +1616,9 @@ export class ImageCacheManager {
             // Save cleaned cache to storage
             await this._saveCacheToStorage(false);
             
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Forced cleanup completed. Removed ${cleanedCount} invalid paths and saved cleaned cache.`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Forced cleanup completed. Removed ${cleanedCount} invalid paths and saved cleaned cache.`, "", true, false);
         } else {
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: No invalid paths found in cache.", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: No invalid paths found in cache.", "", true, false);
         }
         
         return cleanedCount;
@@ -1634,7 +1634,7 @@ export class ImageCacheManager {
         const enabledSetting = mode === this.MODES.PORTRAIT 
             ? 'portraitImageReplacementEnabled' 
             : 'tokenImageReplacementEnabled';
-        if (!getSettingSafely(MODULE.ID, enabledSetting, false)) {
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, enabledSetting, false)) {
             return;
         }
         
@@ -1675,14 +1675,14 @@ export class ImageCacheManager {
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
         
         if (cache.isScanning) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan already in progress - please wait for it to complete`, "", true, false);
-            postConsoleAndNotification(MODULE.NAME, "You can check progress in the console above", "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan already in progress - please wait for it to complete`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "You can check progress in the console above", "", true, false);
             return;
         }
         
         // Check if we were paused
         if (cache.isPaused) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan was paused. Use 'Refresh Cache' to resume.`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan was paused. Use 'Refresh Cache' to resume.`, "", true, false);
             return;
         }
         
@@ -1700,7 +1700,7 @@ export class ImageCacheManager {
         }
         
         if (basePaths.length === 0) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No image paths configured`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No image paths configured`, "", true, false);
             return;
         }
         
@@ -1723,7 +1723,7 @@ export class ImageCacheManager {
         const maxScanTime = 3 * 60 * 60 * 1000; // 3 hours in milliseconds
         const timeoutId = setTimeout(() => {
             if (cache.isScanning) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: SCAN TIMEOUT - Forcing completion after 3 hours`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: SCAN TIMEOUT - Forcing completion after 3 hours`, "", true, false);
                 cache.isScanning = false;
                 cache.overallProgress = cache.totalSteps;
                 cache.currentStepName = "Timeout - Forced Complete";
@@ -1755,8 +1755,8 @@ export class ImageCacheManager {
         cache.totalFolders = basePaths.length;
         cache.currentFolderIndex = 0;
         
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting folder scan across ${basePaths.length} path(s)...`, "", true, false);
-        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: This may take a few minutes for large image collections...`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Starting folder scan across ${basePaths.length} path(s)...`, "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: This may take a few minutes for large image collections...`, "", true, false);
         
         try {
             // Update window with initial scan status
@@ -1773,7 +1773,7 @@ export class ImageCacheManager {
                 // Update current folder index in cache for template display
                 cache.currentFolderIndex = sourceIndex;
                 
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning path ${sourceIndex}/${basePaths.length}: ${basePath}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning path ${sourceIndex}/${basePaths.length}: ${basePath}`, "", true, false);
                 
                 // Use Foundry's FilePicker to get directory contents for this path
                 const files = await this._getDirectoryContents(basePath, sourceIndex, mode, basePaths.length);
@@ -1784,7 +1784,7 @@ export class ImageCacheManager {
             }
             
             if (totalFiles === 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No supported image files found in any configured paths`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No supported image files found in any configured paths`, "", true, false);
                 return;
             }
             
@@ -1801,8 +1801,8 @@ export class ImageCacheManager {
             const seconds = (scanTime % 60).toFixed(1);
             const timeString = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
             
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: âœ… SCAN COMPLETE!`, "", true, false);
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${cache.totalFiles} files across ${cache.folders.size} folders in ${timeString}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: âœ… SCAN COMPLETE!`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${cache.totalFiles} files across ${cache.folders.size} folders in ${timeString}`, "", true, false);
             
             // Restore favorites for files that still exist
             if (preservedFavorites.size > 0) {
@@ -1826,7 +1826,7 @@ export class ImageCacheManager {
                     }
                 }
                 if (restoredCount > 0 || removedCount > 0) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Restored ${restoredCount} favorite(s), ${removedCount} favorite(s) removed (files no longer exist)`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Restored ${restoredCount} favorite(s), ${removedCount} favorite(s) removed (files no longer exist)`, "", false, false);
                 }
             }
             
@@ -1834,9 +1834,9 @@ export class ImageCacheManager {
             this._logCacheStatistics(mode);
             
             // Save cache to persistent storage (final save)
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Performing final cache save...`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Performing final cache save...`, "", false, false);
             await this._saveCacheToStorage(mode, false); // false = final save
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Final cache save completed!`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Final cache save completed!`, "", false, false);
             
             // Note: Window refresh will happen when UI is next accessed
             
@@ -1869,7 +1869,7 @@ export class ImageCacheManager {
             
             // Validate completion before setting final state
             if (cache.overallProgress !== cache.totalSteps) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Progress mismatch detected. Expected ${cache.totalSteps} steps but completed ${cache.overallProgress}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Progress mismatch detected. Expected ${cache.totalSteps} steps but completed ${cache.overallProgress}`, "", true, false);
                 // Force completion
                 cache.overallProgress = cache.totalSteps;
             }
@@ -1903,7 +1903,7 @@ export class ImageCacheManager {
             }, 5000);
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error scanning folders: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error scanning folders: ${error.message}`, "", false, false);
             
             // CRITICAL FIX: Save whatever cache data we have with proper fingerprint
             // This prevents losing incremental progress when errors occur
@@ -1911,11 +1911,11 @@ export class ImageCacheManager {
                 cache.lastScan = Date.now();
                 cache.totalFiles = cache.files.size;
                 
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Saving partial cache (${cache.files.size} files) despite error...`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Saving partial cache (${cache.files.size} files) despite error...`, "", false, false);
                 await this._saveCacheToStorage(mode, false); // false = final save with fingerprint
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Partial cache saved successfully`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Partial cache saved successfully`, "", false, false);
             } catch (saveError) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Failed to save partial cache: ${saveError.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Failed to save partial cache: ${saveError.message}`, "", false, false);
             }
             
             // Show error notification in the window
@@ -1960,20 +1960,20 @@ export class ImageCacheManager {
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
         
         if (cache.creatureTypes.size > 0) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Creature type breakdown:`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Creature type breakdown:`, "", true, false);
             for (const [creatureType, files] of cache.creatureTypes) {
-                postConsoleAndNotification(MODULE.NAME, `  ${creatureType}: ${files.length} files`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `  ${creatureType}: ${files.length} files`, "", true, false);
             }
         }
         
         if (cache.folders.size > 0) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Top folders by file count:`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Top folders by file count:`, "", true, false);
             const sortedFolders = Array.from(cache.folders.entries())
                 .sort((a, b) => b[1].length - a[1].length)
                 .slice(0, 5);
             
             for (const [folder, files] of sortedFolders) {
-                postConsoleAndNotification(MODULE.NAME, `  ${folder}: ${files.length} files`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `  ${folder}: ${files.length} files`, "", true, false);
             }
         }
     }
@@ -1990,17 +1990,17 @@ export class ImageCacheManager {
         const cache = this.getCache(mode);
         
         try {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning directory: ${basePath}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning directory: ${basePath}`, "", true, false);
             
             // Use Foundry's FilePicker to browse the directory (v13: use namespaced FilePicker)
             const response = await ImageCacheManager.FilePicker.browse("data", basePath);
             
             // Log what we found for debugging
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Directory scan results - Files: ${response.files?.length || 0}, Subdirectories: ${response.dirs?.length || 0}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Directory scan results - Files: ${response.files?.length || 0}, Subdirectories: ${response.dirs?.length || 0}`, "", true, false);
             
             // Process files in the base directory (if any)
             if (response.files && response.files.length > 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in base directory`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in base directory`, "", true, false);
                 
                 const baseFiles = [];
                 for (const filePath of response.files) {
@@ -2034,7 +2034,7 @@ export class ImageCacheManager {
             // Always scan subdirectories (this is where most image files will be)
             if (response.dirs && response.dirs.length > 0) {
                 // Log all directories found
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.dirs.length} subdirectories:`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.dirs.length} subdirectories:`, "", true, false);
                 const ignoredDirs = [];
                 const scanDirs = [];
                 for (let i = 0; i < response.dirs.length; i++) {
@@ -2046,9 +2046,9 @@ export class ImageCacheManager {
                         scanDirs.push(dirName);
                     }
                 }
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Will scan: [${scanDirs.join(', ')}]`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Will scan: [${scanDirs.join(', ')}]`, "", true, false);
                 if (ignoredDirs.length > 0) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring: [${ignoredDirs.join(', ')}]`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring: [${ignoredDirs.join(', ')}]`, "", true, false);
                 }
                 
                 // Count non-ignored directories for accurate progress tracking
@@ -2057,7 +2057,7 @@ export class ImageCacheManager {
                     return !ImageCacheManager._isFolderIgnored(dirName, mode);
                 });
                 
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: ${nonIgnoredDirs.length} directories will be scanned (${response.dirs.length - nonIgnoredDirs.length} ignored)`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: ${nonIgnoredDirs.length} directories will be scanned (${response.dirs.length - nonIgnoredDirs.length} ignored)`, "", true, false);
                 
                 // Set total steps for overall progress (non-ignored subdirectories only)
                 cache.totalSteps = nonIgnoredDirs.length;
@@ -2070,7 +2070,7 @@ export class ImageCacheManager {
                 for (let i = 0; i < response.dirs.length; i++) {
                     // Check if we should pause
                     if (cache.isPaused) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan paused by user.`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan paused by user.`, "", true, false);
                         return;
                     }
                     
@@ -2079,7 +2079,7 @@ export class ImageCacheManager {
                     
                     // Check if this folder should be ignored
                     if (ImageCacheManager._isFolderIgnored(subDirName, mode)) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring folder: ${subDirName}`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring folder: ${subDirName}`, "", true, false);
                         continue;
                     }
                     
@@ -2088,7 +2088,7 @@ export class ImageCacheManager {
                     cache.overallProgress = processedCount;
                     cache.currentStepName = subDirName;
                     
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Processing folder ${processedCount}/${nonIgnoredDirs.length}: ${subDirName}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Processing folder ${processedCount}/${nonIgnoredDirs.length}: ${subDirName}`, "", true, false);
                     
                     // Update window progress if it exists
                     if (this.window && this.window.updateScanProgress) {
@@ -2110,11 +2110,11 @@ export class ImageCacheManager {
                         
                         // Save more frequently for large subdirectories (every 500 files)
                         if (cache.files.size % 500 === 0 && cache.files.size > 0) {
-                            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Frequent save checkpoint - ${cache.files.size} files processed`, "", false, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Frequent save checkpoint - ${cache.files.size} files processed`, "", false, false);
                             try {
                                 await this._saveCacheToStorage(mode, true); // Incremental save
                             } catch (saveError) {
-                                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Checkpoint save failed: ${saveError.message}`, "", false, false);
+                                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Checkpoint save failed: ${saveError.message}`, "", false, false);
                                 // Continue with scan
                             }
                         }
@@ -2122,24 +2122,24 @@ export class ImageCacheManager {
                     
                     // Save cache incrementally after each main folder to prevent data loss
                     if (subDirFiles.length > 0) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Saving progress after ${subDirName} (${subDirFiles.length} files)...`, "", false, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Saving progress after ${subDirName} (${subDirFiles.length} files)...`, "", false, false);
                         try {
                         await this._saveCacheToStorage(mode, true); // true = incremental save
-                            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Successfully saved progress after ${subDirName}`, "", false, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Successfully saved progress after ${subDirName}`, "", false, false);
                         } catch (saveError) {
-                            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Failed to save progress after ${subDirName}: ${saveError.message}`, "", false, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Failed to save progress after ${subDirName}: ${saveError.message}`, "", false, false);
                             // Continue with scan even if save fails
                         }
                     }
                     
                     // Log progress with percentage and file count
                     const progressPercent = Math.round((processedCount / nonIgnoredDirs.length) * 100);
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: [${progressPercent}%] Completed ${subDirName} - ${files.length} files total`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: [${progressPercent}%] Completed ${subDirName} - ${files.length} files total`, "", false, false);
                 }
                 
                 // Validate that we've processed all expected directories
                 if (processedCount !== nonIgnoredDirs.length) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Expected to process ${nonIgnoredDirs.length} directories but only processed ${processedCount}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Expected to process ${nonIgnoredDirs.length} directories but only processed ${processedCount}`, "", true, false);
                 }
                 
                 // Ensure progress is complete
@@ -2148,11 +2148,11 @@ export class ImageCacheManager {
             }
             
             if (files.length === 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No supported image files found in ${basePath} or its subdirectories`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No supported image files found in ${basePath} or its subdirectories`, "", true, false);
             }
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error scanning directory ${basePath}: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error scanning directory ${basePath}: ${error.message}`, "", false, false);
         }
         
         return files;
@@ -2174,7 +2174,7 @@ export class ImageCacheManager {
             const response = await ImageCacheManager.FilePicker.browse("data", subDir);
             
             if (response.files && response.files.length > 0) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in ${subDir}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in ${subDir}`, "", true, false);
                 
                 // Categories will be generated from folder structure when window opens
                 
@@ -2191,7 +2191,7 @@ export class ImageCacheManager {
                 for (let i = 0; i < response.files.length; i++) {
                     // Check if we should pause
                     if (cache.isPaused) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan paused by user during file processing.`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan paused by user during file processing.`, "", true, false);
                         return files;
                     }
                     
@@ -2234,7 +2234,7 @@ export class ImageCacheManager {
             // Recursively scan deeper subdirectories
             if (response.dirs && response.dirs.length > 0) {
                 const parentDirName = subDir.split('/').pop();
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.dirs.length} deeper subdirectories in ${parentDirName}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.dirs.length} deeper subdirectories in ${parentDirName}`, "", true, false);
                 
                 for (let i = 0; i < response.dirs.length; i++) {
                     const deeperDir = response.dirs[i];
@@ -2242,7 +2242,7 @@ export class ImageCacheManager {
                     
                     // Check if this folder should be ignored
                     if (ImageCacheManager._isFolderIgnored(deeperDirName, mode)) {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring subfolder: ${parentDirName}/${deeperDirName}`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring subfolder: ${parentDirName}/${deeperDirName}`, "", true, false);
                         continue;
                     }
                     
@@ -2260,13 +2260,13 @@ export class ImageCacheManager {
                     // Log progress more frequently - every 3 items or at the end
                     if ((i + 1) % 3 === 0 || i === response.dirs.length - 1) {
                         const progressPercent = Math.round(((i + 1) / response.dirs.length) * 100);
-                        postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: [${progressPercent}%] ${parentDirName}/${deeperDirName} - ${files.length} files`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: [${progressPercent}%] ${parentDirName}/${deeperDirName} - ${files.length} files`, "", true, false);
                     }
                 }
             }
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error scanning subdirectory ${subDir}: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error scanning subdirectory ${subDir}: ${error.message}`, "", false, false);
         }
         
         return files;
@@ -2296,7 +2296,7 @@ export class ImageCacheManager {
         
         // Validate file path - check for invalid characters
         if (this._isInvalidFilePath(filePath)) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Skipping invalid file path: ${filePath}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Skipping invalid file path: ${filePath}`, "", true, false);
             return null;
         }
         
@@ -2319,7 +2319,7 @@ export class ImageCacheManager {
             }
         } catch (error) {
             // File info not available, use defaults
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Could not get file info for ${filePath}: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Could not get file info for ${filePath}: ${error.message}`, "", false, false);
         }
         
         // Extract metadata from filename and path
@@ -2400,7 +2400,7 @@ export class ImageCacheManager {
             // Validate the full path before storing
             const fullPath = file.fullPath || `${basePath}/${filePath}`;
             if (this._isInvalidFilePath(fullPath)) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Skipping invalid full path: ${fullPath}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Skipping invalid full path: ${fullPath}`, "", true, false);
                 skippedFiles++;
                 continue;
             }
@@ -2410,7 +2410,7 @@ export class ImageCacheManager {
             if (!fileInfo.metadata || !fileInfo.metadata.sourcePath) {
                 fileInfo = await this._processFileInfo(fullPath, basePath, sourceIndex);
                 if (!fileInfo) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Skipping file that failed processing: ${fullPath}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Skipping file that failed processing: ${fullPath}`, "", true, false);
                     skippedFiles++;
                     continue;
                 }
@@ -2454,9 +2454,9 @@ export class ImageCacheManager {
         }
         
         if (duplicateFiles > 0) {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache built with ${validFiles} valid files, skipped ${skippedFiles} invalid files, ${duplicateFiles} duplicates handled (first path wins)`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache built with ${validFiles} valid files, skipped ${skippedFiles} invalid files, ${duplicateFiles} duplicates handled (first path wins)`, "", true, false);
         } else {
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache built with ${validFiles} valid files, skipped ${skippedFiles} invalid files`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache built with ${validFiles} valid files, skipped ${skippedFiles} invalid files`, "", true, false);
         }
     }
     
@@ -2504,7 +2504,7 @@ export class ImageCacheManager {
         if (pathParts.length > 1) {
             const category = pathParts[0];
             // Single setting for both token and portrait
-            const ignoredFoldersSetting = getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '');
+            const ignoredFoldersSetting = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '');
             const ignoredFolders = ignoredFoldersSetting 
                 ? ignoredFoldersSetting.split(',').map(f => f.trim()).filter(f => f)
                 : [];
@@ -2525,7 +2525,7 @@ export class ImageCacheManager {
      */
     static _shouldIgnoreFile(fileName, mode = 'token') {
         // Single setting for both token and portrait
-        const ignoredWords = getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredWords', '');
+        const ignoredWords = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredWords', '');
         if (!ignoredWords || ignoredWords.trim() === '') {
             return false;
         }
@@ -2573,7 +2573,7 @@ export class ImageCacheManager {
      * @returns {boolean} True if the tag should not be added
      */
     static _shouldIgnoreTagByPattern(tag) {
-        const setting = getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredTagPatterns', '');
+        const setting = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredTagPatterns', '');
         if (!setting || typeof setting !== 'string' || setting.trim() === '') return false;
         const patterns = setting.split(',').map(p => p.trim()).filter(p => p.length > 0);
         const tagLower = String(tag).toLowerCase();
@@ -2777,7 +2777,7 @@ export class ImageCacheManager {
         // Also clear from persistent storage
         this._clearCacheFromStorage();
         
-        postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cache cleared from memory and storage", "", true, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cache cleared from memory and storage", "", true, false);
     }
     
     /**
@@ -2833,7 +2833,7 @@ export class ImageCacheManager {
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
             // Get all configured image paths for this mode
             const basePaths = this.getTokenImagePathsForMode(mode);
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: DEBUG (_saveCacheToStorage) - Retrieved ${basePaths.length} path(s)`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: DEBUG (_saveCacheToStorage) - Retrieved ${basePaths.length} path(s)`, "", true, false);
             
             // Only generate fingerprint for final saves, not incremental ones (performance)
             // For multiple paths, we'll generate a combined fingerprint
@@ -2851,22 +2851,22 @@ export class ImageCacheManager {
                     
                     // CRITICAL FIX: Validate fingerprint for final saves
                     if (!folderFingerprint || folderFingerprint === 'error' || folderFingerprint === 'no-path') {
-                        postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Invalid fingerprint generated: ${folderFingerprint}. This may cause issues on next load.`, "", false, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Invalid fingerprint generated: ${folderFingerprint}. This may cause issues on next load.`, "", false, false);
                     }
                 } catch (fingerprintError) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Fingerprint generation failed: ${fingerprintError.message}. Using timestamp-based fingerprint.`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Fingerprint generation failed: ${fingerprintError.message}. Using timestamp-based fingerprint.`, "", false, false);
                     // Use timestamp as fallback fingerprint
                     folderFingerprint = `timestamp_${Date.now()}`;
                 }
             } else {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Incremental save - fingerprint will be null (will be generated on final save)`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Incremental save - fingerprint will be null (will be generated on final save)`, "", false, false);
             }
             
             // Build cache data with streaming compression to avoid memory issues
             const compressedData = await this._buildCompressedCacheData(mode, basePaths, folderFingerprint, isIncremental);
             const compressedSizeMB = (new Blob([compressedData]).size / (1024 * 1024)).toFixed(2);
             
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache saved: ${compressedSizeMB}MB (${cache.files.size} files)`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache saved: ${compressedSizeMB}MB (${cache.files.size} files)`, "", false, false);
             
             try {
                 // Store cache in game.settings (server-side) instead of localStorage (browser-side)
@@ -2874,25 +2874,25 @@ export class ImageCacheManager {
                 await game.settings.set(MODULE.ID, cacheSettingKey, compressedData);
                 
                 if (isIncremental) {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Progress saved (${cache.files.size} files so far)`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Progress saved (${cache.files.size} files so far)`, "", false, false);
                 } else {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache saved to persistent storage`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache saved to persistent storage`, "", false, false);
                 }
             } catch (storageError) {
                 if (storageError.name === 'QuotaExceededError') {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Storage quota exceeded even after compression! Cache size: ${compressedSizeMB}MB. Consider reducing image collection size.`, "", false, false);
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Files in cache: ${cache.files.size}, Folders: ${cache.folders.size}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Storage quota exceeded even after compression! Cache size: ${compressedSizeMB}MB. Consider reducing image collection size.`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Files in cache: ${cache.files.size}, Folders: ${cache.folders.size}`, "", false, false);
                 } else {
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Storage error: ${storageError.message}`, "", false, false);
-                    postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error name: ${storageError.name}, Stack: ${storageError.stack}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Storage error: ${storageError.message}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error name: ${storageError.name}, Stack: ${storageError.stack}`, "", false, false);
                 }
                 throw storageError;
             }
         } catch (error) {
             const cache = this.getCache(mode);
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL ERROR saving cache: ${error.message}`, "", false, false);
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache data - Files: ${cache.files.size}, Folders: ${cache.folders.size}, isIncremental: ${isIncremental}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL ERROR saving cache: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache data - Files: ${cache.files.size}, Folders: ${cache.folders.size}, isIncremental: ${isIncremental}`, "", false, false);
         }
     }
     
@@ -2971,7 +2971,7 @@ export class ImageCacheManager {
             return compressedData;
         } catch (error) {
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Streaming compression failed: ${error.message}. Falling back to standard method.`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Streaming compression failed: ${error.message}. Falling back to standard method.`, "", false, false);
             
             // Fallback to standard method (may still fail on very large caches)
             // Convert single path to array for consistency
@@ -3096,7 +3096,7 @@ export class ImageCacheManager {
             
             return compressed;
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Compression failed: ${error.message}. Using uncompressed data.`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Compression failed: ${error.message}. Using uncompressed data.`, "", false, false);
             return jsonData;
         }
     }
@@ -3137,7 +3137,7 @@ export class ImageCacheManager {
             
             return decompressed;
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Decompression failed: ${error.message}. Using raw data.`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Decompression failed: ${error.message}. Using raw data.`, "", false, false);
             return compressedData;
         }
     }
@@ -3153,7 +3153,7 @@ export class ImageCacheManager {
         
         if (cacheSizeMB > 8) {
             // Warn at 8MB (approaching 10MB limit)
-            postConsoleAndNotification(MODULE.NAME, 
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, 
                 `WARNING: Cache size ${cacheSizeMB}MB approaching localStorage limit. Consider reducing image collection.`, 
                 "", true, false);
         }
@@ -3172,7 +3172,7 @@ export class ImageCacheManager {
             // Load cache from game.settings (server-side) instead of localStorage (browser-side)
             const savedCache = game.settings.get(MODULE.ID, cacheSettingKey);
             if (!savedCache) {
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No cache data found in server settings`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: No cache data found in server settings`, "", true, false);
                 return false;
             }
             
@@ -3182,7 +3182,7 @@ export class ImageCacheManager {
                 decompressedCache = this._decompressCacheData(savedCache);
             } catch (decompressionError) {
                 // If decompression fails, try parsing as-is (might be uncompressed)
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Decompression failed, trying uncompressed format: ${decompressionError.message}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Decompression failed, trying uncompressed format: ${decompressionError.message}`, "", true, false);
                 decompressedCache = savedCache;
             }
             
@@ -3194,23 +3194,23 @@ export class ImageCacheManager {
             const hasFolders = cacheData.folders || cacheData.fo;
             const hasCreatureTypes = cacheData.creatureTypes || cacheData.ct || cacheData.creatureType;
             
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cache validation - Version: ${hasVersion}, Files: ${hasFiles?.length || 'missing'}, Folders: ${hasFolders?.length || 'missing'}, CreatureTypes: ${hasCreatureTypes?.length || 'missing'}`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cache validation - Version: ${hasVersion}, Files: ${hasFiles?.length || 'missing'}, Folders: ${hasFolders?.length || 'missing'}, CreatureTypes: ${hasCreatureTypes?.length || 'missing'}`, "", true, false);
             
             // TEMPORARY FIX: Allow cache with missing creatureTypes (can be empty array)
             if (!hasVersion || !hasFiles || !hasFolders) {
-                postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: (in loadCacheFromStorage) Invalid cache data in storage, will rescan", "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: (in loadCacheFromStorage) Invalid cache data in storage, will rescan", "", false, false);
                 return false;
             }
             
             // CreatureTypes can be missing/empty - that's OK
             if (!hasCreatureTypes) {
-                postConsoleAndNotification(MODULE.NAME, "Token Image Replacement:  (in loadCacheFromStorage) CreatureTypes missing, but cache is valid - proceeding", "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement:  (in loadCacheFromStorage) CreatureTypes missing, but cache is valid - proceeding", "", true, false);
             }
             
             // Check version compatibility
             const version = cacheData.version || cacheData.v;
             if (!version || !version.startsWith('1.')) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cache version incompatible (${version}), cache may need a rescan`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Cache version incompatible (${version}), cache may need a rescan`, "", false, false);
                 cache.needsRescan = true;
             }
 
@@ -3228,13 +3228,13 @@ export class ImageCacheManager {
             }
             
             if (currentBasePaths.length !== cachePaths.length) {
-                postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Number of paths changed; cache may be stale", "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Number of paths changed; cache may be stale", "", true, false);
                 cache.needsRescan = true;
             } else {
                 // Check if any paths changed (order matters for priority)
                 for (let i = 0; i < currentBasePaths.length; i++) {
                     if (currentBasePaths[i] !== cachePaths[i]) {
-                        postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Path configuration changed; cache may be stale", "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Path configuration changed; cache may be stale", "", true, false);
                         cache.needsRescan = true;
                         break;
                     }
@@ -3248,7 +3248,7 @@ export class ImageCacheManager {
                 
                 // CRITICAL FIX: Validate saved fingerprint
                 if (savedFingerprint === 'error' || savedFingerprint === 'no-path') {
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Saved cache has invalid fingerprint (${savedFingerprint}); cache may need a rescan`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Saved cache has invalid fingerprint (${savedFingerprint}); cache may need a rescan`, "", false, false);
                     cache.needsRescan = true;
                 } else {
                     // Use first path for fingerprint check (fingerprint is per-path, but we check first one for now)
@@ -3256,13 +3256,13 @@ export class ImageCacheManager {
                     if (firstPath) {
                         const currentFingerprint = await this._generateFolderFingerprint(firstPath);
                         if (savedFingerprint !== currentFingerprint) {
-                            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Folder structure changed; cache may be stale", "", true, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Folder structure changed; cache may be stale", "", true, false);
                             cache.needsRescan = true;
                         }
                     }
                 }
             } else if (!cacheData.folderFingerprint && !cacheData.isIncremental) {
-                postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Saved cache missing fingerprint (likely from failed scan), cache may be incomplete", "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Saved cache missing fingerprint (likely from failed scan), cache may be incomplete", "", false, false);
                 cache.needsRescan = true;
             }
             
@@ -3300,19 +3300,19 @@ export class ImageCacheManager {
             cache.totalFiles = cacheData.totalFiles || cacheData.tf;
             cache.ignoredFilesCount = cacheData.ignoredFilesCount || cacheData.ifc || 0;
             
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache restored from storage: ${cache.files.size} files, last scan: ${new Date(cache.lastScan).toLocaleString()}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache restored from storage: ${cache.files.size} files, last scan: ${new Date(cache.lastScan).toLocaleString()}`, "", false, false);
             
             // Update the cache status setting for display
             this._updateCacheStatusSetting(mode);
             
             // Log final cache status after loading from storage
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache loading completed. Files: ${cache.files.size}, Folders: ${cache.folders.size}, Creature Types: ${cache.creatureTypes.size}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache loading completed. Files: ${cache.files.size}, Folders: ${cache.folders.size}, Creature Types: ${cache.creatureTypes.size}`, "", false, false);
             
             return true;
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: CRITICAL ERROR loading cache: ${error.message}`, "", false, false);
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error stack: ${error.stack}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: CRITICAL ERROR loading cache: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error stack: ${error.stack}`, "", false, false);
             
             // Try to get cache info for diagnostics
             try {
@@ -3320,10 +3320,10 @@ export class ImageCacheManager {
                 if (savedCache) {
                     const cacheSize = new Blob([savedCache]).size;
                     const cacheSizeMB = (cacheSize / (1024 * 1024)).toFixed(2);
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Corrupted cache size: ${cacheSizeMB}MB`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Corrupted cache size: ${cacheSizeMB}MB`, "", false, false);
                 }
             } catch (diagError) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Could not get cache diagnostics: ${diagError.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Could not get cache diagnostics: ${diagError.message}`, "", false, false);
             }
             
             return false;
@@ -3336,12 +3336,12 @@ export class ImageCacheManager {
     static _clearCacheFromStorage() {
         try {
             localStorage.removeItem('tokenImageReplacement_cache');
-            postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cache cleared from persistent storage", "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cache cleared from persistent storage", "", false, false);
             
             // Update the cache status setting to reflect cleared state
             this._updateCacheStatusSetting();
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error clearing cache: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Error clearing cache: ${error.message}`, "", false, false);
         }
     }
     
@@ -3352,7 +3352,7 @@ export class ImageCacheManager {
     static async _generateFolderFingerprint(basePath) {
         try {
             if (!basePath) {
-                postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cannot generate fingerprint - no basePath provided", "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cannot generate fingerprint - no basePath provided", "", false, false);
                 return 'no-path';
             }
             
@@ -3377,18 +3377,18 @@ export class ImageCacheManager {
                 } catch (error) {
                     // Skip inaccessible directories but count errors
                     errorCount++;
-                    postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Warning - cannot access directory ${dir}: ${error.message}`, "", false, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Warning - cannot access directory ${dir}: ${error.message}`, "", false, false);
                 }
             }
             
             await collectPaths.call(this, basePath);
             
             if (allPaths.length === 0) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: WARNING - No paths found for fingerprint at ${basePath}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: WARNING - No paths found for fingerprint at ${basePath}`, "", false, false);
             }
             
             if (errorCount > 0) {
-                postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Fingerprint generated with ${errorCount} directory access errors`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Fingerprint generated with ${errorCount} directory access errors`, "", false, false);
             }
             
             // Sort paths for consistent fingerprint
@@ -3408,8 +3408,8 @@ export class ImageCacheManager {
             return fingerprint;
             
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: CRITICAL ERROR generating folder fingerprint: ${error.message}`, "", false, false);
-            postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Stack trace: ${error.stack}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: CRITICAL ERROR generating folder fingerprint: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Stack trace: ${error.stack}`, "", false, false);
             return 'error';
         }
     }
@@ -3418,7 +3418,7 @@ export class ImageCacheManager {
      * Force cache refresh (ignores stored cache)
      */
     static async forceRefreshCache() {
-        postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Force refreshing cache...", "", false, false);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Force refreshing cache...", "", false, false);
         this._clearCacheFromStorage();
         // Use getTokenImagePaths() to get all configured paths
         await this._scanFolderStructure(); // Will use getTokenImagePaths() internally
@@ -3442,7 +3442,7 @@ export class ImageCacheManager {
             } catch (decompressionError) {
                 // If decompression fails, try parsing as-is (might be uncompressed)
                 const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Decompression failed, trying uncompressed format: ${decompressionError.message}`, "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Decompression failed, trying uncompressed format: ${decompressionError.message}`, "", true, false);
                 decompressedCache = savedCache;
             }
             
@@ -3488,11 +3488,11 @@ export class ImageCacheManager {
                     : 'tokenImageReplacementDisplayCacheStatus';
                 game.settings.set(MODULE.ID, statusSettingKey, status.message);
                 const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-                postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache status updated: ${status.message}`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache status updated: ${status.message}`, "", false, false);
             }
         } catch (error) {
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error updating cache status setting: ${error.message}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error updating cache status setting: ${error.message}`, "", false, false);
         }
     }
 
@@ -3515,7 +3515,7 @@ export class ImageCacheManager {
         const cache = this.getCache(mode);
         
         // Single setting for both token and portrait
-        const ignoredFoldersSetting = getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '');
+        const ignoredFoldersSetting = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementIgnoredFolders', '');
         const ignoredFolders = ignoredFoldersSetting 
             ? ignoredFoldersSetting.split(',').map(f => f.trim()).filter(f => f)
             : [];

@@ -2,8 +2,8 @@
  * Loot utilities: roll loot tables, add random coins, add loot to actor.
  * Used when converting dead token to loot pile.
  */
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
-import { postConsoleAndNotification, getSettingSafely } from './api-helpers.js';
 
 export class LootUtilities {
     /**
@@ -15,19 +15,19 @@ export class LootUtilities {
      */
     static async _rollLootTable(tableName, timesToRoll, actor, quantityMax = 1) {
         try {
-            postConsoleAndNotification(MODULE.NAME, `Looking for loot table: "${tableName}"`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Looking for loot table: "${tableName}"`, "", true, false);
 
             const table = game.tables.find(t => t.name === tableName);
             if (!table) {
-                postConsoleAndNotification(MODULE.NAME, `Loot table "${tableName}" not found`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Loot table "${tableName}" not found`, "", false, false);
                 return;
             }
 
-            postConsoleAndNotification(MODULE.NAME, `Found table "${tableName}", rolling ${timesToRoll} times`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Found table "${tableName}", rolling ${timesToRoll} times`, "", true, false);
 
             for (let i = 0; i < timesToRoll; i++) {
                 const roll = await table.draw({ displayChat: false });
-                postConsoleAndNotification(MODULE.NAME, `Roll ${i+1} results:`, roll, true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Roll ${i+1} results:`, roll, true, false);
 
                 if (!roll || !roll.results || roll.results.length === 0) {
                     continue;
@@ -35,20 +35,20 @@ export class LootUtilities {
 
                 for (const result of roll.results) {
                     const resultName = result.name || result.description || 'N/A';
-                    postConsoleAndNotification(MODULE.NAME, `Processing result - type: ${result.type}, name: ${resultName}, documentCollection: ${result.documentCollection}`, "", true, false);
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Processing result - type: ${result.type}, name: ${resultName}, documentCollection: ${result.documentCollection}`, "", true, false);
 
                     if (result.type === CONST.TABLE_RESULT_TYPES.DOCUMENT || result.type === 'pack' || result.documentCollection) {
-                        postConsoleAndNotification(MODULE.NAME, `This is a document/pack result`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `This is a document/pack result`, "", true, false);
 
                         let item = null;
                         if (result.documentCollection && result.documentId) {
-                            postConsoleAndNotification(MODULE.NAME, `Getting item from pack: ${result.documentCollection}, ID: ${result.documentId}`, "", true, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Getting item from pack: ${result.documentCollection}, ID: ${result.documentId}`, "", true, false);
                             const pack = game.packs.get(result.documentCollection);
                             if (pack) {
                                 item = await pack.getDocument(result.documentId);
-                                postConsoleAndNotification(MODULE.NAME, `Retrieved item:`, item, true, false);
+                                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Retrieved item:`, item, true, false);
                             } else {
-                                postConsoleAndNotification(MODULE.NAME, `Pack not found: ${result.documentCollection}`, "", false, false);
+                                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Pack not found: ${result.documentCollection}`, "", false, false);
                             }
                         }
 
@@ -62,20 +62,20 @@ export class LootUtilities {
                                 itemData.system.quantity = quantity;
                             }
                             await actor.createEmbeddedDocuments('Item', [itemData]);
-                            postConsoleAndNotification(MODULE.NAME, `Added ${itemData.name} to ${actor.name}`, "", false, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Added ${itemData.name} to ${actor.name}`, "", false, false);
                         } else {
-                            postConsoleAndNotification(MODULE.NAME, `Could not retrieve item from result`, "", false, false);
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Could not retrieve item from result`, "", false, false);
                         }
                     } else if (result.type === CONST.TABLE_RESULT_TYPES.TEXT || result.type === 'text') {
                         const textName = result.name || result.description || 'N/A';
-                        postConsoleAndNotification(MODULE.NAME, `Loot table text result: ${textName}`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Loot table text result: ${textName}`, "", true, false);
                     } else {
-                        postConsoleAndNotification(MODULE.NAME, `Unknown result type: ${result.type}`, "", true, false);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Unknown result type: ${result.type}`, "", true, false);
                     }
                 }
             }
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, `Error rolling loot table ${tableName}:`, error, false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error rolling loot table ${tableName}:`, error, false, false);
         }
     }
 
@@ -84,11 +84,11 @@ export class LootUtilities {
 
         try {
             const currency = actor.system.currency;
-            const maxCopper = Math.max(0, Number(getSettingSafely(MODULE.ID, 'tokenLootMaxCopperAmount', 0)) || 0);
-            const maxSilver = Math.max(0, Number(getSettingSafely(MODULE.ID, 'tokenLootMaxSilverAmount', 0)) || 0);
-            const maxGold = Math.max(0, Number(getSettingSafely(MODULE.ID, 'tokenLootMaxGoldAmount', 0)) || 0);
-            const maxPlatinum = Math.max(0, Number(getSettingSafely(MODULE.ID, 'tokenLootMaxPlatinumAmount', 0)) || 0);
-            const maxElectrum = Math.max(0, Number(getSettingSafely(MODULE.ID, 'tokenLootMaxElectrumAmount', 0)) || 0);
+            const maxCopper = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxCopperAmount', 0)) || 0);
+            const maxSilver = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxSilverAmount', 0)) || 0);
+            const maxGold = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxGoldAmount', 0)) || 0);
+            const maxPlatinum = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxPlatinumAmount', 0)) || 0);
+            const maxElectrum = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxElectrumAmount', 0)) || 0);
 
             const copperAmount = maxCopper > 0 ? Math.floor(Math.random() * maxCopper) + 1 : 0;
             const silverAmount = maxSilver > 0 ? Math.floor(Math.random() * maxSilver) + 1 : 0;
@@ -104,7 +104,7 @@ export class LootUtilities {
                 "system.currency.ep": (currency.ep || 0) + electrumAmount
             });
 
-            postConsoleAndNotification(
+            BlacksmithUtils.postConsoleAndNotification(
                 MODULE.NAME,
                 "Added coins:",
                 `CP: ${copperAmount}, SP: ${silverAmount}, EP: ${electrumAmount}, GP: ${goldAmount}, PP: ${platinumAmount}`,
@@ -113,7 +113,7 @@ export class LootUtilities {
                 false
             );
         } catch (error) {
-            postConsoleAndNotification(MODULE.NAME, "Error adding coins:", error, true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Error adding coins:", error, true, false);
         }
     }
 
@@ -141,11 +141,11 @@ export class LootUtilities {
             }
         }
 
-        const addCoins = getSettingSafely(MODULE.ID, 'tokenLootAddCoins', true);
+        const addCoins = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootAddCoins', true);
         if (addCoins) await LootUtilities._addRandomCoins(actor);
 
-        const epicTableName = getSettingSafely(MODULE.ID, 'tokenLootTableEpic', '');
-        const epicOddsSetting = Number(getSettingSafely(MODULE.ID, 'tokenLootTableEpicOdds', 0)) || 0;
+        const epicTableName = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootTableEpic', '');
+        const epicOddsSetting = Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootTableEpicOdds', 0)) || 0;
         if (epicTableName && epicTableName !== 'none' && !epicTableName.startsWith('--') && epicOddsSetting > 0) {
             const epicRoll = Math.floor(Math.random() * 1000) + 1;
             if (epicRoll <= Math.min(epicOddsSetting, 1000)) {

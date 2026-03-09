@@ -2,8 +2,8 @@
 // ===== IMAGE MATCHING LOGIC =======================================
 // ================================================================== 
 
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
-import { postConsoleAndNotification, getSettingSafely } from './api-helpers.js';
 
 /**
  * Image Matching Logic

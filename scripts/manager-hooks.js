@@ -2,8 +2,8 @@
  * HookManager - Simple Orchestration Layer
  * Registers hooks and provides cleanup - no business logic
  */
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
-import { postConsoleAndNotification } from './api-helpers.js';
 
 export class HookManager {
     static hooks = new Map(); // hookName -> { hookId, callbacks: [], registeredAt }
@@ -131,7 +131,7 @@ export class HookManager {
         }
         
         // Logging hook registration
-        postConsoleAndNotification(
+        BlacksmithUtils.postConsoleAndNotification(
             MODULE.NAME,
             `Hook registered: ${name}`,
             { description, priority, totalCallbacks: entry.callbacks.length },
@@ -160,7 +160,7 @@ export class HookManager {
         this.hooks.delete(hookName);
         
         
-        postConsoleAndNotification(
+        BlacksmithUtils.postConsoleAndNotification(
             MODULE.NAME,
             `Hook removed: ${hookName}`,
             { totalHooks: this.hooks.size },
@@ -203,7 +203,7 @@ export class HookManager {
             Hooks.off(hookName, entry.hookId);
             this.hooks.delete(hookName);
             
-            postConsoleAndNotification(
+            BlacksmithUtils.postConsoleAndNotification(
                 MODULE.NAME,
                 `Hook completely removed: ${hookName}`,
                 { totalHooks: this.hooks.size },
@@ -213,7 +213,7 @@ export class HookManager {
 
         } else {
 
-            postConsoleAndNotification(
+            BlacksmithUtils.postConsoleAndNotification(
                 MODULE.NAME,
                 `Callback removed from hook: ${hookName}`,
                 { remainingCallbacks: entry.callbacks.length },
@@ -252,7 +252,7 @@ export class HookManager {
         if (callbackId) {
             const removed = this.removeCallback(callbackId);
             if (removed) {
-                postConsoleAndNotification(
+                BlacksmithUtils.postConsoleAndNotification(
                     MODULE.NAME,
                     `Hook callback removed via unregisterHook`,
                     { name, callbackId },
@@ -266,7 +266,7 @@ export class HookManager {
         const hookExists = this.hooks.has(name);
         if (hookExists) {
             this.removeHook(name);
-            postConsoleAndNotification(
+            BlacksmithUtils.postConsoleAndNotification(
                 MODULE.NAME,
                 `Hook removed via unregisterHook`,
                 { name },
@@ -307,7 +307,7 @@ export class HookManager {
         this.hooks.clear();
         this.contexts.clear();
         
-        postConsoleAndNotification(
+        BlacksmithUtils.postConsoleAndNotification(
             MODULE.NAME,
             'All hooks cleaned up',
             { totalCleaned },
@@ -479,7 +479,7 @@ export class HookManager {
             HookManager.disposeByContext(`token:${data._id ?? data.id}`);
         });
         
-        postConsoleAndNotification(
+        BlacksmithUtils.postConsoleAndNotification(
             MODULE.NAME,
             'Hook Manager | Initialization',
             'Initialized with console commands: curatorHooks(), curatorHookDetails(), curatorHookStats()',
