@@ -9,8 +9,21 @@ import { TokenImageUtilities } from './token-image-utilities.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { registerSettings } from './settings.js';
 import { getSettingSafely } from './api-helpers.js';
+import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
-Hooks.once('ready', function () {
+Hooks.once('ready', async function () {
+    try {
+        if (window.BlacksmithModuleManager) {
+            window.BlacksmithModuleManager.registerModule(MODULE.ID, {
+                name: MODULE.TITLE,
+                version: game.modules.get(MODULE.ID)?.version || '1.0.0'
+            });
+            console.log(`✅ Module ${MODULE.TITLE} registered with Blacksmith successfully`);
+        }
+    } catch (error) {
+        console.error(`❌ Failed to register ${MODULE.TITLE} with Blacksmith:`, error);
+    }
+
     const blacksmith = game.modules.get('coffee-pub-blacksmith')?.api;
     if (!blacksmith) {
         console.warn(`${MODULE.TITLE} | Blacksmith not found; skipping registration.`);

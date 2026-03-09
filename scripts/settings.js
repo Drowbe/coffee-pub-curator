@@ -89,8 +89,33 @@ export function getTokenImageReplacementCacheStats() {
  * @param {Object} [blacksmithApi] - Blacksmith module.api; used for arrSoundChoices on dead token sound settings.
  */
 export function registerSettings(blacksmithApi) {
-    const soundChoices = (blacksmithApi?.BLACKSMITH?.arrSoundChoices) || { none: 'None' };
-    const tableChoices = (blacksmithApi?.BLACKSMITH?.arrTableChoices) || { '-- Choose a General Loot Table --': '-- Choose a General Loot Table --' };
+    const soundChoices = window.BlacksmithConstants?.arrSoundChoices || blacksmithApi?.BLACKSMITH?.arrSoundChoices || { none: 'None' };
+    const tableChoices = window.BlacksmithConstants?.arrTableChoices || blacksmithApi?.BLACKSMITH?.arrTableChoices || { '-- Choose a General Loot Table --': '-- Choose a General Loot Table --' };
+
+    // Dynamic update for choices if they arrive later via blacksmithUpdated hook
+    Hooks.on('blacksmithUpdated', (data) => {
+        if (data.type === 'ready') {
+            const api = window.BlacksmithConstants || game.modules.get('coffee-pub-blacksmith')?.api?.BLACKSMITH;
+            if (!api) return;
+
+            if (api.arrSoundChoices) {
+                const sChoices = api.arrSoundChoices;
+                const soundSettings = ['deadTokenSoundNPC', 'deadTokenSoundPC', 'deadTokenSoundStable', 'tokenLootSound'];
+                for (const key of soundSettings) {
+                    const setting = game.settings.settings.get(`${MODULE.ID}.${key}`);
+                    if (setting) setting.choices = sChoices;
+                }
+            }
+            if (api.arrTableChoices) {
+                const tChoices = api.arrTableChoices;
+                const tableSettings = ['tokenLootTableGeneral', 'tokenLootTableGear', 'tokenLootTableTreasure', 'tokenLootTableEpic'];
+                for (const key of tableSettings) {
+                    const setting = game.settings.settings.get(`${MODULE.ID}.${key}`);
+                    if (setting) setting.choices = tChoices;
+                }
+            }
+        }
+    });
 
     // ----- Dead Tokens -----
     registerHeader('DeadTokens', 'headingH2DeadTokens-Label', 'headingH2DeadTokens-Hint', 'H2', GROUP, 'world');
