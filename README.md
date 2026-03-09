@@ -37,7 +37,8 @@ This module was originally part of Coffee Pub Blacksmith and has been extracted 
    ```
    https://github.com/Drowbe/coffee-pub-curator/releases/latest/download/module.json
    ```
-2. Enable the module in your game world's module settings.
+2. Alternatively, you can download the [latest zip release](https://github.com/Drowbe/coffee-pub-curator/releases/latest/download/coffee-pub-curator.zip) and extract it to your `Data/modules/coffee-pub-curator` directory.
+3. Enable the module in your game world's module settings.
 
 ## Configuration
 
