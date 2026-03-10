@@ -28,6 +28,11 @@ Hooks.once('ready', async function () {
         console.warn(`${MODULE.TITLE} | Blacksmith not found; skipping registration.`);
         return;
     }
+
+    registerSettings(blacksmith);
+
+    if (!game.user.isGM) return;
+
     if (typeof blacksmith.registerMenubarTool !== 'function') {
         setTimeout(() => {
             const api = game.modules.get('coffee-pub-blacksmith')?.api;
@@ -43,7 +48,6 @@ Hooks.once('ready', async function () {
 });
 
 function initializeCurator(blacksmith) {
-    registerSettings(blacksmith);
     HookManager.initialize();
     ImageCacheManager.initialize();
     TokenImageUtilities.initialize();

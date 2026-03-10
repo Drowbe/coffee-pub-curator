@@ -3481,6 +3481,7 @@ export class ImageCacheManager {
      */
     static _updateCacheStatusSetting(mode = 'token') {
         try {
+            if (!game.user.isGM) return;
             if (game.settings && game.settings.set) {
                 const status = this.getCacheStorageStatus(mode);
                 const statusSettingKey = mode === this.MODES.PORTRAIT 
