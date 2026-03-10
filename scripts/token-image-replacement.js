@@ -3320,10 +3320,11 @@ export class TokenImageReplacementWindow extends Application {
         const fileCount = ImageCacheManager.getCache(this.mode).files.size;
         const lastScan = ImageCacheManager.getCache(this.mode).lastScan;
         
-        // Get cache size from server settings (not localStorage)
+        // Get cache size from server settings (not localStorage) for current mode
         let cacheSizeText = '';
         try {
-            const cacheData = game.settings.get(MODULE.ID, 'tokenImageReplacementCache');
+            const cacheSettingKey = ImageCacheManager.getCacheSettingKey(this.mode);
+            const cacheData = game.settings.get(MODULE.ID, cacheSettingKey);
             if (cacheData) {
                 const sizeMB = (new Blob([cacheData]).size / (1024 * 1024)).toFixed(2);
                 cacheSizeText = `, ${sizeMB}MB`;

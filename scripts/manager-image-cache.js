@@ -3426,10 +3426,12 @@ export class ImageCacheManager {
     
     /**
      * Check cache storage status
+     * @param {string} mode - 'token' or 'portrait'
      */
-    static getCacheStorageStatus() {
-        // Read from game.settings instead of localStorage
-        const savedCache = game.settings.get(MODULE.ID, 'tokenImageReplacementCache');
+    static getCacheStorageStatus(mode = 'token') {
+        // Read from game.settings for the given mode
+        const cacheSettingKey = this.getCacheSettingKey(mode);
+        const savedCache = game.settings.get(MODULE.ID, cacheSettingKey);
         if (!savedCache) {
             return { hasStoredCache: false, message: "No cache in storage" };
         }
