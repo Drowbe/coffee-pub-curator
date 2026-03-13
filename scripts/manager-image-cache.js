@@ -398,27 +398,11 @@ export class ImageCacheManager {
     static async _loadMonsterMappingData() {
         try {
             const newSettingKey = 'tokenImageReplacementMonsterMapping';
-            const oldSettingKey = 'targetedIndicatorEnabled'; // Old key (was incorrectly used)
             
             // Check if we already have the data in the new location
             let existingData = game.settings.get(MODULE.ID, newSettingKey);
             if (existingData && Object.keys(existingData).length > 0) {
                 return;
-            }
-            
-            // Migration: Check if data exists in old location and migrate it
-            try {
-                const oldData = game.settings.get(MODULE.ID, oldSettingKey);
-                if (oldData && typeof oldData === 'object' && Object.keys(oldData).length > 0 && oldData.monsters) {
-                    // This is monster mapping data in the wrong location - migrate it
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Migrating monster mapping data to new setting key...", "", true, false);
-                    await game.settings.set(MODULE.ID, newSettingKey, oldData);
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Migrated monster mapping data with ${Object.keys(oldData.monsters).length} monsters`, "", true, false);
-                    return;
-                }
-            } catch (migrationError) {
-                // Old setting might not exist or might be the Boolean value - that's fine, continue to load from file
-                console.log('No existing monster mapping data to migrate:', migrationError);
             }
             
             // No existing data found - load from resources
@@ -454,23 +438,8 @@ export class ImageCacheManager {
             if (mappingData && typeof mappingData === 'object' && mappingData.monsters) {
                 this.monsterMapping = mappingData;
             } else {
-                // Fallback: try old key for migration compatibility
-                try {
-                    const oldData = game.settings.get(MODULE.ID, 'targetedIndicatorEnabled');
-                    if (oldData && typeof oldData === 'object' && oldData.monsters) {
-                        // This is monster mapping data - use it temporarily
-                        this.monsterMapping = oldData;
-                        console.warn('Using monster mapping from old setting key. Migration recommended.');
-                    } else {
-                        // Fallback: empty mapping
-                        console.warn('Monster mapping not found in settings, using empty mapping');
-                        this.monsterMapping = { monsters: {} };
-                    }
-                } catch (fallbackError) {
-                    // Old setting might be Boolean (correct usage) - use empty mapping
-                    console.warn('Monster mapping not found in settings, using empty mapping');
-                    this.monsterMapping = { monsters: {} };
-                }
+                console.warn('Monster mapping not found in settings, using empty mapping');
+                this.monsterMapping = { monsters: {} };
             }
         } catch (error) {
             console.warn('Failed to load monster mapping:', error);
