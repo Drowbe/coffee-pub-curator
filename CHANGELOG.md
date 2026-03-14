@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [13.0.4]
+## [13.0.4] - 2026-03-14
+
+### Changed
+- Curator no longer owns or initializes Blacksmith's current-turn and targeted token indicator behavior. That feature now lives entirely in Blacksmith.
+
+### Removed
+- Removed the orphaned turn-indicator, targeted-indicator, and related token movement/visibility helper code from `scripts/token-image-utilities.js`.
+- Removed the stale `targetedIndicatorEnabled` fallback reference from `scripts/manager-image-cache.js`.
 
 
 
