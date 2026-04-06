@@ -11,6 +11,18 @@ import { registerSettings } from './settings.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
 Hooks.once('ready', async function () {
+    const blacksmith = game.modules.get('coffee-pub-blacksmith')?.api;
+    if (!blacksmith) {
+        console.warn(`${MODULE.TITLE} | Blacksmith not found; skipping registration.`);
+        return;
+    }
+
+    // module.api is assigned early; window globals (BlacksmithUtils, etc.) wire later.
+    // Wait so initializeCurator and settings do not call null helpers (see Blacksmith wiki).
+    if (typeof BlacksmithAPI.waitForReady === 'function') {
+        await BlacksmithAPI.waitForReady();
+    }
+
     try {
         if (window.BlacksmithModuleManager) {
             window.BlacksmithModuleManager.registerModule(MODULE.ID, {
@@ -21,12 +33,6 @@ Hooks.once('ready', async function () {
         }
     } catch (error) {
         console.error(`❌ Failed to register ${MODULE.TITLE} with Blacksmith:`, error);
-    }
-
-    const blacksmith = game.modules.get('coffee-pub-blacksmith')?.api;
-    if (!blacksmith) {
-        console.warn(`${MODULE.TITLE} | Blacksmith not found; skipping registration.`);
-        return;
     }
 
     registerSettings(blacksmith);

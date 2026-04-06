@@ -479,13 +479,18 @@ export class HookManager {
             HookManager.disposeByContext(`token:${data._id ?? data.id}`);
         });
         
-        BlacksmithUtils.postConsoleAndNotification(
-            MODULE.NAME,
-            'Hook Manager | Initialization',
-            'Initialized with console commands: curatorHooks(), curatorHookDetails(), curatorHookStats()',
-            true,
-            false
-        );
+        const utils = globalThis.BlacksmithUtils;
+        if (typeof utils?.postConsoleAndNotification === 'function') {
+            utils.postConsoleAndNotification(
+                MODULE.NAME,
+                'Hook Manager | Initialization',
+                'Initialized with console commands: curatorHooks(), curatorHookDetails(), curatorHookStats()',
+                true,
+                false
+            );
+        } else {
+            console.log(`${MODULE.NAME} | Hook Manager | Initialization (BlacksmithUtils not ready)`);
+        }
         
         // Set up global console commands for easy access
         if (typeof window !== 'undefined') {
