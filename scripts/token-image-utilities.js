@@ -268,7 +268,7 @@ export class TokenImageUtilities {
             
             // Check if Item Piles module is installed and active
             if (!game.modules.get("item-piles")?.active) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Item Piles module not installed. Cannot convert token to loot.", "", true, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Convert to Loot is enabled in Curator settings, but the Item Piles module is not active. Token cannot be converted to a loot pile. Please install and enable Item Piles, or disable Convert to Loot.", "", false, true);
                 return;
             }
             

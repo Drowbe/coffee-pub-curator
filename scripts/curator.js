@@ -58,6 +58,14 @@ function initializeCurator(blacksmith) {
     ImageCacheManager.initialize();
     TokenImageUtilities.initialize();
 
+    // Warn GM if Convert to Loot is enabled but Item Piles is not active
+    if (game.user.isGM) {
+        const lootEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false);
+        if (lootEnabled && !game.modules.get('item-piles')?.active) {
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Curator: Convert to Loot is enabled in settings, but the Item Piles module is not active. Tokens will not be converted to loot piles. Please install and enable Item Piles, or disable Convert to Loot in Curator settings.", "", false, true);
+        }
+    }
+
     blacksmith.registerMenubarTool('replacetoken', {
         icon: 'fa-solid fa-images',
         name: 'replacetoken',
