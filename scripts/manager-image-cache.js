@@ -1135,6 +1135,14 @@ export class ImageCacheManager {
             if (this._isInvalidFilePath(fileInfo.fullPath)) {
                 invalidPaths.push(fileInfo.fullPath);
                 cache.files.delete(fileName);
+                if (cache.filesByFileName && fileInfo.name) {
+                    const keys = cache.filesByFileName.get(fileInfo.name.toLowerCase());
+                    if (keys) {
+                        const idx = keys.indexOf(fileName);
+                        if (idx !== -1) keys.splice(idx, 1);
+                        if (keys.length === 0) cache.filesByFileName.delete(fileInfo.name.toLowerCase());
+                    }
+                }
                 cleanedCount++;
             }
         }

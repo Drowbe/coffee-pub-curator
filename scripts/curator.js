@@ -37,6 +37,16 @@ Hooks.once('ready', async function () {
 
     registerSettings(blacksmith);
 
+    // Socket handler — must register for ALL users, not just GM
+    game.socket.on(`module.${MODULE.ID}`, (data) => {
+        if (data?.action === 'showImage') {
+            const ImagePopout = foundry.applications?.apps?.ImagePopout ?? window.ImagePopout;
+            if (ImagePopout) {
+                new ImagePopout(data.src, { title: data.title ?? '', shareable: false }).render(true);
+            }
+        }
+    });
+
     if (!game.user.isGM) return;
 
     if (typeof blacksmith.registerMenubarTool !== 'function') {

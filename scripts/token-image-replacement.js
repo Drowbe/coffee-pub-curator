@@ -1013,6 +1013,18 @@ export class TokenImageReplacementWindow extends Application {
             }
         });
 
+        coreItems.push({
+            name: 'View Full Size and Share',
+            icon: 'fa-solid fa-users',
+            description: 'Show this image to all connected players',
+            callback: () => {
+                const title = imageName || imagePath.split('/').pop();
+                game.socket.emit(`module.${MODULE.ID}`, { action: 'showImage', src: imagePath, title });
+                const ImagePopout = foundry.applications?.apps?.ImagePopout ?? window.ImagePopout;
+                if (ImagePopout) new ImagePopout(imagePath, { title, shareable: false }).render(true);
+            }
+        });
+
         if (this.selectedToken) {
             const modeLabel = this._getModeLabel();
             coreItems.push({
@@ -1074,11 +1086,6 @@ export class TokenImageReplacementWindow extends Application {
             callback: () => window.open(imagePath, '_blank', 'noopener,noreferrer')
         });
 
-        coreItems.push({
-            name: 'View Full Size',
-            icon: 'fa-solid fa-expand',
-            callback: () => this._showFullSizeImage(imagePath, imageName)
-        });
 
         const totalItems = moduleItems.length + coreItems.length;
         if (totalItems > 0) {
