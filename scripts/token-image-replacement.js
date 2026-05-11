@@ -996,11 +996,11 @@ export class TokenImageReplacementWindow extends Application {
                 if (!fileInfo) return;
                 if (isFavorited) {
                     ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
-                    await ImageCacheManager._saveCacheToStorage(this.mode);
+                    await ImageCacheManager._saveMetadataToStorage(this.mode);
                     ui.notifications.info(`Removed ${imageName} from favorites`);
                 } else {
                     ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
-                    await ImageCacheManager._saveCacheToStorage(this.mode);
+                    await ImageCacheManager._saveMetadataToStorage(this.mode);
                     ui.notifications.info(`Added ${imageName} to favorites`);
                 }
                 if (this.currentFilter === 'favorites') {
@@ -2579,10 +2579,10 @@ export class TokenImageReplacementWindow extends Application {
         if (!fileName) {
             return null;
         }
-        
+
         const cache = ImageCacheManager.getCache(this.mode);
         const fileNameKey = fileName.toLowerCase();
-        
+
         // First try using filesByFileName index (supports multiple files with same name)
         if (cache.filesByFileName && cache.filesByFileName.has(fileNameKey)) {
             const cacheKeys = cache.filesByFileName.get(fileNameKey);

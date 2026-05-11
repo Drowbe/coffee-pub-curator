@@ -1745,7 +1745,7 @@ export class ImageCacheManager {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning path ${sourceIndex}/${basePaths.length}: ${basePath}`, "", true, false);
                 
                 // Use Foundry's FilePicker to get directory contents for this path
-                const files = await this._getDirectoryContents(basePath, sourceIndex, mode, basePaths.length);
+                const files = await this._getDirectoryContents(basePath, sourceIndex, mode, basePaths.length, true);
                 
                 if (files.length > 0) {
                     totalFiles += files.length;
@@ -2089,12 +2089,10 @@ export class ImageCacheManager {
                         }
                     }
                     
-                    // Save cache incrementally after each main folder to prevent data loss
-                    if (subDirFiles.length > 0) {
-                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Saving progress after ${subDirName} (${subDirFiles.length} files)...`, "", false, false);
+                    // Save cache incrementally every 5 subdirectories to prevent data loss without excessive writes
+                    if (subDirFiles.length > 0 && processedCount % 5 === 0) {
                         try {
-                        await this._saveCacheToStorage(mode, true); // true = incremental save
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Successfully saved progress after ${subDirName}`, "", false, false);
+                            await this._saveCacheToStorage(mode, true); // true = incremental save
                         } catch (saveError) {
                             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Failed to save progress after ${subDirName}: ${saveError.message}`, "", false, false);
                             // Continue with scan even if save fails
@@ -2273,24 +2271,6 @@ export class ImageCacheManager {
         const relativePath = filePath.replace(`${basePath}/`, '');
         // fileName already declared at the top of the function
         
-        // Get file stats if possible
-        let fileSize = 0;
-        let lastModified = Date.now();
-        
-        try {
-            // Try to get file information using FilePicker (v13: use namespaced FilePicker)
-            const fileInfo = await ImageCacheManager.FilePicker.browse("data", filePath);
-            if (fileInfo && fileInfo.files && fileInfo.files.length > 0) {
-                // For now, we'll use basic info - in a real implementation,
-                // we might want to get actual file size and modification date
-                fileSize = 0; // Placeholder
-                lastModified = Date.now(); // Placeholder
-            }
-        } catch (error) {
-            // File info not available, use defaults
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Could not get file info for ${filePath}: ${error.message}`, "", false, false);
-        }
-        
         // Extract metadata from filename and path
         const metadata = ImageCacheManager._extractMetadata(fileName, relativePath);
         
@@ -2303,8 +2283,8 @@ export class ImageCacheManager {
             name: fileName,
             path: relativePath,
             fullPath: filePath,
-            size: fileSize,
-            lastModified: lastModified,
+            size: 0,
+            lastModified: Date.now(),
             metadata: metadata
         };
     }
@@ -2349,6 +2329,7 @@ export class ImageCacheManager {
             cache.files.clear();
             cache.folders.clear();
             cache.creatureTypes.clear();
+            cache.filesByFileName = new Map();
         }
         
         let validFiles = 0;
@@ -2792,6 +2773,24 @@ export class ImageCacheManager {
     }
     
     /**
+     * Save cache metadata changes (e.g. favorites) without regenerating the folder fingerprint.
+     * Uses the last known fingerprint from the most recent scan or load.
+     */
+    static async _saveMetadataToStorage(mode = 'token') {
+        try {
+            const cache = this.getCache(mode);
+            const cacheSettingKey = this.getCacheSettingKey(mode);
+            const basePaths = this.getTokenImagePathsForMode(mode);
+            const fingerprint = cache.lastFingerprint || null;
+            const compressedData = await this._buildCompressedCacheData(mode, basePaths, fingerprint, false);
+            await game.settings.set(MODULE.ID, cacheSettingKey, compressedData);
+        } catch (error) {
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error saving metadata: ${error.message}`, "", false, false);
+        }
+    }
+
+    /**
      * Save cache to localStorage
      * @param {boolean} isIncremental - If true, this is an incremental save during scanning
      */
@@ -2818,10 +2817,12 @@ export class ImageCacheManager {
                     );
                     
                     folderFingerprint = await Promise.race([fingerprintPromise, timeoutPromise]);
-                    
+
                     // CRITICAL FIX: Validate fingerprint for final saves
                     if (!folderFingerprint || folderFingerprint === 'error' || folderFingerprint === 'no-path') {
                         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Invalid fingerprint generated: ${folderFingerprint}. This may cause issues on next load.`, "", false, false);
+                    } else {
+                        cache.lastFingerprint = folderFingerprint;
                     }
                 } catch (fingerprintError) {
                     BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Fingerprint generation failed: ${fingerprintError.message}. Using timestamp-based fingerprint.`, "", false, false);
@@ -2971,7 +2972,6 @@ export class ImageCacheManager {
         const compressed = {
             fp: fileData.fullPath,
             fn: fileData.name,
-            pt: fileData.path,
             fs: fileData.size,
             lm: fileData.lastModified
         };
@@ -3238,30 +3238,32 @@ export class ImageCacheManager {
             
             // Restore cache (handle both old and new compressed formats)
             cache.files = new Map();
-            if (!cache.filesByFileName) {
-                cache.filesByFileName = new Map();
-            }
+            cache.filesByFileName = new Map();
             const filesData = cacheData.files || cacheData.f;
             for (const [cacheKey, rawFileData] of filesData) {
                 const actualKey = cacheKey;
 
-                // Expand abbreviated keys (fp/fn/pt/fs/lm/m) back to full keys
+                // Normalize to a consistent full-key object regardless of format:
+                // - abbreviated (fp/fn/fs/lm/m) — stored pre-decompression
+                // - decompressed (fullPath/fileName/fileSize/lastModified/metadata) — after _decompressCacheData
+                // - old format (name/path/fullPath/size/lastModified/metadata) — legacy saves
                 let fileInfo;
-                if (rawFileData !== null && typeof rawFileData === 'object' && 'fp' in rawFileData) {
-                    const m = rawFileData.m;
+                if (rawFileData !== null && typeof rawFileData === 'object') {
+                    const m = rawFileData.m || rawFileData.metadata || {};
                     fileInfo = {
-                        name: rawFileData.fn || rawFileData.fp?.split('/').pop() || '',
-                        path: rawFileData.pt || '',
-                        fullPath: rawFileData.fp || '',
-                        size: rawFileData.fs || 0,
-                        lastModified: rawFileData.lm || 0,
-                        metadata: m ? {
-                            tags: m.t || [],
-                            primaryTags: m.pt || [],
-                            secondaryTags: m.st || [],
-                            tagTypes: m.tt || {},
-                            creatureType: m.ct || ''
-                        } : { tags: [], primaryTags: [], secondaryTags: [], tagTypes: {} }
+                        name: rawFileData.name || rawFileData.fileName || rawFileData.fn ||
+                              rawFileData.fullPath?.split('/').pop() || rawFileData.fp?.split('/').pop() || '',
+                        path: rawFileData.path || '',
+                        fullPath: rawFileData.fullPath || rawFileData.fp || '',
+                        size: rawFileData.size || rawFileData.fileSize || rawFileData.fs || 0,
+                        lastModified: rawFileData.lastModified || rawFileData.lm || 0,
+                        metadata: {
+                            tags: m.tags || m.t || [],
+                            primaryTags: m.primaryTags || m.pt || [],
+                            secondaryTags: m.secondaryTags || m.st || [],
+                            tagTypes: m.tagTypes || m.tt || {},
+                            creatureType: m.creatureType || m.ct || ''
+                        }
                     };
                 } else {
                     fileInfo = rawFileData;
@@ -3290,6 +3292,7 @@ export class ImageCacheManager {
             
             cache.lastScan = cacheData.lastScan || cacheData.ls;
             cache.totalFiles = cacheData.totalFiles || cacheData.tf;
+            cache.lastFingerprint = cacheData.ff || cacheData.folderFingerprint || null;
             cache.ignoredFilesCount = cacheData.ignoredFilesCount || cacheData.ifc || 0;
             
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache restored from storage: ${cache.files.size} files, last scan: ${new Date(cache.lastScan).toLocaleString()}`, "", false, false);
