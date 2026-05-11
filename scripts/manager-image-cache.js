@@ -3219,27 +3219,11 @@ export class ImageCacheManager {
                 }
             }
             
-            // Check if folder fingerprint changed (file system changes)
-            // Only check fingerprint if it exists and is not from an incremental save
-            if (cacheData.folderFingerprint && !cacheData.isIncremental) {
-                const savedFingerprint = cacheData.folderFingerprint;
-                
-                // CRITICAL FIX: Validate saved fingerprint
-                if (savedFingerprint === 'error' || savedFingerprint === 'no-path') {
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Saved cache has invalid fingerprint (${savedFingerprint}); cache may need a rescan`, "", false, false);
-                    cache.needsRescan = true;
-                } else {
-                    // Use first path for fingerprint check (fingerprint is per-path, but we check first one for now)
-                    const firstPath = currentBasePaths.length > 0 ? currentBasePaths[0] : null;
-                    if (firstPath) {
-                        const currentFingerprint = await this._generateFolderFingerprint(firstPath);
-                        if (savedFingerprint !== currentFingerprint) {
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Folder structure changed; cache may be stale", "", true, false);
-                            cache.needsRescan = true;
-                        }
-                    }
-                }
-            } else if (!cacheData.folderFingerprint && !cacheData.isIncremental) {
+            // Fingerprint comparison is intentionally skipped on load — generating a live fingerprint
+            // requires a full recursive FilePicker traverse (30+ seconds for large libraries) which
+            // blocks the startup cache load and races with window opens. The cache is accepted as-is;
+            // needsRescan is set only when paths changed (checked above). Users can manually rescan.
+            if (!cacheData.folderFingerprint && !cacheData.isIncremental) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Saved cache missing fingerprint (likely from failed scan), cache may be incomplete", "", false, false);
                 cache.needsRescan = true;
             }
