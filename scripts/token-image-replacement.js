@@ -987,44 +987,31 @@ export class TokenImageReplacementWindow extends Application {
 
         const coreItems = [];
 
-        if (fileInfo) {
-            const isFavorited = fileInfo.metadata.tags.includes('FAVORITE');
-            if (isFavorited) {
-                coreItems.push({
-                    name: 'Remove from Favorites',
-                    icon: 'fa-solid fa-heart-crack',
-                    callback: async () => {
-                        ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
-                        await ImageCacheManager._saveCacheToStorage(true);
-                        ui.notifications.info(`Removed ${imageName} from favorites`);
-                        if (this.currentFilter === 'favorites') {
-                            this._showSearchSpinner();
-                            await this._findMatches();
-                            this._hideSearchSpinner();
-                        } else {
-                            this._updateResults();
-                        }
-                    }
-                });
-            } else {
-                coreItems.push({
-                    name: 'Add to Favorites',
-                    icon: 'fa-solid fa-heart',
-                    callback: async () => {
-                        ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
-                        await ImageCacheManager._saveCacheToStorage(true);
-                        ui.notifications.info(`Added ${imageName} to favorites`);
-                        if (this.currentFilter === 'favorites') {
-                            this._showSearchSpinner();
-                            await this._findMatches();
-                            this._hideSearchSpinner();
-                        } else {
-                            this._updateResults();
-                        }
-                    }
-                });
+        // Favorites is always first
+        const isFavorited = fileInfo?.metadata?.tags?.includes('FAVORITE') ?? false;
+        coreItems.push({
+            name: isFavorited ? 'Remove from Favorites' : 'Add to Favorites',
+            icon: isFavorited ? 'fa-solid fa-heart-crack' : 'fa-solid fa-heart',
+            callback: async () => {
+                if (!fileInfo) return;
+                if (isFavorited) {
+                    ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
+                    await ImageCacheManager._saveCacheToStorage(this.mode);
+                    ui.notifications.info(`Removed ${imageName} from favorites`);
+                } else {
+                    ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
+                    await ImageCacheManager._saveCacheToStorage(this.mode);
+                    ui.notifications.info(`Added ${imageName} to favorites`);
+                }
+                if (this.currentFilter === 'favorites') {
+                    this._showSearchSpinner();
+                    await this._findMatches();
+                    this._hideSearchSpinner();
+                } else {
+                    this._updateResults();
+                }
             }
-        }
+        });
 
         if (this.selectedToken) {
             const modeLabel = this._getModeLabel();

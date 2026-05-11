@@ -2313,21 +2313,22 @@ export class ImageCacheManager {
      * Check if a file path contains invalid characters or patterns
      */
     static _isInvalidFilePath(filePath) {
-        // Always check for wildcards and other invalid characters - these should never be allowed
+        // Guard against null/undefined/empty
+        if (!filePath || typeof filePath !== 'string') return true;
+
+        // Catch literal "undefined" or "null" strings from old buggy serialization
+        if (filePath === 'undefined' || filePath === 'null') return true;
+
+        // Wildcards and invalid characters
         if (filePath.includes('*') || filePath.includes('?') || filePath.includes('[') || filePath.includes(']')) {
             return true;
         }
-        
-        // Check for other potentially problematic patterns
+
+        // Path traversal patterns
         if (filePath.includes('..') || filePath.includes('//')) {
             return true;
         }
-        
-        // Check if the path looks like a valid Foundry path
-        if (!filePath.startsWith('modules/') && !filePath.startsWith('assets/') && !filePath.startsWith('data/')) {
-            return true;
-        }
-        
+
         return false;
     }
     
@@ -2969,9 +2970,9 @@ export class ImageCacheManager {
     static _compressFileData(fileData) {
         const compressed = {
             fp: fileData.fullPath,
-            fn: fileData.fileName,
-            fe: fileData.fileExtension,
-            fs: fileData.fileSize,
+            fn: fileData.name,
+            pt: fileData.path,
+            fs: fileData.size,
             lm: fileData.lastModified
         };
         
@@ -3241,11 +3242,33 @@ export class ImageCacheManager {
                 cache.filesByFileName = new Map();
             }
             const filesData = cacheData.files || cacheData.f;
-            for (const [cacheKey, fileInfo] of filesData) {
-                // Determine the actual cache key (may be old format with just filename, or new format with path+filename)
-                const actualKey = cacheKey; // Use the key as stored
+            for (const [cacheKey, rawFileData] of filesData) {
+                const actualKey = cacheKey;
+
+                // Expand abbreviated keys (fp/fn/pt/fs/lm/m) back to full keys
+                let fileInfo;
+                if (rawFileData !== null && typeof rawFileData === 'object' && 'fp' in rawFileData) {
+                    const m = rawFileData.m;
+                    fileInfo = {
+                        name: rawFileData.fn || rawFileData.fp?.split('/').pop() || '',
+                        path: rawFileData.pt || '',
+                        fullPath: rawFileData.fp || '',
+                        size: rawFileData.fs || 0,
+                        lastModified: rawFileData.lm || 0,
+                        metadata: m ? {
+                            tags: m.t || [],
+                            primaryTags: m.pt || [],
+                            secondaryTags: m.st || [],
+                            tagTypes: m.tt || {},
+                            creatureType: m.ct || ''
+                        } : { tags: [], primaryTags: [], secondaryTags: [], tagTypes: {} }
+                    };
+                } else {
+                    fileInfo = rawFileData;
+                }
+
                 cache.files.set(actualKey, fileInfo);
-                
+
                 // Rebuild filesByFileName index
                 if (fileInfo && fileInfo.name) {
                     const fileNameKey = fileInfo.name.toLowerCase();
