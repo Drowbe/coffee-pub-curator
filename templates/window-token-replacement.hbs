@@ -1,4 +1,4 @@
-<div class="token-replacement-window">
+<div class="token-replacement-window" id="{{appId}}">
     {{!-- Global Controls (apply to both Token and Portrait modes) --}}
     <div class="tir-global-controls">
         <!-- Mode Toggle (Token/Portrait) - always visible so user can switch mode in window -->
@@ -120,24 +120,7 @@
     <div class="tir-token-replacement-header-container">
         <div class="tir-token-replacement-header-left"><i class="fas fa-search"></i> Search Filters</div>
         <div class="tir-token-replacement-header-right">
-
-            <!-- DELETE CACHE -->
-            <button class="button-delete-cache" data-tooltip="Delete Cache: This will completely remove all cached image data."><i class="fas fa-trash"></i> Delete Cache</button>
-
-            <span class="button-divider"> • </span>
-
-            <!-- SCAN FOR IMAGES -->
-            {{#if isScanning}}
-                <button class="button-pause-cache" data-tooltip="Stop Image Scan: This will result in incomplete image lokups."><i class="fas fa-pause"></i> Delay Scan</span></button>
-            {{else}}
-                <button class="button-scan-images" data-tooltip="Scan for Images: This will update the image cache with any new or changed images."><i class="fas fa-search"></i> Scan for Images</button>
-            {{/if}}
-
-            <span class="button-divider"> | </span>
-
-            <!-- UPDATE CANVAS -->
-            <button class="button-update-canvas" data-tooltip="Update Canvas: Re-run token/portrait replacements for every token on the current canvas using the active mode."><i class="fas fa-sync"></i> Update Canvas</button>
-
+            <span>{{cacheStatus}}</span>
         </div>
     </div>
 
@@ -167,11 +150,11 @@
             <div id="tir-search-tools-row-left" class="tir-search-tools-row-left">
                 <div class="tir-search-container">
                     <input type="text" class="tir-search-input" placeholder="Search for images..." value="">
-                    <button type="button" class="tir-clear-search-btn" title="Clear search">
+                    <button type="button" class="tir-clear-search-btn" data-action="clearSearch" title="Clear search">
                         <i class="fas fa-square-xmark"></i>
                     </button>
                 </div>
-                <button type="button" class="tir-filter-toggle-btn" title="Tag Sort: Count" data-tag-sort-mode="count">
+                <button type="button" class="tir-filter-toggle-btn" data-action="filterToggle" title="Tag Sort: Count" data-tag-sort-mode="count">
                     <i class="fas fa-filter"></i>
                 </button>
             </div>
@@ -271,4 +254,33 @@
         </div>
         {{/if}}
     </div>
+
+    <!-- Action Bar -->
+    <section class="tir-window-buttons">
+        <div class="tir-action-bar">
+            <div class="tir-action-left">
+                <button type="button" class="tir-btn-secondary" data-action="deleteCache"
+                    data-tooltip="Delete Cache: Completely removes all cached image data.">
+                    <i class="fas fa-trash"></i> Delete Cache
+                </button>
+            </div>
+            <div class="tir-action-right">
+                {{#if isScanning}}
+                    <button type="button" class="tir-btn-secondary" data-action="pauseCache"
+                        data-tooltip="Stop Image Scan: Results will be incomplete.">
+                        <i class="fas fa-pause"></i> Delay Scan
+                    </button>
+                {{else}}
+                    <button type="button" class="tir-btn-secondary" data-action="scanImages"
+                        data-tooltip="Scan for Images: Updates the cache with new or changed images.">
+                        <i class="fas fa-search"></i> Scan Images
+                    </button>
+                {{/if}}
+                <button type="button" class="tir-btn-primary" data-action="updateCanvas"
+                    data-tooltip="Update Canvas: Re-run replacements for every token on the current canvas.">
+                    <i class="fas fa-sync"></i> Update Canvas
+                </button>
+            </div>
+        </div>
+    </section>
 </div>

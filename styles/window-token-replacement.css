@@ -1460,3 +1460,59 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ========== ACTION BAR ========== */
+
+.tir-window-buttons {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(16, 40, 18, 0.7);
+}
+
+.tir-action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+}
+
+.tir-action-left,
+.tir-action-right {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.tir-btn-primary,
+.tir-btn-secondary {
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    white-space: nowrap;
+    font-family: "Signika", sans-serif;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.tir-btn-primary {
+    background: rgba(88, 135, 72, 0.85);
+    color: #e8e8d0;
+    border: 1px solid rgba(120, 160, 90, 0.8);
+}
+
+.tir-btn-primary:hover {
+    background: rgba(100, 155, 82, 0.95);
+    border-color: rgba(140, 180, 110, 0.9);
+}
+
+.tir-btn-secondary {
+    background: rgba(40, 40, 40, 0.7);
+    color: #c0c0b0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tir-btn-secondary:hover {
+    background: rgba(60, 60, 60, 0.85);
+    border-color: rgba(255, 255, 255, 0.3);
+}

@@ -4,6 +4,7 @@
 
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { ImageMatching } from './manager-image-matching.js';
@@ -14,53 +15,44 @@ import { UIContextMenu } from './ui-context-menu.js';
 /**
  * Token Image Replacement Window
  */
-export class TokenImageReplacementWindow extends Application {
+export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
     constructor(options = {}) {
-        super(options);
+        super(foundry.utils.mergeObject({}, options));
         // Get last used mode from settings, default to 'token'
         this.mode = game.settings.get(MODULE.ID, 'tokenImageReplacementLastMode') || 'token';
         this.selectedToken = null;
         this.matches = [];
-        this.allMatches = []; // Store all matches for pagination
+        this.allMatches = [];
         this.currentPage = 0;
         this.resultsPerPage = 50;
         this.isLoadingMore = false;
         this.hasMoreResults = false;
         this.isSearching = false;
         this.scanProgress = 0;
-        this.sortOrder = 'relevance'; // Default sort order
-        this.currentFilter = 'all'; // Track current category filter
-        this._cachedSearchTerms = null; // Cache for search terms
+        this.sortOrder = 'relevance';
+        this.currentFilter = 'all';
+        this._cachedSearchTerms = null;
         this.scanTotal = 0;
         this.scanStatusText = this.mode === ImageCacheManager.MODES.PORTRAIT ? "Scanning Portrait Images..." : "Scanning Token Images...";
         this.notificationIcon = null;
         this.notificationText = null;
-        
+
         // Debouncing for token selection changes
         this._tokenSelectionDebounceTimer = null;
         this._lastProcessedTokenId = null;
-        
-        // Window state management - let Foundry handle it automatically
-        this.windowState = {
-            width: 700,
-            height: 550,
-            left: null,
-            top: null
-        };
-        
+
         // Tag filtering system
-        this.selectedTags = new Set(); // Track which tags are currently selected as filters
-        
+        this.selectedTags = new Set();
+
         // Tag sort mode
-        this.tagSortMode = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'); // Current tag sort mode
-        
-        // Search result caching (Phase 1.1 Optimization)
-        this._searchResultCache = new Map(); // Cache: searchKey â†’ {results, timestamp}
-        this._searchCacheMaxSize = 50; // Maximum cached searches
-        this._searchCacheTTL = 300000; // Cache lifetime: 5 minutes (300000ms)
+        this.tagSortMode = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count');
+
+        // Search result caching
+        this._searchResultCache = new Map();
+        this._searchCacheMaxSize = 50;
+        this._searchCacheTTL = 300000;
 
         // Lifecycle tracking for cleanup
-        this._domEventDisposers = [];
         this._trackedTimeouts = new Set();
         this._teardownExecuted = false;
         this._hookRegistrationTimeoutId = null;
@@ -84,157 +76,32 @@ export class TokenImageReplacementWindow extends Application {
         return `${this._getModeLabel()} Image Replacement:`;
     }
 
-    /**
-     * Get the default window options
-     */
-    static get defaultOptions() {
-        // Try to load saved position/size
-        let saved = {};
-        try {
-            // Check if game.settings is available and the setting exists
-            if (game.settings && game.settings.get) {
-                saved = game.settings.get(MODULE.ID, 'tokenImageReplacementWindowState') || {};
-            }
-        } catch (e) {
-            saved = {};
-        }
-        
-        // Use saved values or defaults
-        const width = saved.width ?? 700;  // Default width
-        const height = saved.height ?? 500; // Default height
-        const top = (typeof saved.top === 'number') ? saved.top : Math.max(0, (window.innerHeight - height) / 2);
-        const left = (typeof saved.left === 'number') ? saved.left : Math.max(0, (window.innerWidth - width) / 2);
-        
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "token-image-replacement",
-            title: "Image Replacements",
-            template: "modules/coffee-pub-curator/templates/window-token-replacement.hbs",
-            width,
-            height,
-            top,
-            left,
-            resizable: true,
-            minimizable: true,
-            maximizable: true,
-            classes: ['token-replacement-window']
-        });
-    }
-
-    /**
-     * Override setPosition to save window position and size
-     */
-    setPosition(options={}) {
-        const pos = super.setPosition(options);
-        
-        // Save position/size to settings
-        if (this.rendered) {
-            const { top, left, width, height } = this.position;
-            game.settings.set(MODULE.ID, 'tokenImageReplacementWindowState', { top, left, width, height });
-        }
-        return pos;
-    }
-
-    /**
-     * Track DOM event bindings for cleanup
-     * @param {JQuery} html - root element
-     * @param {string} selector - target selector
-     * @param {string} eventName - event to bind
-     * @param {Function} handler - handler bound to this instance
-     * @param {boolean} delegate - whether to delegate from root
-     */
-    _registerDomEvent(html, selector, eventName, handler, delegate = false) {
-        if (!html) return;
-        
-        // v13: Handle both jQuery and native DOM (html parameter may still be jQuery)
-        let htmlElement;
-        if (html && typeof html.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            htmlElement = html[0] || html.get?.(0);
-        } else if (html && typeof html.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            htmlElement = html;
-        } else {
-            return;
-        }
-        
-        if (!htmlElement) {
-            return;
-        }
-        
-        const boundHandler = handler.bind(this);
-        if (delegate) {
-            // Event delegation: listen on htmlElement, check if target matches selector
-            const delegatedHandler = (event) => {
-                const target = event.target.closest(selector);
-                if (target) {
-                    // Create a synthetic event with currentTarget set to the matched element
-                    // This ensures handlers can use event.currentTarget correctly
-                    // Use a Proxy to intercept currentTarget access while preserving all other event properties
-                    const syntheticEvent = new Proxy(event, {
-                        get: (obj, prop) => {
-                            if (prop === 'currentTarget') {
-                                return target;
-                            }
-                            // For methods, bind them to the original event object to preserve 'this' context
-                            const value = obj[prop];
-                            if (typeof value === 'function') {
-                                return value.bind(obj);
-                            }
-                            return value;
-                        },
-                        has: (obj, prop) => {
-                            if (prop === 'currentTarget') {
-                                return true;
-                            }
-                            return prop in obj;
-                        },
-                        ownKeys: (obj) => {
-                            const keys = Reflect.ownKeys(obj);
-                            if (!keys.includes('currentTarget')) {
-                                return [...keys, 'currentTarget'];
-                            }
-                            return keys;
-                        },
-                        getOwnPropertyDescriptor: (obj, prop) => {
-                            if (prop === 'currentTarget') {
-                                return {
-                                    enumerable: true,
-                                    configurable: true,
-                                    value: target,
-                                    writable: false
-                                };
-                            }
-                            return Reflect.getOwnPropertyDescriptor(obj, prop);
-                        }
-                    });
-                    boundHandler.call(this, syntheticEvent);
-                }
-            };
-            htmlElement.addEventListener(eventName, delegatedHandler);
-            this._domEventDisposers.push(() => htmlElement.removeEventListener(eventName, delegatedHandler));
-            return;
-        }
-        const targets = htmlElement.querySelectorAll(selector);
-        if (targets.length === 0) return;
-        targets.forEach(target => {
-            target.addEventListener(eventName, boundHandler);
-            this._domEventDisposers.push(() => target.removeEventListener(eventName, boundHandler));
-        });
-    }
-
-    /**
-     * Remove all tracked DOM event bindings
-     */
-    _clearDomEvents() {
-        while (this._domEventDisposers.length > 0) {
-            const disposer = this._domEventDisposers.pop();
-            try {
-                disposer();
-            } catch (error) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Error clearing DOM event: ${error.message}`, "", false, false);
+    static DEFAULT_OPTIONS = foundry.utils.mergeObject(
+        foundry.utils.mergeObject({}, super.DEFAULT_OPTIONS ?? {}),
+        {
+            id: 'token-image-replacement',
+            classes: ['token-replacement-window'],
+            position: { width: 700, height: 550 },
+            window: { title: 'Image Replacements', resizable: true, minimizable: true },
+            actions: {
+                scanImages: TokenImageReplacementWindow._actionScanImages,
+                pauseCache: TokenImageReplacementWindow._actionPauseCache,
+                deleteCache: TokenImageReplacementWindow._actionDeleteCache,
+                updateCanvas: TokenImageReplacementWindow._actionUpdateCanvas,
+                clearSearch: TokenImageReplacementWindow._actionClearSearch,
+                filterToggle: TokenImageReplacementWindow._actionFilterToggle
             }
         }
-    }
+    );
+
+    static PARTS = {
+        body: { template: 'modules/coffee-pub-curator/templates/window-token-replacement.hbs' }
+    };
+
+    static ROOT_CLASS = 'token-replacement-window';
+
+    static _ref = null;
+    static _delegationAttached = false;
 
     /**
      * Track timeouts for cleanup
@@ -271,9 +138,6 @@ export class TokenImageReplacementWindow extends Application {
         }
         this._teardownExecuted = true;
 
-        // Ensure no DOM events remain bound to detached nodes
-        this._clearDomEvents();
-
         // Cancel timers
         this.searchTimeout = this._cancelTrackedTimeout(this.searchTimeout);
         this._hookRegistrationTimeoutId = this._cancelTrackedTimeout(this._hookRegistrationTimeoutId);
@@ -290,13 +154,9 @@ export class TokenImageReplacementWindow extends Application {
         });
         this._activeImageElements.clear();
 
-        const element = this.element;
-        if (element) {
-            // Remove any lingering listeners that were attached outside _registerDomEvent
-            // (Already handled by _clearDomEvents above)
-            if (element.parentNode) {
-                element.remove();
-            }
+        const element = this._getRoot();
+        if (element?.parentNode) {
+            element.remove();
         }
 
         // Drop heavy references
@@ -313,22 +173,8 @@ export class TokenImageReplacementWindow extends Application {
      * Show the search spinner overlay
      */
     _showSearchSpinner() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let htmlElement;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            htmlElement = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            htmlElement = this.element;
-        } else {
-            return;
-        }
-        
-        if (!htmlElement) {
-            return;
-        }
-        
+        const htmlElement = this._getRoot();
+        if (!htmlElement) return;
         const spinner = htmlElement.querySelector('.tir-search-spinner');
         if (spinner) spinner.classList.remove('hidden');
     }
@@ -337,22 +183,8 @@ export class TokenImageReplacementWindow extends Application {
      * Hide the search spinner overlay
      */
     _hideSearchSpinner() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let htmlElement;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            htmlElement = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            htmlElement = this.element;
-        } else {
-            return;
-        }
-        
-        if (!htmlElement) {
-            return;
-        }
-        
+        const htmlElement = this._getRoot();
+        if (!htmlElement) return;
         const spinner = htmlElement.querySelector('.tir-search-spinner');
         if (spinner) spinner.classList.add('hidden');
     }
@@ -526,6 +358,11 @@ export class TokenImageReplacementWindow extends Application {
         });
     }
 
+    async _prepareContext(options = {}) {
+        const base = await super._prepareContext?.(options) ?? {};
+        return foundry.utils.mergeObject(base, this.getData(options));
+    }
+
     getData() {
         // Use only the static cache state as source of truth
         const systemScanning = ImageCacheManager.getCache(this.mode).isScanning;
@@ -618,103 +455,98 @@ export class TokenImageReplacementWindow extends Application {
             mode: this.mode,
             isTokenMode: this.mode === ImageCacheManager.MODES.TOKEN,
             isPortraitMode: this.mode === ImageCacheManager.MODES.PORTRAIT,
-            portraitEnabled: BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false)
+            portraitEnabled: BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false),
+            appId: this.id
         };
     }
 
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _attachDelegationOnce() {
+        TokenImageReplacementWindow._ref = this;
+        if (TokenImageReplacementWindow._delegationAttached) return;
+        TokenImageReplacementWindow._delegationAttached = true;
 
-        // v13: Application.activateListeners may still receive jQuery in some cases
-        // Convert to native DOM if needed
-        let htmlElement = html;
-        if (html && (html.jquery || typeof html.find === 'function')) {
-            htmlElement = html[0] || html.get?.(0) || html;
-        } else if (html && typeof html.querySelectorAll !== 'function') {
-            // Not a valid DOM element
-            return;
-        }
-        
-        if (!htmlElement) {
-            return;
-        }
+        document.addEventListener('click', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
 
-        this._clearDomEvents();
+            const thumb = e.target?.closest?.('.tir-thumbnail-item');
+            if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
 
-        // Thumbnail clicks
-        this._registerDomEvent(htmlElement, '.tir-thumbnail-item', 'click', this._onSelectImage, true);
-        this._registerDomEvent(htmlElement, '.tir-thumbnail-item', 'contextmenu', this._onImageRightClick, true);
-        
-        // Pause cache button
-        this._registerDomEvent(htmlElement, '.button-pause-cache', 'click', this._onPauseCache);
-        
-        // Scan images button
-        this._registerDomEvent(htmlElement, '.button-scan-images', 'click', this._onScanImages);
-        
-        // Delete cache button
-        this._registerDomEvent(htmlElement, '.button-delete-cache', 'click', this._onDeleteCache);
-        this._registerDomEvent(htmlElement, '.button-update-canvas', 'click', this._onUpdateCanvas);
-        
-        
-        // Close button
-        this._registerDomEvent(htmlElement, '.close-btn', 'click', this._onClose);
+            const cat = e.target?.closest?.('.tir-filter-category');
+            if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
 
-        // Search functionality
-        this._registerDomEvent(htmlElement, '.tir-search-input', 'input', this._onSearchInput);
-        
-        // Sort order change
-        this._registerDomEvent(htmlElement, '.tir-select', 'change', this._onSortOrderChange);
-        this._registerDomEvent(htmlElement, '.tir-search-input', 'keypress', (event) => {
-            if (event.which === 13) { // Enter key
-                event.preventDefault();
+            const tag = e.target?.closest?.('.tir-search-tools-tag');
+            if (tag) { e.preventDefault(); w._onTagClick(e); return; }
+        });
+
+        document.addEventListener('contextmenu', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            const thumb = e.target?.closest?.('.tir-thumbnail-item');
+            if (thumb) { e.preventDefault(); w._onImageRightClick(e); return; }
+        });
+
+        document.addEventListener('input', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
+            if (e.target?.matches?.('.tir-rangeslider-input')) { w._onThresholdSliderChange(e); return; }
+        });
+
+        document.addEventListener('change', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            if (e.target?.matches?.('.tir-select')) { w._onSortOrderChange(e); return; }
+            if (e.target?.matches?.('#updateDropped')) { w._onUpdateDroppedToggle(e); return; }
+            if (e.target?.matches?.('#modeToggle')) { w._onModeToggle(e); return; }
+            if (e.target?.matches?.('#fuzzySearch')) { w._onFuzzySearchToggle(e); return; }
+            if (e.target?.matches?.('#convertDeadToLoot')) { w._onConvertDeadToLootToggle(e); return; }
+            if (e.target?.matches?.('#deadTokenReplacement')) { w._onDeadTokenReplacementToggle(e); return; }
+        });
+
+        document.addEventListener('scroll', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            if (e.target?.matches?.('.tir-thumbnails-grid')) { w._onScroll(e); return; }
+        }, true);
+
+        document.addEventListener('keypress', (e) => {
+            const w = TokenImageReplacementWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            if (e.target?.matches?.('.tir-search-input') && (e.key === 'Enter' || e.which === 13)) {
+                e.preventDefault();
             }
         });
-        
-        // Infinite scroll
-        this._registerDomEvent(htmlElement, '.tir-thumbnails-grid', 'scroll', this._onScroll);
-        
-        
-        // Filter category click handlers
-        this._registerDomEvent(htmlElement, '.tir-filter-category', 'click', this._onCategoryFilterClick, true);
-        
-        // Tag click handlers for new tags row
-        // TODO: Add right-click context menu for tags (e.g., Add to Ignored, Favorite, etc.)
-        this._registerDomEvent(htmlElement, '.tir-search-tools-tag', 'click', this._onTagClick, true);
-        
-        // Clear search button
-        this._registerDomEvent(htmlElement, '.tir-clear-search-btn', 'click', this._onClearSearch);
-        
-        // Filter toggle button
-        this._registerDomEvent(htmlElement, '.tir-filter-toggle-btn', 'click', this._onFilterToggle);
-        
-        // Initialize filter toggle button state
+    }
+
+    async _onFirstRender(_context, options) {
+        await super._onFirstRender?.(_context, options);
+        this._attachDelegationOnce();
+        this._registerTokenHook();
+    }
+
+    activateListeners(html) {
+        super.activateListeners(html);
+        this._attachDelegationOnce();
         this._initializeFilterToggleButton();
-        
-        // Threshold slider
-        this._registerDomEvent(htmlElement, '.tir-rangeslider-input', 'input', this._onThresholdSliderChange);
-        
-        // Set initial threshold value in label (mode-specific)
-        const thresholdSettingKey = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portraitImageReplacementThreshold' : 'tokenImageReplacementThreshold';
-        const currentThreshold = game.settings.get(MODULE.ID, thresholdSettingKey) || 0.3;
-        const thresholdPercentage = Math.round(currentThreshold * 100);
-        const thresholdValue = htmlElement.querySelector('.tir-threshold-value');
-        if (thresholdValue) thresholdValue.textContent = `${thresholdPercentage}%`;
-        
-        // Update Dropped Tokens toggle
-        this._registerDomEvent(htmlElement, '#updateDropped', 'change', this._onUpdateDroppedToggle);
-        this._registerDomEvent(htmlElement, '#modeToggle', 'change', this._onModeToggle);
-        
-        // Fuzzy Search toggle
-        this._registerDomEvent(html, '#fuzzySearch', 'change', this._onFuzzySearchToggle);
-        
-        // Convert Dead To Loot toggle
-        this._registerDomEvent(html, '#convertDeadToLoot', 'change', this._onConvertDeadToLootToggle);
-        
-        // Dead Token Replacement toggle
-        this._registerDomEvent(html, '#deadTokenReplacement', 'change', this._onDeadTokenReplacementToggle);
-        
-        // Initialize threshold slider with current value
         this._initializeThresholdSlider();
     }
 
@@ -924,11 +756,13 @@ export class TokenImageReplacementWindow extends Application {
 
     async _onSelectImage(event) {
         if (event.button === 2) return;
-        const imagePath = event.currentTarget.dataset.imagePath;
-        const imageName = event.currentTarget.dataset.imageName;
+        const tile = event.target.closest('.tir-thumbnail-item');
+        if (!tile) return;
+        const imagePath = tile.dataset.imagePath;
+        const imageName = tile.dataset.imageName;
         const isQuickApply = event.target.closest('[data-quick-apply="true"]');
-        const isCurrentImage = event.currentTarget.classList.contains('tir-current-image');
-        const isOriginalImage = event.currentTarget.classList.contains('tir-original-image');
+        const isCurrentImage = tile.classList.contains('tir-current-image');
+        const isOriginalImage = tile.classList.contains('tir-original-image');
         
         if (!this.selectedToken || !imagePath) return;
 
@@ -956,7 +790,7 @@ export class TokenImageReplacementWindow extends Application {
         event.preventDefault();
         event.stopPropagation();
 
-        const tile = event.currentTarget;
+        const tile = event.target.closest('.tir-thumbnail-item');
         const imagePath = tile?.dataset?.imagePath;
         const imageName = tile?.dataset?.imageName;
 
@@ -1165,7 +999,7 @@ export class TokenImageReplacementWindow extends Application {
      * Show image at full size in a dialog
      */
     _showFullSizeImage(imagePath, imageName) {
-        const doc = this.element?.[0]?.ownerDocument || document;
+        const doc = this._getRoot()?.ownerDocument || document;
         const esc = TokenImageReplacementWindow._escapeHtml;
         const title = esc(imageName || imagePath.split('/').pop() || '');
         const safePath = esc(imagePath);
@@ -1205,7 +1039,7 @@ export class TokenImageReplacementWindow extends Application {
         dialog.querySelector('.blacksmith-image-fullsize-header').style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--color-header,#2c2c2c);';
         dialog.querySelector('.blacksmith-image-fullsize-img').style.cssText = 'display:block;max-width:90vw;max-height:85vh;object-fit:contain;';
 
-        const root = this.element?.[0]?.closest('.app')?.ownerDocument?.body || doc.body;
+        const root = this._getRoot()?.closest('.app')?.ownerDocument?.body || doc.body;
         root.appendChild(dialog);
     }
 
@@ -1466,9 +1300,7 @@ export class TokenImageReplacementWindow extends Application {
 
 
 
-    _onClose() {
-        this.close();
-    }
+
 
 
     // Method to update scan progress
@@ -1501,17 +1333,7 @@ export class TokenImageReplacementWindow extends Application {
 
     // Show completion notification in the window
     showCompletionNotification(totalFiles, totalFolders, timeString) {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Update the notification area with completion info
@@ -1531,17 +1353,7 @@ export class TokenImageReplacementWindow extends Application {
 
     // Show error notification in the window
     showErrorNotification(errorMessage) {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Update the notification area with error info
@@ -1561,17 +1373,7 @@ export class TokenImageReplacementWindow extends Application {
 
     // Hide progress bars after completion
     hideProgressBars() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Hide the progress bars
@@ -1594,41 +1396,65 @@ export class TokenImageReplacementWindow extends Application {
         }, 2000); // Hide notification after 2 more seconds
     }
 
+    _registerTokenHook() {
+        if (this._tokenHookRegistered) return;
+        this._hookRegistrationTimeoutId = this._scheduleTrackedTimeout(async () => {
+            this._hookRegistrationTimeoutId = null;
+            if (!this._tokenHookRegistered) {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Registering controlToken hook`, 'token-image-replacement-selection', true, false);
+                this._tokenHookId = HookManager.registerHook({
+                    name: 'controlToken',
+                    description: `${this._getModePrefix()} Handle token selection changes`,
+                    context: 'token-image-replacement-selection',
+                    priority: 3,
+                    callback: async (token, controlled) => {
+                        await this._onTokenSelectionChange(token, controlled);
+                    }
+                });
+                this._tokenHookRegistered = true;
+                await this._checkForSelectedToken();
+            }
+        }, 100);
+    }
+
+    static _actionScanImages(event, target) {
+        TokenImageReplacementWindow._ref?._onScanImages(event);
+    }
+
+    static _actionPauseCache(event, target) {
+        TokenImageReplacementWindow._ref?._onPauseCache(event);
+    }
+
+    static _actionDeleteCache(event, target) {
+        TokenImageReplacementWindow._ref?._onDeleteCache(event);
+    }
+
+    static _actionUpdateCanvas(event, target) {
+        TokenImageReplacementWindow._ref?._onUpdateCanvas(event);
+    }
+
+    static _actionClearSearch(event, target) {
+        TokenImageReplacementWindow._ref?._onClearSearch(event);
+    }
+
+    static _actionFilterToggle(event, target) {
+        TokenImageReplacementWindow._ref?._onFilterToggle(event);
+    }
+
     async render(force = false, options = {}) {
+        const scrolls = this._saveScrollPositions();
         const result = await super.render(force, options);
-        
-        // Register token selection hook only once when first rendered
-        // Use a small delay to ensure the DOM is ready
-        if (!this._tokenHookRegistered) {
-            this._hookRegistrationTimeoutId = this._scheduleTrackedTimeout(async () => {
-                this._hookRegistrationTimeoutId = null;
-                if (!this._tokenHookRegistered) {
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Registering controlToken hook`, 'token-image-replacement-selection', true, false);
-                    this._tokenHookId = HookManager.registerHook({
-                        name: 'controlToken',
-                        description: `${this._getModePrefix()} Handle token selection changes`,
-                        context: 'token-image-replacement-selection',
-                        priority: 3,
-                        callback: async (token, controlled) => {
-                            await this._onTokenSelectionChange(token, controlled);
-                        }
-                    });
-                    this._tokenHookRegistered = true;
-                    
-                    // Check for currently selected token after hook registration
-                    await this._checkForSelectedToken();
-                }
-            }, 100);
-        }
-        
+        requestAnimationFrame(() => {
+            this._restoreScrollPositions(scrolls);
+            this._initializeFilterToggleButton();
+            this._initializeThresholdSlider();
+        });
         return result;
     }
 
     async close(options = {}) {
-        // Cancel any ongoing search
         this.isSearching = false;
-        
-        // Remove token selection hook
+
         if (this._tokenHookRegistered && this._tokenHookId) {
             HookManager.unregisterHook({
                 name: 'controlToken',
@@ -1637,12 +1463,14 @@ export class TokenImageReplacementWindow extends Application {
             this._tokenHookRegistered = false;
             this._tokenHookId = null;
         }
-        
-        // Tear down DOM, listeners, and cached references
+
+        TokenImageReplacementWindow._ref = null;
+        TokenImageReplacementWindow._delegationAttached = false;
+
         this._teardownWindowResources();
-        
+
         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Window closed, memory cleaned up`, '', true, false);
-        
+
         return super.close(options);
     }
 
@@ -1769,17 +1597,7 @@ export class TokenImageReplacementWindow extends Application {
      * Update tab states without full re-render
      */
     _updateTabStates() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Update active tab states
@@ -1794,17 +1612,7 @@ export class TokenImageReplacementWindow extends Application {
      * Update token info in header without full re-render
      */
     _updateTokenInfo() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Update token/actor name and image in header
@@ -1986,7 +1794,7 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     async _onSearchInput(event) {
-        const searchTerm = event.currentTarget.value.trim();
+        const searchTerm = event.target.value.trim();
         this.searchTerm = searchTerm; // Store the search term
         
         // Clear any existing timeout
@@ -2195,17 +2003,7 @@ export class TokenImageReplacementWindow extends Application {
     _updateResults() {
         // Update the results grid and the results summary
         const resultsHtml = this._renderResults();
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (element) {
             const grid = element.querySelector('.tir-thumbnails-grid');
             if (grid) {
@@ -2485,7 +2283,7 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     async _onScroll(event) {
-        const element = event.currentTarget;
+        const element = event.target;
         const threshold = 100; // Load more when 100px from bottom
         
         if (element.scrollTop + element.clientHeight >= element.scrollHeight - threshold) {
@@ -2504,33 +2302,20 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     async _onTagClick(event) {
-        const tagName = event.currentTarget.dataset.searchTerm;
+        const tag = event.target.closest('.tir-search-tools-tag');
+        if (!tag) return;
+        const tagName = tag.dataset.searchTerm;
         if (!tagName) return;
-        
-        // Note: This method doesn't actually use this.element, but keeping for consistency
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        }
-        // Note: We don't return early here since we don't actually use element in this method
-        
+
         // Toggle the tag in the selected tags set
         if (this.selectedTags.has(tagName)) {
             this.selectedTags.delete(tagName);
         } else {
             this.selectedTags.add(tagName);
         }
-        
+
         // Invalidate search cache when tags change
         this._invalidateSearchCache();
-        
-        // Update the visual state of the tag
-        const tag = event.currentTarget;
         if (this.selectedTags.has(tagName)) {
             tag.classList.add('selected');
         } else {
@@ -2687,20 +2472,8 @@ export class TokenImageReplacementWindow extends Application {
      * Initialize threshold slider with current setting value
      */
     _initializeThresholdSlider() {
-        // Don't re-initialize during scanning - it's not needed
         if (ImageCacheManager.getCache(this.mode)?.isScanning) return;
-        
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
         
         // Get mode-specific threshold
@@ -2734,16 +2507,7 @@ export class TokenImageReplacementWindow extends Application {
         if (!slider) return;
         const fill = slider.querySelector('.tir-rangeslider-fill');
         const thumb = slider.querySelector('.tir-rangeslider-thumb');
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        }
-        const thresholdValue = element ? element.querySelector('.tir-threshold-value') : null;
+        const thresholdValue = this._getRoot()?.querySelector('.tir-threshold-value') ?? null;
         
         if (fill) fill.style.width = `${percentage}%`;
         if (thumb) thumb.style.left = `${percentage}%`;
@@ -2832,24 +2596,16 @@ export class TokenImageReplacementWindow extends Application {
         
         // Use requestAnimationFrame to ensure DOM is fully ready
         requestAnimationFrame(() => {
-            // Double-check element exists and has the grid
-            const element = this.element;
-            if (element) {
-                let nativeElement = element;
-                if (element.jquery || typeof element.find === 'function') {
-                    nativeElement = element[0] || element.get?.(0);
-                }
-                if (nativeElement && nativeElement.querySelector('.tir-thumbnails-grid')) {
-                    this._updateResults();
-                } else {
-                    // If grid not found, try again after a short delay
-                    setTimeout(() => {
-                        if (this.element) {
-                            this._applyPagination();
-                            this._updateResults();
-                        }
-                    }, 100);
-                }
+            const element = this._getRoot();
+            if (element?.querySelector('.tir-thumbnails-grid')) {
+                this._updateResults();
+            } else {
+                setTimeout(() => {
+                    if (this._getRoot()) {
+                        this._applyPagination();
+                        this._updateResults();
+                    }
+                }, 100);
             }
         });
     }
@@ -2858,16 +2614,7 @@ export class TokenImageReplacementWindow extends Application {
      * Update filter button active states in the UI
      */
     _updateFilterButtonStates() {
-        // v13: Handle both jQuery and native DOM
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            element = this.element;
-        } else {
-            return;
-        }
-        
+        const element = this._getRoot();
         if (!element) return;
         
         // Remove active class from all filter categories
@@ -3114,18 +2861,7 @@ export class TokenImageReplacementWindow extends Application {
 
     async _onClearSearch(event) {
         event.preventDefault();
-        
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (element) {
             // Clear the search input
             const searchInput = element.querySelector('.tir-search-input');
@@ -3152,20 +2888,9 @@ export class TokenImageReplacementWindow extends Application {
 
     _onFilterToggle(event) {
         event.preventDefault();
-        
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (element) {
-            const button = event.currentTarget;
+            const button = event.target.closest('.tir-filter-toggle-btn') ?? event.target;
             const tagContainer = element.querySelector('#tir-search-tools-tag-container');
             const icon = button.querySelector('i');
             
@@ -3207,32 +2932,23 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     async _onCategoryFilterClick(event) {
-        const category = event.currentTarget.dataset.category;
+        const clickedCat = event.target.closest('.tir-filter-category');
+        if (!clickedCat) return;
+        const category = clickedCat.dataset.category;
         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Category filter clicked: ${category}`, "", true, false);
-        
+
         if (!category || category === this.currentFilter) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${this._getModePrefix()} Filter click ignored - category: ${category}, current: ${this.currentFilter}`, "", true, false);
             return;
         }
-        
-        // Update active filter
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+
+        const element = this._getRoot();
         if (element) {
             // Remove active class from all filter categories
             element.querySelectorAll('#tir-filter-category-container .tir-filter-category').forEach(cat => {
                 cat.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            clickedCat.classList.add('active');
             
             // Set new filter
             this.currentFilter = category;
@@ -3247,7 +2963,7 @@ export class TokenImageReplacementWindow extends Application {
     }
 
     async _onSortOrderChange(event) {
-        const newSortOrder = event.currentTarget.value;
+        const newSortOrder = event.target.value;
         if (!newSortOrder || newSortOrder === this.sortOrder) return;
         
         
@@ -3591,17 +3307,7 @@ export class TokenImageReplacementWindow extends Application {
      * Initialize the filter toggle button state based on current setting
      */
     _initializeFilterToggleButton() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
 
         const button = element.querySelector('.tir-filter-toggle-btn');
@@ -3641,17 +3347,7 @@ export class TokenImageReplacementWindow extends Application {
      * Update the tag container with current tags and sorting
      */
     _updateTagContainer() {
-        // v13: Handle both jQuery and native DOM (this.element may still be jQuery)
-        let element;
-        if (this.element && typeof this.element.jquery !== 'undefined') {
-            // It's a jQuery object, get the native DOM element
-            element = this.element[0] || this.element.get?.(0);
-        } else if (this.element && typeof this.element.querySelectorAll === 'function') {
-            // It's already a native DOM element
-            element = this.element;
-        } else {
-            return;
-        }
+        const element = this._getRoot();
         if (!element) return;
 
         const aggregatedTags = this._getAggregatedTags();
