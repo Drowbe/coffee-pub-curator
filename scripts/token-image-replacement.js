@@ -359,8 +359,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
     }
 
     async _prepareContext(options = {}) {
-        const base = await super._prepareContext?.(options) ?? {};
-        return foundry.utils.mergeObject(base, this.getData(options));
+        return this.getData(options);
     }
 
     getData() {
