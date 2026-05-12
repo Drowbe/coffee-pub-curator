@@ -933,25 +933,14 @@ export function registerSettings(blacksmithApi) {
 
     registerHeader('headingH3TileImageDefaults', 'headingH3TileImageDefaults-Label', 'headingH3TileImageDefaults-Hint', 'H3', GROUP, 'world');
 
-    game.settings.register(MODULE.ID, 'tileDefaultWidth', {
-        name: MODULE.ID + '.tileDefaultWidth-Label',
-        hint: MODULE.ID + '.tileDefaultWidth-Hint',
+    game.settings.register(MODULE.ID, 'tileDefaultAssetGridSize', {
+        name: MODULE.ID + '.tileDefaultAssetGridSize-Label',
+        hint: MODULE.ID + '.tileDefaultAssetGridSize-Hint',
         type: Number,
         config: true,
         scope: 'world',
-        default: 200,
-        range: { min: 50, max: 3000, step: 50 },
-        requiresReload: false,
-        group: GROUP
-    });
-    game.settings.register(MODULE.ID, 'tileDefaultHeight', {
-        name: MODULE.ID + '.tileDefaultHeight-Label',
-        hint: MODULE.ID + '.tileDefaultHeight-Hint',
-        type: Number,
-        config: true,
-        scope: 'world',
-        default: 200,
-        range: { min: 50, max: 3000, step: 50 },
+        default: 100,
+        range: { min: 16, max: 1000, step: 1 },
         requiresReload: false,
         group: GROUP
     });

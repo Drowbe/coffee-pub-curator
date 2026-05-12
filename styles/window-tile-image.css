@@ -33,14 +33,19 @@
 .tiw-param-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex: 1;
+    flex-wrap: wrap;
 }
 
 .tiw-param-group {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
+}
+
+.tiw-param-group-slider {
+    gap: 6px;
 }
 
 .tiw-param-label {
@@ -52,7 +57,7 @@
 }
 
 .tiw-param-input {
-    width: 58px;
+    width: 62px;
     background: rgba(0, 0, 0, 0.5) !important;
     border: 1px solid rgba(255, 255, 255, 0.15) !important;
     border-radius: 3px;
@@ -62,9 +67,75 @@
     text-align: center;
 }
 
+.tiw-param-input-sm {
+    width: 50px !important;
+}
+
+.tiw-param-input-wide {
+    width: 70px !important;
+}
+
+/* Computed placed-size readout (updates when an image is selected) */
+.tiw-computed-size {
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    padding: 0 4px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    margin-left: 2px;
+}
+
 .tiw-param-input:focus {
     outline: none;
     border-color: rgba(255, 100, 0, 0.7) !important;
+}
+
+/* ---- Slider — reuse tir-rangeslider widget, compact width for option bar ---- */
+.tiw-param-group-slider .tir-rangeslider {
+    width: 80px;
+}
+
+.tiw-param-group-slider .tir-rangeslider-value {
+    margin-left: 2px;
+    min-width: 38px;
+}
+
+/* ---- Color picker ---- */
+.tiw-param-color {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px;
+    height: 22px;
+    padding: 1px 2px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.tiw-param-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.tiw-param-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+/* ---- Set as Default button (pushed to the far right) ---- */
+.tiw-set-defaults-btn {
+    margin-left: auto;
+    padding: 3px 9px;
+    font-size: 0.78em;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.tiw-set-defaults-btn:hover {
+    border-color: rgba(255, 100, 0, 0.7) !important;
+    color: #e0e0e0;
 }
 
 /* ---- Selected thumbnail (pending placement) ---- */

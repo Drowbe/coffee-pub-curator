@@ -33,6 +33,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._teardownExecuted = false;
         this._activeImageElements = new Set();
 
+        this.tileTint = '#ffffff';
+        this.dropShadow = false;
+
         // Placement mode state
         this._pendingPlacement = null;
         this._placementCleanup = null;
@@ -56,7 +59,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 deleteCache: TileImageWindow._actionDeleteCache,
                 cancelPlacement: TileImageWindow._actionCancelPlacement,
                 clearSearch: TileImageWindow._actionClearSearch,
-                filterToggle: TileImageWindow._actionFilterToggle
+                filterToggle: TileImageWindow._actionFilterToggle,
+                setDefaults: TileImageWindow._actionSetDefaults
             }
         }
     );
@@ -106,15 +110,21 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
             tagSortMode: this.tagSortMode,
             fuzzySearch: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageFuzzySearch', false),
-            tileWidth: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultWidth', 200),
-            tileHeight: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHeight', 200),
+            tileAssetGridSize: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAssetGridSize', 100),
+            tileComputedSize: this._getComputedSizeLabel(),
             tileRotation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
+            tileRotationFillPct: Math.round((BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0) / 359) * 100),
             tileAlpha: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
+            tileAlphaPercent: Math.round(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0) * 100),
+            tileAlphaFillPct: Math.round(((BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0) - 0.1) / 0.9) * 100),
+            tileTint: this.tileTint ?? '#ffffff',
             tileLocked: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
             tileHidden: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
             tileElevation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0),
             isPlacementMode: this.isPlacementMode,
-            pendingImageName: this._pendingPlacement?.imageName ?? ''
+            pendingImageName: this._pendingPlacement?.imageName ?? '',
+            tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
+            dropShadow: this.dropShadow
         };
     }
 
@@ -158,6 +168,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
+            if (e.target?.matches?.('.tir-rangeslider-input')) { w._onParamSliderInput(e); return; }
+            if (e.target?.matches?.('#tiw-param-asset-grid-size')) { w._refreshComputedSize(); return; }
         });
 
         document.addEventListener('change', (e) => {
@@ -167,6 +179,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
             if (e.target?.matches?.('#tiw-fuzzy-search')) { w._onFuzzySearchToggle(e); return; }
+            if (e.target?.matches?.('#tiw-param-tint'))    { w.tileTint    = e.target.value;   return; }
+            if (e.target?.matches?.('#tiw-drop-shadow'))  { w.dropShadow  = e.target.checked; return; }
         });
 
         document.addEventListener('scroll', (e) => {
@@ -192,12 +206,14 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         await super._onFirstRender?.(_context, options);
         this._attachDelegationOnce();
         this._initializeFilterToggleButton();
+        this._initializeParamSliders();
     }
 
     activateListeners(html) {
         super.activateListeners(html);
         this._attachDelegationOnce();
         this._initializeFilterToggleButton();
+        this._initializeParamSliders();
     }
 
     // ------------------------------------------------------------------
@@ -210,6 +226,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         requestAnimationFrame(() => {
             this._restoreScrollPositions(scrolls);
             this._initializeFilterToggleButton();
+            this._initializeParamSliders();
             this._updateResults();
         });
         return result;
@@ -246,6 +263,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     static _actionCancelPlacement(event, target){ TileImageWindow._ref?._exitPlacementMode(true); }
     static _actionClearSearch(event, target)    { TileImageWindow._ref?._onClearSearch(event); }
     static _actionFilterToggle(event, target)   { TileImageWindow._ref?._onFilterToggle(event); }
+    static _actionSetDefaults(event, target)    { TileImageWindow._ref?._onSetDefaults(); }
 
     // ------------------------------------------------------------------
     // openWindow
@@ -267,20 +285,41 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     // Canvas placement mode
     // ------------------------------------------------------------------
 
-    _enterPlacementMode(imagePath, imageName) {
+    _snapshotParams(naturalWidth, naturalHeight) {
+        // Read all option-bar values NOW, before any re-render can reset them.
+        const root = this._getRoot();
+        const get  = s => root?.querySelector(s);
+        return {
+            naturalWidth,
+            naturalHeight,
+            assetGridSize: parseInt(get('#tiw-param-asset-grid-size')?.value) || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAssetGridSize', 100),
+            sceneGridSize: canvas.scene?.grid?.size || canvas.grid?.size || 100,
+            rotation:      parseFloat(get('#tiw-param-rotation')?.value)           ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
+            alpha:         parseFloat(get('#tiw-param-alpha')?.value)              ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
+            elevation:     parseInt(get('#tiw-param-elevation')?.value)            ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0),
+            tint:          get('#tiw-param-tint')?.value                           || '#ffffff',
+            locked:        get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
+            hidden:        get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+        };
+    }
+
+    _enterPlacementMode(imagePath, imageName, naturalWidth = 0, naturalHeight = 0) {
         if (!canvas?.scene) {
             ui.notifications.warn('Tile Image: No active scene to place a tile on.');
             return;
         }
 
+        const snapshot = this._snapshotParams(naturalWidth, naturalHeight);
+
         // If already in placement mode, just swap the image
         if (this._pendingPlacement) {
-            this._pendingPlacement = { imagePath, imageName };
+            this._pendingPlacement = { imagePath, imageName, ...snapshot };
             this._highlightSelectedThumb(imagePath);
+            this._refreshComputedSize();
             return;
         }
 
-        this._pendingPlacement = { imagePath, imageName };
+        this._pendingPlacement = { imagePath, imageName, ...snapshot };
         this.isPlacementMode = true;
         this._highlightSelectedThumb(imagePath);
 
@@ -317,6 +356,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._placementCleanup = cleanup;
         canvasEl?.addEventListener?.('click', onCanvasClick, true);
         document.addEventListener('keydown', onKeyDown);
+
+        this._refreshComputedSize();
+        this.render(false);
     }
 
     _exitPlacementMode(rerender = false) {
@@ -336,7 +378,12 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     async _completePlacement(clickEvent) {
         if (!this._pendingPlacement) return;
-        const { imagePath, imageName } = this._pendingPlacement;
+
+        // Capture snapshot BEFORE _exitPlacementMode nulls _pendingPlacement
+        const { imagePath, imageName,
+                naturalWidth: naturalW0, naturalHeight: naturalH0,
+                assetGridSize, sceneGridSize,
+                rotation, alpha, elevation, tint, locked, hidden } = this._pendingPlacement;
         this._exitPlacementMode(false);
 
         // Convert screen coordinates → canvas stage coordinates
@@ -347,25 +394,42 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const t = canvas.stage?.worldTransform;
         const canvasX = t ? (screenX - t.tx) / t.a : screenX;
         const canvasY = t ? (screenY - t.ty) / t.d : screenY;
-
-        // Read params from the option bar inputs
-        const root = this._getRoot();
-        const get = (sel) => root?.querySelector(sel);
-        const width    = parseInt(get('#tiw-param-width')?.value)    || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultWidth', 200);
-        const height   = parseInt(get('#tiw-param-height')?.value)   || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHeight', 200);
-        const rotation = parseFloat(get('#tiw-param-rotation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0);
-        const alpha    = parseFloat(get('#tiw-param-alpha')?.value)   ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0);
-        const elevation= parseInt(get('#tiw-param-elevation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0);
-        const locked   = get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false);
-        const hidden   = get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false);
+        const naturalW = naturalW0 || sceneGridSize;
+        const naturalH = naturalH0 || sceneGridSize;
+        const scale    = sceneGridSize / assetGridSize;
+        const width    = Math.round(naturalW * scale);
+        const height   = Math.round(naturalH * scale);
+        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
+            `Tile dims: natural=${naturalW}×${naturalH} assetGrid=${assetGridSize} sceneGrid=${sceneGridSize} → placed=${width}×${height}`, '', true, false);
 
         try {
-            await canvas.scene.createEmbeddedDocuments('Tile', [{
-                texture: { src: imagePath },
+            const [tileDoc] = await canvas.scene.createEmbeddedDocuments('Tile', [{
+                texture: { src: imagePath, tint: tint !== '#ffffff' ? tint : null },
                 x: Math.round(canvasX - width / 2),
                 y: Math.round(canvasY - height / 2),
                 width, height, rotation, alpha, locked, hidden, elevation
             }]);
+
+            if (this.dropShadow && game.modules.get('tokenmagic')?.active && tileDoc) {
+                await tileDoc.setFlag('tokenmagic', 'params', [{
+                    filterType: 'shadow',
+                    filterId: 'curator-shadow',
+                    rotation: 35,
+                    blur: 2,
+                    quality: 5,
+                    distance: 5,
+                    alpha: 0.8,
+                    padding: 10,
+                    shadowOnly: false,
+                    color: 0x000000,
+                    zOrder: 6000,
+                    animated: {
+                        blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
+                        rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
+                    }
+                }]);
+            }
+
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
                 `Tile Image: Placed "${imageName}" (${width}x${height})`, '', true, false);
         } catch (err) {
@@ -523,16 +587,27 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const path = fileInfo.fullPath || '';
         const name = fileInfo.name || path.split('/').pop() || '';
         const tags = [...(fileInfo?.metadata?.primaryTags ?? []), ...(fileInfo?.metadata?.secondaryTags ?? [])];
-        const tagHtml = tags.slice(0, 8).map(t => `<span class="tir-search-tools-tag tir-thumb-tag" data-search-term="${t}">${t}</span>`).join('');
-        const isFav = fileInfo?.metadata?.tags?.includes('favorite');
+        const isFav = fileInfo?.metadata?.tags?.includes('FAVORITE') || fileInfo?.metadata?.tags?.includes('favorite');
         const isSelected = this._pendingPlacement?.imagePath === path;
         return `
-            <div class="tir-thumbnail-item${isSelected ? ' tiw-selected' : ''}" data-image-path="${path}" data-image-name="${name}"
-                title="Click to place on canvas">
-                ${isFav ? '<i class="tir-fav-indicator fa-solid fa-heart"></i>' : ''}
-                <img class="tir-thumb-img" src="${path}" alt="${name}" loading="lazy">
-                <div class="tir-thumb-name">${name}</div>
-                ${tagHtml ? `<div class="tir-thumb-tags">${tagHtml}</div>` : ''}
+            <div class="tir-thumbnail-item${isSelected ? ' tiw-selected' : ''}${isFav ? ' tir-favorite-image' : ''}"
+                 data-image-path="${path}" data-image-name="${name}" data-tooltip="${name}">
+                <div class="tir-thumbnail-image">
+                    <img src="${path}" alt="${name}" loading="lazy">
+                    <div class="tir-thumbnail-overlay">
+                        <i class="fa-solid fa-crosshairs"></i>
+                        <span class="tir-overlay-text">Place Tile</span>
+                    </div>
+                    ${isFav ? '<div class="tir-thumbnail-favorite-badge"><i class="fas fa-heart"></i></div>' : ''}
+                </div>
+                <div class="tir-thumbnail-name">${name}</div>
+                <div class="tir-thumbnail-score">
+                    <div class="tir-score-text">Browse</div>
+                    <div class="tir-score-bar"><div class="tir-score-fill" style="width: 0%"></div></div>
+                </div>
+                <div class="tir-thumbnail-tagset">
+                    ${tags.slice(0, 8).map(t => `<span class="tir-thumbnail-tag">${t}</span>`).join('')}
+                </div>
             </div>`;
     }
 
@@ -549,9 +624,91 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._updateResults();
     }
 
+    _onParamSliderInput(event) {
+        const input = event.target;
+        const slider = input.closest('.tir-rangeslider');
+        const fill  = slider?.querySelector('.tir-rangeslider-fill');
+        const thumb = slider?.querySelector('.tir-rangeslider-thumb');
+        const root  = this._getRoot();
+
+        if (input.id === 'tiw-param-rotation') {
+            const pct = (parseFloat(input.value) / 359) * 100;
+            if (fill)  fill.style.width = `${pct}%`;
+            if (thumb) thumb.style.left = `${pct}%`;
+            const val = root?.querySelector('#tiw-param-rotation-val');
+            if (val) val.textContent = `${Math.round(input.value)}°`;
+        } else if (input.id === 'tiw-param-alpha') {
+            const pct = ((parseFloat(input.value) - 0.1) / 0.9) * 100;
+            if (fill)  fill.style.width = `${pct}%`;
+            if (thumb) thumb.style.left = `${pct}%`;
+            const val = root?.querySelector('#tiw-param-alpha-val');
+            if (val) val.textContent = `${Math.round(parseFloat(input.value) * 100)}%`;
+        }
+    }
+
+    _getComputedSizeLabel() {
+        const p = this._pendingPlacement;
+        if (p?.naturalWidth > 0) {
+            // Use snapshotted values — always accurate after selection
+            const scale = p.sceneGridSize / p.assetGridSize;
+            return `${Math.round(p.naturalWidth * scale)} × ${Math.round(p.naturalHeight * scale)} px`;
+        }
+        // No image selected yet — show what the current input would produce with a hypothetical 1×1 tile
+        return '— × —';
+    }
+
+    _refreshComputedSize() {
+        const el = this._getRoot()?.querySelector('#tiw-computed-size');
+        if (el) el.textContent = this._getComputedSizeLabel();
+    }
+
+    _initializeParamSliders() {
+        const root = this._getRoot();
+        if (!root) return;
+
+        const rotInput = root.querySelector('#tiw-param-rotation');
+        if (rotInput) {
+            const pct = (parseFloat(rotInput.value) / 359) * 100;
+            const slider = rotInput.closest('.tir-rangeslider');
+            const fill  = slider?.querySelector('.tir-rangeslider-fill');
+            const thumb = slider?.querySelector('.tir-rangeslider-thumb');
+            const val   = root.querySelector('#tiw-param-rotation-val');
+            if (fill)  fill.style.width = `${pct}%`;
+            if (thumb) thumb.style.left = `${pct}%`;
+            if (val)   val.textContent  = `${Math.round(rotInput.value)}°`;
+        }
+
+        const alphaInput = root.querySelector('#tiw-param-alpha');
+        if (alphaInput) {
+            const pct = ((parseFloat(alphaInput.value) - 0.1) / 0.9) * 100;
+            const slider = alphaInput.closest('.tir-rangeslider');
+            const fill  = slider?.querySelector('.tir-rangeslider-fill');
+            const thumb = slider?.querySelector('.tir-rangeslider-thumb');
+            const val   = root.querySelector('#tiw-param-alpha-val');
+            if (fill)  fill.style.width = `${pct}%`;
+            if (thumb) thumb.style.left = `${pct}%`;
+            if (val)   val.textContent  = `${Math.round(parseFloat(alphaInput.value) * 100)}%`;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Event handlers
     // ------------------------------------------------------------------
+
+    _resolveImageDims(imagePath, thumbEl, callback) {
+        // Primary: Foundry's texture loader uses the PIXI cache — most reliable
+        foundry.canvas.loadTexture(imagePath).then(texture => {
+            if (texture?.width > 0) { callback(texture.width, texture.height); return; }
+            // Fallback: DOM img naturalWidth (if fully loaded)
+            const img = thumbEl?.querySelector('img');
+            if (img?.complete && img.naturalWidth > 0) { callback(img.naturalWidth, img.naturalHeight); return; }
+            callback(0, 0);
+        }).catch(() => {
+            const img = thumbEl?.querySelector('img');
+            if (img?.complete && img.naturalWidth > 0) callback(img.naturalWidth, img.naturalHeight);
+            else callback(0, 0);
+        });
+    }
 
     _onSelectImage(event) {
         const thumb = event.target.closest('.tir-thumbnail-item');
@@ -559,7 +716,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const imagePath = thumb.dataset.imagePath;
         const imageName = thumb.dataset.imageName;
         if (!imagePath) return;
-        this._enterPlacementMode(imagePath, imageName);
+        this._resolveImageDims(imagePath, thumb, (nw, nh) => {
+            this._enterPlacementMode(imagePath, imageName, nw, nh);
+        });
     }
 
     _onImageRightClick(event) {
@@ -582,7 +741,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             {
                 name: 'Place on Canvas',
                 icon: 'fa-solid fa-map',
-                callback: () => this._enterPlacementMode(imagePath, imageName)
+                callback: () => this._resolveImageDims(imagePath, thumb, (nw, nh) => this._enterPlacementMode(imagePath, imageName, nw, nh))
             },
             {
                 name: 'View Full Size and Share',
@@ -654,6 +813,26 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     _onPauseCache() {
         ImageCacheManager.pauseCache(TILE_MODE);
         this.render(true);
+    }
+
+    async _onSetDefaults() {
+        const root = this._getRoot();
+        const get = (sel) => root?.querySelector(sel);
+        const assetGridSize = parseInt(get('#tiw-param-asset-grid-size')?.value) || 100;
+        const rotation      = parseFloat(get('#tiw-param-rotation')?.value)  ?? 0;
+        const alpha         = parseFloat(get('#tiw-param-alpha')?.value)     ?? 1.0;
+        const elevation     = parseInt(get('#tiw-param-elevation')?.value)   ?? 0;
+        const locked        = get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? false;
+        const hidden        = get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? false;
+
+        await game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', assetGridSize);
+        await game.settings.set(MODULE.ID, 'tileDefaultRotation',      rotation);
+        await game.settings.set(MODULE.ID, 'tileDefaultAlpha',         alpha);
+        await game.settings.set(MODULE.ID, 'tileDefaultElevation',     elevation);
+        await game.settings.set(MODULE.ID, 'tileDefaultLocked',        locked);
+        await game.settings.set(MODULE.ID, 'tileDefaultHidden',        hidden);
+
+        ui.notifications.info('Tile defaults saved.');
     }
 
     async _onDeleteCache() {

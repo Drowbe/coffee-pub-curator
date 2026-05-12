@@ -236,11 +236,8 @@
     "headingH3TileImageDefaults-Label": "Default Tile Parameters",
     "headingH3TileImageDefaults-Hint": "These values are used as defaults when placing a tile from the browser. They can be overridden per-placement in the window.",
 
-    "tileDefaultWidth-Label": "Default Width (px)",
-    "tileDefaultWidth-Hint": "Default width of placed tiles in pixels.",
-
-    "tileDefaultHeight-Label": "Default Height (px)",
-    "tileDefaultHeight-Hint": "Default height of placed tiles in pixels.",
+    "tileDefaultAssetGridSize-Label": "Default Asset Grid Size (px)",
+    "tileDefaultAssetGridSize-Hint": "The pixel size of one grid square in the source artwork. Tiles are auto-scaled so this maps to the scene's grid size. Example: set to 140 if your art was drawn at 140px per grid square.",
 
     "tileDefaultRotation-Label": "Default Rotation (°)",
     "tileDefaultRotation-Hint": "Default rotation of placed tiles in degrees (0–359).",
