@@ -1,0 +1,812 @@
+// ==================================================================
+// ===== TILE IMAGE PLACEMENT WINDOW ================================
+// ==================================================================
+
+import { MODULE } from './const.js';
+import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
+import { ImageCacheManager } from './manager-image-cache.js';
+import { UIContextMenu } from './ui-context-menu.js';
+
+const TILE_MODE = ImageCacheManager.MODES.TILE;
+
+export class TileImageWindow extends BlacksmithWindowBaseV2 {
+    constructor(options = {}) {
+        super(foundry.utils.mergeObject({}, options));
+        this.matches = [];
+        this.allMatches = [];
+        this.currentPage = 0;
+        this.resultsPerPage = 50;
+        this.isLoadingMore = false;
+        this.hasMoreResults = false;
+        this.isSearching = false;
+        this.sortOrder = 'relevance';
+        this.currentFilter = 'all';
+        this.searchTerm = '';
+        this._cachedSearchTerms = null;
+        this.selectedTags = new Set();
+        this.tagSortMode = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageTagSortMode', 'count');
+        this._searchResultCache = new Map();
+        this._searchCacheMaxSize = 50;
+        this._searchCacheTTL = 300000;
+        this._trackedTimeouts = new Set();
+        this._teardownExecuted = false;
+        this._activeImageElements = new Set();
+
+        // Placement mode state
+        this._pendingPlacement = null;
+        this._placementCleanup = null;
+        this.isPlacementMode = false;
+    }
+
+    // ------------------------------------------------------------------
+    // Static class properties (ApplicationV2)
+    // ------------------------------------------------------------------
+
+    static DEFAULT_OPTIONS = foundry.utils.mergeObject(
+        foundry.utils.mergeObject({}, super.DEFAULT_OPTIONS ?? {}),
+        {
+            id: 'tile-image-window',
+            classes: ['tile-image-window'],
+            position: { width: 800, height: 620 },
+            window: { title: 'Place Tile', resizable: true, minimizable: true },
+            actions: {
+                scanImages: TileImageWindow._actionScanImages,
+                pauseCache: TileImageWindow._actionPauseCache,
+                deleteCache: TileImageWindow._actionDeleteCache,
+                cancelPlacement: TileImageWindow._actionCancelPlacement,
+                clearSearch: TileImageWindow._actionClearSearch,
+                filterToggle: TileImageWindow._actionFilterToggle
+            }
+        }
+    );
+
+    static PARTS = {
+        body: { template: 'modules/coffee-pub-curator/templates/window-tile-image.hbs' }
+    };
+
+    static ROOT_CLASS = 'tile-image-window';
+    static _ref = null;
+    static _delegationAttached = false;
+
+    // ------------------------------------------------------------------
+    // Lifecycle
+    // ------------------------------------------------------------------
+
+    async _prepareContext(options = {}) {
+        return this.getData(options);
+    }
+
+    getData() {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        const aggregatedTags = this._getAggregatedTags();
+        return {
+            appId: this.id,
+            isScanning: cache.isScanning,
+            overallProgress: cache.overallProgress,
+            totalSteps: cache.totalSteps,
+            overallProgressPercentage: cache.totalSteps > 0
+                ? Math.round((cache.overallProgress / cache.totalSteps) * 100) : 0,
+            currentFolderIndex: cache.currentFolderIndex || 0,
+            totalFolders: cache.totalFolders || 0,
+            showFolderInfo: (cache.totalFolders || 0) > 1,
+            currentStepName: cache.currentStepName,
+            currentStepProgress: cache.currentStepProgress,
+            currentStepTotal: cache.currentStepTotal,
+            currentStepProgressPercentage: cache.currentStepTotal > 0
+                ? Math.round((cache.currentStepProgress / cache.currentStepTotal) * 100) : 0,
+            currentPath: cache.currentPath,
+            currentFileName: cache.currentFileName,
+            cacheStatus: this._getCacheStatus(),
+            sortOrder: this.sortOrder,
+            currentFilter: this.currentFilter,
+            categoryStyle: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageCategoryStyle', 'buttons'),
+            categories: this._getCategories(),
+            aggregatedTags,
+            hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
+            tagSortMode: this.tagSortMode,
+            fuzzySearch: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageFuzzySearch', false),
+            tileWidth: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultWidth', 200),
+            tileHeight: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHeight', 200),
+            tileRotation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
+            tileAlpha: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
+            tileLocked: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
+            tileHidden: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            tileElevation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0),
+            isPlacementMode: this.isPlacementMode,
+            pendingImageName: this._pendingPlacement?.imageName ?? ''
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // Delegation
+    // ------------------------------------------------------------------
+
+    _attachDelegationOnce() {
+        TileImageWindow._ref = this;
+        if (TileImageWindow._delegationAttached) return;
+        TileImageWindow._delegationAttached = true;
+
+        document.addEventListener('click', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+
+            const thumb = e.target?.closest?.('.tir-thumbnail-item');
+            if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
+
+            const cat = e.target?.closest?.('.tir-filter-category');
+            if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
+
+            const tag = e.target?.closest?.('.tir-search-tools-tag');
+            if (tag) { e.preventDefault(); w._onTagClick(e); return; }
+        });
+
+        document.addEventListener('contextmenu', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+            const thumb = e.target?.closest?.('.tir-thumbnail-item');
+            if (thumb) { e.preventDefault(); w._onImageRightClick(e); return; }
+        });
+
+        document.addEventListener('input', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+            if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
+        });
+
+        document.addEventListener('change', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+            if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
+            if (e.target?.matches?.('#tiw-fuzzy-search')) { w._onFuzzySearchToggle(e); return; }
+        });
+
+        document.addEventListener('scroll', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+            if (e.target?.matches?.('.tir-thumbnails-grid')) { w._onScroll(e); return; }
+        }, true);
+
+        document.addEventListener('keypress', (e) => {
+            const w = TileImageWindow._ref;
+            if (!w) return;
+            const root = w._getRoot();
+            if (!root?.contains?.(e.target)) return;
+            if (e.target?.matches?.('.tir-search-input') && (e.key === 'Enter' || e.which === 13)) {
+                e.preventDefault();
+            }
+        });
+    }
+
+    async _onFirstRender(_context, options) {
+        await super._onFirstRender?.(_context, options);
+        this._attachDelegationOnce();
+        this._initializeFilterToggleButton();
+    }
+
+    activateListeners(html) {
+        super.activateListeners(html);
+        this._attachDelegationOnce();
+        this._initializeFilterToggleButton();
+    }
+
+    // ------------------------------------------------------------------
+    // render / close
+    // ------------------------------------------------------------------
+
+    async render(force = false, options = {}) {
+        const scrolls = this._saveScrollPositions();
+        const result = await super.render(force, options);
+        requestAnimationFrame(() => {
+            this._restoreScrollPositions(scrolls);
+            this._initializeFilterToggleButton();
+            this._updateResults();
+        });
+        return result;
+    }
+
+    _saveScrollPositions() {
+        const root = this._getRoot();
+        const body = root?.querySelector?.('.tir-content');
+        return { body: body ? body.scrollTop : 0 };
+    }
+
+    _restoreScrollPositions(saved) {
+        if (!saved) return;
+        const root = this._getRoot();
+        const body = root?.querySelector?.('.tir-content');
+        if (body && saved.body) body.scrollTop = saved.body;
+    }
+
+    async close(options = {}) {
+        this._exitPlacementMode();
+        TileImageWindow._ref = null;
+        TileImageWindow._delegationAttached = false;
+        this._teardownResources();
+        return super.close(options);
+    }
+
+    // ------------------------------------------------------------------
+    // Static action handlers
+    // ------------------------------------------------------------------
+
+    static _actionScanImages(event, target)     { TileImageWindow._ref?._onScanImages(); }
+    static _actionPauseCache(event, target)     { TileImageWindow._ref?._onPauseCache(); }
+    static _actionDeleteCache(event, target)    { TileImageWindow._ref?._onDeleteCache(); }
+    static _actionCancelPlacement(event, target){ TileImageWindow._ref?._exitPlacementMode(true); }
+    static _actionClearSearch(event, target)    { TileImageWindow._ref?._onClearSearch(event); }
+    static _actionFilterToggle(event, target)   { TileImageWindow._ref?._onFilterToggle(event); }
+
+    // ------------------------------------------------------------------
+    // openWindow
+    // ------------------------------------------------------------------
+
+    static async openWindow(opts = {}) {
+        if (!game.user.isGM) {
+            ui.notifications.warn('Only GMs can use the Tile Image Placement window.');
+            return;
+        }
+        const existing = Object.values(ui.windows).find(w => w instanceof TileImageWindow);
+        if (existing) { existing.render(true); return; }
+        const win = new TileImageWindow();
+        win.render(true);
+        await win._findMatches();
+    }
+
+    // ------------------------------------------------------------------
+    // Canvas placement mode
+    // ------------------------------------------------------------------
+
+    _enterPlacementMode(imagePath, imageName) {
+        if (!canvas?.scene) {
+            ui.notifications.warn('Tile Image: No active scene to place a tile on.');
+            return;
+        }
+
+        // If already in placement mode, just swap the image
+        if (this._pendingPlacement) {
+            this._pendingPlacement = { imagePath, imageName };
+            this._highlightSelectedThumb(imagePath);
+            return;
+        }
+
+        this._pendingPlacement = { imagePath, imageName };
+        this.isPlacementMode = true;
+        this._highlightSelectedThumb(imagePath);
+
+        // Switch to tiles layer so the placed tile is immediately visible/selected
+        canvas.tiles?.activate?.();
+
+        // Crosshair cursor on the canvas
+        const canvasEl = canvas.app?.view;
+        if (canvasEl) canvasEl.style.cursor = 'crosshair';
+
+        // One-shot canvas click handler — only fires on direct canvas clicks
+        const onCanvasClick = (e) => {
+            if (e.target !== canvasEl) return; // ignore clicks on UI overlays
+            e.stopPropagation();
+            cleanup();
+            this._completePlacement(e);
+        };
+
+        // ESC cancels
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                cleanup();
+                this._exitPlacementMode(true);
+            }
+        };
+
+        const cleanup = () => {
+            canvasEl?.removeEventListener?.('click', onCanvasClick, true);
+            document.removeEventListener('keydown', onKeyDown);
+            if (canvasEl) canvasEl.style.cursor = '';
+            this._placementCleanup = null;
+        };
+
+        this._placementCleanup = cleanup;
+        canvasEl?.addEventListener?.('click', onCanvasClick, true);
+        document.addEventListener('keydown', onKeyDown);
+    }
+
+    _exitPlacementMode(rerender = false) {
+        this._placementCleanup?.();
+        this._placementCleanup = null;
+        this._pendingPlacement = null;
+        this.isPlacementMode = false;
+
+        const canvasEl = canvas.app?.view;
+        if (canvasEl) canvasEl.style.cursor = '';
+
+        this._getRoot()?.querySelectorAll('.tir-thumbnail-item.tiw-selected')
+            .forEach(el => el.classList.remove('tiw-selected'));
+
+        if (rerender) this.render(false);
+    }
+
+    async _completePlacement(clickEvent) {
+        if (!this._pendingPlacement) return;
+        const { imagePath, imageName } = this._pendingPlacement;
+        this._exitPlacementMode(false);
+
+        // Convert screen coordinates → canvas stage coordinates
+        const canvasEl = canvas.app?.view;
+        const rect = canvasEl?.getBoundingClientRect() ?? { left: 0, top: 0 };
+        const screenX = clickEvent.clientX - rect.left;
+        const screenY = clickEvent.clientY - rect.top;
+        const t = canvas.stage?.worldTransform;
+        const canvasX = t ? (screenX - t.tx) / t.a : screenX;
+        const canvasY = t ? (screenY - t.ty) / t.d : screenY;
+
+        // Read params from the option bar inputs
+        const root = this._getRoot();
+        const get = (sel) => root?.querySelector(sel);
+        const width    = parseInt(get('#tiw-param-width')?.value)    || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultWidth', 200);
+        const height   = parseInt(get('#tiw-param-height')?.value)   || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHeight', 200);
+        const rotation = parseFloat(get('#tiw-param-rotation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0);
+        const alpha    = parseFloat(get('#tiw-param-alpha')?.value)   ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0);
+        const elevation= parseInt(get('#tiw-param-elevation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0);
+        const locked   = get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false);
+        const hidden   = get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false);
+
+        try {
+            await canvas.scene.createEmbeddedDocuments('Tile', [{
+                texture: { src: imagePath },
+                x: Math.round(canvasX - width / 2),
+                y: Math.round(canvasY - height / 2),
+                width, height, rotation, alpha, locked, hidden, elevation
+            }]);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
+                `Tile Image: Placed "${imageName}" (${width}x${height})`, '', true, false);
+        } catch (err) {
+            ui.notifications.error(`Tile Image: Failed to place tile — ${err.message}`);
+        }
+
+        // Re-render to clear placement mode banner
+        this.render(false);
+    }
+
+    _highlightSelectedThumb(imagePath) {
+        const root = this._getRoot();
+        if (!root) return;
+        root.querySelectorAll('.tir-thumbnail-item').forEach(el => {
+            el.classList.toggle('tiw-selected', el.dataset.imagePath === imagePath);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Cache helpers
+    // ------------------------------------------------------------------
+
+    _getCacheStatus() {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        if (!cache.lastScan) return 'No cache';
+        const files = cache.files?.size ?? 0;
+        const ageMs = Date.now() - cache.lastScan;
+        const ageH = (ageMs / 3600000).toFixed(1);
+        const sizeStr = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageDisplayCacheStatus', '');
+        return `${files.toLocaleString()} files, ${ageH} hours old${sizeStr ? ', ' + sizeStr : ''}`;
+    }
+
+    _getCategories() {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        if (!cache.files || cache.files.size === 0) return [];
+        const tagCount = new Map();
+        for (const [, f] of cache.files) {
+            for (const tag of (f?.metadata?.primaryTags ?? []))
+                tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
+        }
+        return Array.from(tagCount.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 12)
+            .map(([tag, count]) => ({ key: tag, name: tag, count, isActive: this.currentFilter === tag }));
+    }
+
+    _getAggregatedTags() {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        const files = this.allMatches.length > 0 ? this.allMatches : Array.from(cache.files?.values() ?? []);
+        const primaryCount = new Map();
+        const secondaryCount = new Map();
+        for (const f of files) {
+            for (const t of (f?.metadata?.primaryTags ?? [])) primaryCount.set(t, (primaryCount.get(t) ?? 0) + 1);
+            for (const t of (f?.metadata?.secondaryTags ?? [])) secondaryCount.set(t, (secondaryCount.get(t) ?? 0) + 1);
+        }
+        const sort = (map) => {
+            const arr = Array.from(map.entries());
+            if (this.tagSortMode === 'alpha') arr.sort((a, b) => a[0].localeCompare(b[0]));
+            else arr.sort((a, b) => b[1] - a[1]);
+            return arr.map(([t]) => t);
+        };
+        return { primary: sort(primaryCount), secondary: sort(secondaryCount) };
+    }
+
+    // ------------------------------------------------------------------
+    // Search / matching
+    // ------------------------------------------------------------------
+
+    async _findMatches() {
+        this.matches = [];
+        this.allMatches = [];
+        this.currentPage = 0;
+        this.isSearching = true;
+        this._updateStatusIcon();
+
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        if (cache.files.size === 0) {
+            this.isSearching = false;
+            this._updateStatusIcon();
+            this._updateResults();
+            return;
+        }
+
+        let files = Array.from(cache.files.values());
+
+        if (this.currentFilter === 'favorites') {
+            files = files.filter(f => f?.metadata?.tags?.includes('favorite'));
+        } else if (this.currentFilter !== 'all') {
+            files = files.filter(f =>
+                f?.metadata?.primaryTags?.includes(this.currentFilter) ||
+                f?.metadata?.secondaryTags?.includes(this.currentFilter)
+            );
+        }
+
+        if (this.selectedTags.size > 0) {
+            files = files.filter(f => {
+                const all = [...(f?.metadata?.primaryTags ?? []), ...(f?.metadata?.secondaryTags ?? [])];
+                return Array.from(this.selectedTags).every(t => all.includes(t));
+            });
+        }
+
+        const term = (this.searchTerm || '').trim().toLowerCase();
+        if (term.length >= 2) {
+            files = files.filter(f => {
+                const name = (f?.name ?? '').toLowerCase();
+                const path = (f?.fullPath ?? '').toLowerCase();
+                const tags = [...(f?.metadata?.primaryTags ?? []), ...(f?.metadata?.secondaryTags ?? [])].join(' ').toLowerCase();
+                return name.includes(term) || path.includes(term) || tags.includes(term);
+            });
+        }
+
+        if (this.sortOrder === 'atoz') files.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+        else if (this.sortOrder === 'ztoa') files.sort((a, b) => (b.name ?? '').localeCompare(a.name ?? ''));
+
+        this.allMatches = files;
+        this.hasMoreResults = files.length > this.resultsPerPage;
+        this.matches = files.slice(0, this.resultsPerPage);
+        this.isSearching = false;
+        this._updateStatusIcon();
+        this._updateResults();
+    }
+
+    _updateStatusIcon() {
+        const el = this._getRoot()?.querySelector('#tir-results-details-status');
+        if (!el) return;
+        el.innerHTML = this.isSearching
+            ? '<i class="fa-solid fa-arrows-rotate fa-spin"></i>'
+            : '<i class="fa-solid fa-magnifying-glass"></i>';
+    }
+
+    _updateResults() {
+        const root = this._getRoot();
+        if (!root) return;
+        const grid = root.querySelector('.tir-thumbnails-grid');
+        if (!grid) return;
+
+        this._activeImageElements.forEach(img => { try { img.src = ''; } catch (_) {} });
+        this._activeImageElements.clear();
+
+        if (this.matches.length === 0) {
+            grid.innerHTML = `<div class="tir-no-results">
+                <i class="fa-solid fa-map"></i>
+                <p>No tile images found.<br>Add image folder paths in Settings and click Scan Images.</p>
+            </div>`;
+        } else {
+            grid.innerHTML = this.matches.map(f => this._renderThumbnail(f)).join('');
+            grid.querySelectorAll('img.tir-thumb-img').forEach(img => this._activeImageElements.add(img));
+        }
+
+        const countEl = root.querySelector('#tir-results-details-count');
+        if (countEl) countEl.innerHTML = `<i class="fas fa-images"></i>${this.matches.length} of ${this.allMatches.length} Showing`;
+    }
+
+    _renderThumbnail(fileInfo) {
+        const path = fileInfo.fullPath || '';
+        const name = fileInfo.name || path.split('/').pop() || '';
+        const tags = [...(fileInfo?.metadata?.primaryTags ?? []), ...(fileInfo?.metadata?.secondaryTags ?? [])];
+        const tagHtml = tags.slice(0, 8).map(t => `<span class="tir-search-tools-tag tir-thumb-tag" data-search-term="${t}">${t}</span>`).join('');
+        const isFav = fileInfo?.metadata?.tags?.includes('favorite');
+        const isSelected = this._pendingPlacement?.imagePath === path;
+        return `
+            <div class="tir-thumbnail-item${isSelected ? ' tiw-selected' : ''}" data-image-path="${path}" data-image-name="${name}"
+                title="Click to place on canvas">
+                ${isFav ? '<i class="tir-fav-indicator fa-solid fa-heart"></i>' : ''}
+                <img class="tir-thumb-img" src="${path}" alt="${name}" loading="lazy">
+                <div class="tir-thumb-name">${name}</div>
+                ${tagHtml ? `<div class="tir-thumb-tags">${tagHtml}</div>` : ''}
+            </div>`;
+    }
+
+    async _loadMoreResults() {
+        if (this.isLoadingMore || !this.hasMoreResults) return;
+        this.isLoadingMore = true;
+        const nextPage = this.currentPage + 1;
+        const start = nextPage * this.resultsPerPage;
+        const more = this.allMatches.slice(start, start + this.resultsPerPage);
+        this.matches = [...this.matches, ...more];
+        this.currentPage = nextPage;
+        this.hasMoreResults = this.allMatches.length > this.matches.length;
+        this.isLoadingMore = false;
+        this._updateResults();
+    }
+
+    // ------------------------------------------------------------------
+    // Event handlers
+    // ------------------------------------------------------------------
+
+    _onSelectImage(event) {
+        const thumb = event.target.closest('.tir-thumbnail-item');
+        if (!thumb) return;
+        const imagePath = thumb.dataset.imagePath;
+        const imageName = thumb.dataset.imageName;
+        if (!imagePath) return;
+        this._enterPlacementMode(imagePath, imageName);
+    }
+
+    _onImageRightClick(event) {
+        const thumb = event.target.closest('.tir-thumbnail-item');
+        if (!thumb) return;
+        const imagePath = thumb.dataset.imagePath;
+        const imageName = thumb.dataset.imageName;
+        if (!imagePath) return;
+
+        const fileInfo = ImageCacheManager.getCache(TILE_MODE).files.get(imageName?.toLowerCase());
+        const isFav = fileInfo?.metadata?.tags?.includes('favorite');
+        const menuRoot = (thumb.ownerDocument || document).body;
+
+        const coreItems = [
+            {
+                name: isFav ? 'Remove from Favorites' : 'Add to Favorites',
+                icon: isFav ? 'fa-solid fa-heart-crack' : 'fa-solid fa-heart',
+                callback: () => this._toggleFavorite(imagePath, imageName, fileInfo)
+            },
+            {
+                name: 'Place on Canvas',
+                icon: 'fa-solid fa-map',
+                callback: () => this._enterPlacementMode(imagePath, imageName)
+            },
+            {
+                name: 'View Full Size and Share',
+                icon: 'fa-solid fa-users',
+                description: 'Show this image to all connected players',
+                callback: () => {
+                    game.socket.emit(`module.${MODULE.ID}`, { action: 'showImage', src: imagePath, title: imageName });
+                    const ImagePopout = foundry.applications?.apps?.ImagePopout ?? window.ImagePopout;
+                    if (ImagePopout) new ImagePopout(imagePath, { title: imageName, shareable: false }).render(true);
+                }
+            }
+        ];
+
+        UIContextMenu.show({
+            id: `${MODULE.ID}-tile-context-menu`,
+            x: event.clientX,
+            y: event.clientY,
+            root: menuRoot,
+            className: 'context-menu-above-dialogs',
+            zones: { core: coreItems, module: [], gm: [] }
+        });
+    }
+
+    async _toggleFavorite(imagePath, imageName, fileInfo) {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        const key = imageName?.toLowerCase();
+        const entry = cache.files.get(key);
+        if (!entry) return;
+        if (!entry.metadata) entry.metadata = {};
+        if (!Array.isArray(entry.metadata.tags)) entry.metadata.tags = [];
+        const idx = entry.metadata.tags.indexOf('favorite');
+        if (idx === -1) entry.metadata.tags.push('favorite');
+        else entry.metadata.tags.splice(idx, 1);
+        await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
+        this.render(true);
+    }
+
+    async _onScanImages() {
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        if (cache.isScanning) return;
+
+        // Re-render immediately to show scanning state in the template
+        this.render(false);
+
+        // Track whether the scan ever started — dialog may be open before scan begins,
+        // so isScanning is false initially. Don't clear until true→false transition.
+        let scanStarted = false;
+        const progressTimer = setInterval(() => {
+            const isScanning = ImageCacheManager.getCache(TILE_MODE).isScanning;
+            if (isScanning) {
+                scanStarted = true;
+                this.render(false);
+            } else if (scanStarted) {
+                clearInterval(progressTimer);
+            }
+        }, 400);
+
+        try {
+            await ImageCacheManager.scanForImages(TILE_MODE);
+        } finally {
+            clearInterval(progressTimer);
+        }
+
+        await this._findMatches();
+        this.render(true);
+    }
+
+    _onPauseCache() {
+        ImageCacheManager.pauseCache(TILE_MODE);
+        this.render(true);
+    }
+
+    async _onDeleteCache() {
+        const confirmed = await Dialog.confirm({
+            title: 'Delete Tile Image Cache',
+            content: '<p>Delete the tile image cache? You will need to scan again to browse images.</p>',
+            yes: () => true, no: () => false, defaultYes: false
+        });
+        if (!confirmed) return;
+        await ImageCacheManager.deleteCache(TILE_MODE);
+        this.matches = [];
+        this.allMatches = [];
+        this.render(true);
+    }
+
+    async _onClearSearch(event) {
+        event?.preventDefault?.();
+        const root = this._getRoot();
+        const input = root?.querySelector('.tir-search-input');
+        if (input) input.value = '';
+        this.searchTerm = '';
+        this.selectedTags.clear();
+        root?.querySelectorAll('.tir-search-tools-tag').forEach(t => t.classList.remove('selected'));
+        await this._findMatches();
+    }
+
+    _onFilterToggle(event) {
+        event?.preventDefault?.();
+        const root = this._getRoot();
+        if (!root) return;
+        const button = event?.target?.closest('.tir-filter-toggle-btn') ?? event?.target;
+        const tagContainer = root.querySelector('#tir-search-tools-tag-container');
+        const icon = button?.querySelector('i');
+        if (this.tagSortMode === 'count') {
+            this.tagSortMode = 'alpha';
+            if (button) button.setAttribute('title', 'Tag Sort: Alpha');
+            if (icon) icon.className = 'fas fa-filter-list';
+            if (tagContainer) tagContainer.style.display = '';
+        } else if (this.tagSortMode === 'alpha') {
+            this.tagSortMode = 'hidden';
+            if (button) button.setAttribute('title', 'Tag Sort: Hidden');
+            if (icon) icon.className = 'fas fa-filter-circle-xmark';
+            if (tagContainer) tagContainer.style.display = 'none';
+        } else {
+            this.tagSortMode = 'count';
+            if (button) button.setAttribute('title', 'Tag Sort: Count');
+            if (icon) icon.className = 'fas fa-filter';
+            if (tagContainer) tagContainer.style.display = '';
+        }
+        game.settings.set(MODULE.ID, 'tileImageTagSortMode', this.tagSortMode);
+        this._updateTagContainer();
+    }
+
+    _initializeFilterToggleButton() {
+        const root = this._getRoot();
+        if (!root) return;
+        const button = root.querySelector('.tir-filter-toggle-btn');
+        const tagContainer = root.querySelector('#tir-search-tools-tag-container');
+        const icon = button?.querySelector('i');
+        const states = {
+            count:  { title: 'Tag Sort: Count',  cls: 'fas fa-filter',              show: true },
+            alpha:  { title: 'Tag Sort: Alpha',   cls: 'fas fa-filter-list',         show: true },
+            hidden: { title: 'Tag Sort: Hidden',  cls: 'fas fa-filter-circle-xmark', show: false }
+        };
+        const s = states[this.tagSortMode] ?? states.count;
+        if (button) button.setAttribute('title', s.title);
+        if (icon) icon.className = s.cls;
+        if (tagContainer) tagContainer.style.display = s.show ? '' : 'none';
+    }
+
+    async _onSearchInput(event) {
+        this.searchTerm = event.target.value.trim();
+        clearTimeout(this._searchTimeout);
+        this._searchTimeout = setTimeout(() => this._findMatches(), 300);
+    }
+
+    async _onSortOrderChange(event) {
+        const val = event.target.value;
+        if (!val || val === this.sortOrder) return;
+        this.sortOrder = val;
+        await this._findMatches();
+    }
+
+    async _onScroll(event) {
+        const el = event.target;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+            if (this.hasMoreResults && !this.isLoadingMore) await this._loadMoreResults();
+        }
+    }
+
+    async _onCategoryFilterClick(event) {
+        const clicked = event.target.closest('.tir-filter-category');
+        if (!clicked) return;
+        const cat = clicked.dataset.category;
+        if (!cat || cat === this.currentFilter) return;
+        this.currentFilter = cat;
+        const root = this._getRoot();
+        root?.querySelectorAll('.tir-filter-category').forEach(el => el.classList.remove('active'));
+        clicked.classList.add('active');
+        await this._findMatches();
+    }
+
+    async _onTagClick(event) {
+        const tag = event.target.closest('.tir-search-tools-tag');
+        if (!tag) return;
+        const name = tag.dataset.searchTerm;
+        if (!name) return;
+        if (this.selectedTags.has(name)) { this.selectedTags.delete(name); tag.classList.remove('selected'); }
+        else { this.selectedTags.add(name); tag.classList.add('selected'); }
+        await this._findMatches();
+    }
+
+    async _onFuzzySearchToggle(event) {
+        await game.settings.set(MODULE.ID, 'tileImageFuzzySearch', event.target.checked);
+        await this._findMatches();
+    }
+
+    _updateTagContainer() {
+        const root = this._getRoot();
+        const container = root?.querySelector('#tir-search-tools-tag-container');
+        if (!container) return;
+        const agg = this._getAggregatedTags();
+        const groups = [
+            { label: 'Primary Tags', list: agg.primary, css: 'primary' },
+            { label: 'Secondary Tags', list: agg.secondary, css: 'secondary' }
+        ];
+        container.innerHTML = groups.map(g => {
+            if (!g.list?.length) return '';
+            const tags = g.list.map(t => {
+                const sel = this.selectedTags.has(t) ? ' selected' : '';
+                return `<span class="tir-search-tools-tag${sel}" data-search-term="${t}">${t}</span>`;
+            }).join('');
+            return `<div class="tir-search-tools-tag-group tir-search-tools-tag-group-${g.css}">
+                        <div class="tir-search-tools-tag-group-label">${g.label}</div>
+                        <div class="tir-search-tools-tag-row">${tags}</div>
+                    </div>`;
+        }).join('');
+    }
+
+    // ------------------------------------------------------------------
+    // Cleanup
+    // ------------------------------------------------------------------
+
+    _teardownResources() {
+        if (this._teardownExecuted) return;
+        this._teardownExecuted = true;
+        for (const id of this._trackedTimeouts) clearTimeout(id);
+        this._trackedTimeouts.clear();
+        this._activeImageElements.forEach(img => { try { img.src = ''; } catch (_) {} });
+        this._activeImageElements.clear();
+        this.matches = [];
+        this.allMatches = [];
+        this._cachedSearchTerms = null;
+        this.selectedTags.clear();
+        this._searchResultCache.clear();
+    }
+}

@@ -1117,28 +1117,49 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
     async _onScanImages() {
         this.scanProgress = 0;
         this.scanTotal = 0;
-        this.render();
 
+        // Trigger immediate render to show isScanning state in template
+        this.render(true);
+
+        // Poll every 400ms to push progress bar updates into the template.
+        // ApplicationV2's async render lock drops rapid fire render() calls from
+        // the cache manager, so the window drives its own progress refresh.
+        // Track whether the scan ever started (dialog may be open before scan begins,
+        // so isScanning is false initially — we must not clear the interval until
+        // it transitions true→false, not on the initial false state).
+        let scanStarted = false;
+        const progressTimer = setInterval(() => {
+            const isScanning = ImageCacheManager.getCache(this.mode).isScanning;
+            if (isScanning) {
+                scanStarted = true;
+                this.render(false);
+            } else if (scanStarted) {
+                // Scan was running and just finished — stop polling
+                clearInterval(progressTimer);
+            }
+            // isScanning=false and scanStarted=false means the dialog is still open; keep waiting
+        }, 400);
+
+        const modeLabel = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token';
         try {
             await ImageCacheManager.scanForImages(this.mode);
-            
-            // Check if we have completion data to show
+
+            // Final render to clear progress bars
+            this.render(true);
+
             const cache = ImageCacheManager.getCache(this.mode);
-            const modeLabel = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token';
-            
             if (cache.justCompleted && cache.completionData) {
                 const data = cache.completionData;
                 let message = `${modeLabel} Image Replacement: Scan completed! Found ${data.totalFiles} files across ${data.totalFolders} folders in ${data.timeString}`;
-                if (data.ignoredFiles > 0) {
-                    message += ` (${data.ignoredFiles} files ignored by filter)`;
-                }
+                if (data.ignoredFiles > 0) message += ` (${data.ignoredFiles} files ignored by filter)`;
                 ui.notifications.info(message);
             } else {
                 ui.notifications.info(`${modeLabel} image scan completed`);
             }
         } catch (error) {
-            const modeLabel = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token';
             ui.notifications.error(`${modeLabel} image scan failed: ${error.message}`);
+        } finally {
+            clearInterval(progressTimer);
         }
     }
 

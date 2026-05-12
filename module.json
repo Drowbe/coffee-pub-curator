@@ -1,7 +1,7 @@
 {
   "id": "coffee-pub-curator",
   "title": "Coffee Pub Curator",
-  "description": "Token and portrait image replacement fro dropped tokens, dead tokens, and loot piles.",
+  "description": "Image management for Foundry VTT: token replacement, portrait replacement, and tile/map image placement.",
   "version": "13.1.0",
 
   "manifest": "https://github.com/Drowbe/coffee-pub-curator/releases/latest/download/module.json",
@@ -55,6 +55,7 @@
     "scripts/token-image-utilities.js",
     "scripts/ui-context-menu.js",
     "scripts/token-image-replacement.js",
+    "scripts/tile-image-window.js",
     "scripts/curator.js"
   ],
 

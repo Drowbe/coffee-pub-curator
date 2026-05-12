@@ -8,7 +8,7 @@ import { HookManager } from './manager-hooks.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
 import { ImageMatching } from './manager-image-matching.js';
-import { getTokenImagePaths, getPortraitImagePaths } from './settings.js';
+import { getTokenImagePaths, getPortraitImagePaths, getTileImagePaths } from './settings.js';
 
 /**
  * Token Image Replacement Cache Management System
@@ -25,7 +25,8 @@ export class ImageCacheManager {
     // Mode constants
     static MODES = {
         TOKEN: 'token',
-        PORTRAIT: 'portrait'
+        PORTRAIT: 'portrait',
+        TILE: 'tile'
     };
     
     // Cache structure for storing file information (token mode)
@@ -54,6 +55,32 @@ export class ImageCacheManager {
         needsRescan: false          // flag for external changes without rescanning
     };
     
+    // Cache structure for storing file information (tile/map mode)
+    static tileCache = {
+        files: new Map(),
+        folders: new Map(),
+        creatureTypes: new Map(),
+        categoryIndex: new Map(),
+        tagIndex: new Map(),
+        lastScan: null,
+        isScanning: false,
+        isPaused: false,
+        justCompleted: false,
+        completionData: null,
+        totalFiles: 0,
+        overallProgress: 0,
+        totalSteps: 0,
+        currentFolderIndex: 0,
+        totalFolders: 0,
+        currentStepName: '',
+        currentStepProgress: 0,
+        currentStepTotal: 0,
+        currentPath: '',
+        currentFileName: '',
+        ignoredFilesCount: 0,
+        needsRescan: false
+    };
+
     // Cache structure for storing file information (portrait mode)
     static portraitCache = {
         files: new Map(),           // filename -> full path mapping
@@ -86,7 +113,9 @@ export class ImageCacheManager {
      * @returns {Object} The cache object for the specified mode
      */
     static getCache(mode = 'token') {
-        return mode === this.MODES.PORTRAIT ? this.portraitCache : this.cache;
+        if (mode === this.MODES.PORTRAIT) return this.portraitCache;
+        if (mode === this.MODES.TILE) return this.tileCache;
+        return this.cache;
     }
     
     /**
@@ -95,9 +124,9 @@ export class ImageCacheManager {
      * @returns {string} The setting key for the cache
      */
     static getCacheSettingKey(mode = 'token') {
-        return mode === this.MODES.PORTRAIT 
-            ? 'portraitImageReplacementCache' 
-            : 'tokenImageReplacementCache';
+        if (mode === this.MODES.PORTRAIT) return 'portraitImageReplacementCache';
+        if (mode === this.MODES.TILE) return 'tileImageCache';
+        return 'tokenImageReplacementCache';
     }
     
     /**
@@ -106,9 +135,9 @@ export class ImageCacheManager {
      * @returns {string[]} Array of configured paths
      */
     static getTokenImagePathsForMode(mode = 'token') {
-        return mode === this.MODES.PORTRAIT 
-            ? getPortraitImagePaths() 
-            : getTokenImagePaths();
+        if (mode === this.MODES.PORTRAIT) return getPortraitImagePaths();
+        if (mode === this.MODES.TILE) return getTileImagePaths();
+        return getTokenImagePaths();
     }
 
     /**
@@ -1039,9 +1068,9 @@ export class ImageCacheManager {
         await this._loadMonsterMappingData();
         
         // Initialize the caching system immediately since we're already in the ready hook
-        // Initialize both token and portrait caches
         await this._initializeCache(this.MODES.TOKEN);
         await this._initializeCache(this.MODES.PORTRAIT);
+        await this._initializeCache(this.MODES.TILE);
         
         // Register createToken hook for image replacement
         const createTokenHookId = HookManager.registerHook({
@@ -1202,7 +1231,7 @@ export class ImageCacheManager {
         }
         
         if (cleanedCount > 0) {
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cleaned up ${cleanedCount} invalid file paths from cache`, "", true, false);
             if (invalidPaths.length > 0) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Invalid paths found: ${invalidPaths.join(', ')}`, "", true, false);
@@ -1224,7 +1253,7 @@ export class ImageCacheManager {
      */
     static async scanForImages(mode = 'token') {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         // Check if we already have a working cache
         if (cache.files.size > 0) {
@@ -1310,7 +1339,7 @@ export class ImageCacheManager {
      */
     static async _doIncrementalUpdate(basePath, mode = 'token') {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         if (cache.isScanning) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Stopping current scan for incremental update...`, "", true, false);
@@ -1523,7 +1552,7 @@ export class ImageCacheManager {
      */
     static pauseCache(mode = 'token') {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         if (cache.isScanning) {
             cache.isPaused = true;
@@ -1547,7 +1576,7 @@ export class ImageCacheManager {
     static async deleteCache(mode = 'token') {
         const cache = this.getCache(mode);
         const cacheSettingKey = this.getCacheSettingKey(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Deleting cache...`, "", true, false);
         
@@ -1638,7 +1667,7 @@ export class ImageCacheManager {
         }
         
         // No cache found - user must scan manually
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         ui.notifications.info(`No ${modeLabel} Image Replacement images found. Use "Update Images" in the replacement window to scan.`);
     }
     
@@ -1649,7 +1678,7 @@ export class ImageCacheManager {
      */
     static async _scanFolderStructure(mode = 'token', basePathOrPaths = null) {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         if (cache.isScanning) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan already in progress - please wait for it to complete`, "", true, false);
@@ -1934,7 +1963,7 @@ export class ImageCacheManager {
      */
     static _logCacheStatistics(mode = 'token') {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         if (cache.creatureTypes.size > 0) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Creature type breakdown:`, "", true, false);
@@ -1963,7 +1992,7 @@ export class ImageCacheManager {
      */
     static async _getDirectoryContents(basePath, sourceIndex = 1, mode = 'token', totalFolders = 1, skipDelays = false) {
         const files = [];
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         const cache = this.getCache(mode);
         
         try {
@@ -2142,7 +2171,7 @@ export class ImageCacheManager {
      */
     static async _scanSubdirectory(subDir, basePath, sourceIndex = 1, mode = 'token', totalFolders = 1, skipDelays = false) {
         const files = [];
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         try {
             // v13: use namespaced FilePicker
@@ -2330,7 +2359,7 @@ export class ImageCacheManager {
      */
     static async _processFiles(files, basePath, clearCache = false, sourceIndex = 1, mode = 'token') {
         const cache = this.getCache(mode);
-        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         // Only clear existing cache if explicitly requested (for complete rescans)
         if (clearCache) {
@@ -2793,7 +2822,7 @@ export class ImageCacheManager {
             const compressedData = await this._buildCompressedCacheData(mode, basePaths, fingerprint, false);
             await game.settings.set(MODULE.ID, cacheSettingKey, compressedData);
         } catch (error) {
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error saving metadata: ${error.message}`, "", false, false);
         }
     }
@@ -2807,7 +2836,7 @@ export class ImageCacheManager {
             const cache = this.getCache(mode);
             cache.needsRescan = false;
             const cacheSettingKey = this.getCacheSettingKey(mode);
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             // Get all configured image paths for this mode
             const basePaths = this.getTokenImagePathsForMode(mode);
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: DEBUG (_saveCacheToStorage) - Retrieved ${basePaths.length} path(s)`, "", true, false);
@@ -2869,7 +2898,7 @@ export class ImageCacheManager {
             }
         } catch (error) {
             const cache = this.getCache(mode);
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL ERROR saving cache: ${error.message}`, "", false, false);
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache data - Files: ${cache.files.size}, Folders: ${cache.folders.size}, isIncremental: ${isIncremental}`, "", false, false);
         }
@@ -2949,7 +2978,7 @@ export class ImageCacheManager {
             
             return compressedData;
         } catch (error) {
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Streaming compression failed: ${error.message}. Falling back to standard method.`, "", false, false);
             
             // Fallback to standard method (may still fail on very large caches)
@@ -3146,7 +3175,7 @@ export class ImageCacheManager {
         try {
             const cache = this.getCache(mode);
             const cacheSettingKey = this.getCacheSettingKey(mode);
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             // Load cache from game.settings (server-side) instead of localStorage (browser-side)
             const savedCache = game.settings.get(MODULE.ID, cacheSettingKey);
             if (!savedCache) {
@@ -3430,7 +3459,7 @@ export class ImageCacheManager {
                 decompressedCache = this._decompressCacheData(savedCache);
             } catch (decompressionError) {
                 // If decompression fails, try parsing as-is (might be uncompressed)
-                const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+                const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Decompression failed, trying uncompressed format: ${decompressionError.message}`, "", true, false);
                 decompressedCache = savedCache;
             }
@@ -3477,11 +3506,11 @@ export class ImageCacheManager {
                     ? 'portraitImageReplacementDisplayCacheStatus' 
                     : 'tokenImageReplacementDisplayCacheStatus';
                 game.settings.set(MODULE.ID, statusSettingKey, status.message);
-                const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+                const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache status updated: ${status.message}`, "", false, false);
             }
         } catch (error) {
-            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : 'Token';
+            const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Error updating cache status setting: ${error.message}`, "", false, false);
         }
     }

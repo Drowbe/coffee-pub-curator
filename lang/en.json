@@ -222,6 +222,51 @@
     "headingH3PortraitImageReplacementCache-Hint": "",
 
     "numPortraitImageReplacementPaths-Label": "Number of Image Folders",
-    "numPortraitImageReplacementPaths-Hint": ""
+    "numPortraitImageReplacementPaths-Hint": "",
+
+    "headingH2TileImagePlacement-Label": "Tile & Map Image Placement",
+    "headingH2TileImagePlacement-Hint": "Browse and place map/environment images as canvas tiles directly from the Blacksmith menubar.",
+
+    "headingH3TileImagePaths-Label": "Tile Image Folders",
+    "headingH3TileImagePaths-Hint": "Configure the folders that contain your tile and map images.",
+
+    "numTileImagePaths-Label": "Number of Image Folders",
+    "numTileImagePaths-Hint": "How many folder paths to configure for tile images. Requires a reload to add or remove folders.",
+
+    "headingH3TileImageDefaults-Label": "Default Tile Parameters",
+    "headingH3TileImageDefaults-Hint": "These values are used as defaults when placing a tile from the browser. They can be overridden per-placement in the window.",
+
+    "tileDefaultWidth-Label": "Default Width (px)",
+    "tileDefaultWidth-Hint": "Default width of placed tiles in pixels.",
+
+    "tileDefaultHeight-Label": "Default Height (px)",
+    "tileDefaultHeight-Hint": "Default height of placed tiles in pixels.",
+
+    "tileDefaultRotation-Label": "Default Rotation (°)",
+    "tileDefaultRotation-Hint": "Default rotation of placed tiles in degrees (0–359).",
+
+    "tileDefaultAlpha-Label": "Default Opacity",
+    "tileDefaultAlpha-Hint": "Default opacity of placed tiles (0.1 = nearly invisible, 1.0 = fully opaque).",
+
+    "tileDefaultLocked-Label": "Lock by Default",
+    "tileDefaultLocked-Hint": "When enabled, placed tiles will be locked so they cannot be accidentally moved.",
+
+    "tileDefaultHidden-Label": "Hidden by Default",
+    "tileDefaultHidden-Hint": "When enabled, placed tiles will be hidden from players until revealed by the GM.",
+
+    "tileDefaultElevation-Label": "Default Elevation",
+    "tileDefaultElevation-Hint": "Default elevation level for placed tiles.",
+
+    "headingH3TileImageSearch-Label": "Search & Display",
+    "headingH3TileImageSearch-Hint": "Settings that control how tile images are searched and displayed in the browser.",
+
+    "tileImageFuzzySearch-Label": "Fuzzy Search",
+    "tileImageFuzzySearch-Hint": "When enabled, searches use fuzzy matching. When disabled, only exact string matches are returned.",
+
+    "tileImageTagSortMode-Label": "Tag Sort Mode",
+    "tileImageTagSortMode-Hint": "Controls how tags are sorted in the tile image browser.",
+
+    "tileImageCategoryStyle-Label": "Category Style",
+    "tileImageCategoryStyle-Hint": "Display category filters as buttons or tabs. Requires a reload to take effect."
   }
 }

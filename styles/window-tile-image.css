@@ -1,0 +1,89 @@
+/* ================================================================
+   TILE IMAGE PLACEMENT WINDOW — unique styles only.
+   All chrome (option bar, header, search rows, thumbnails, action
+   bar) reuses .tir-* classes from window-token-replacement.css.
+   ================================================================ */
+
+/* Remove Foundry's default window-content padding (same as token window) */
+.tile-image-window .window-content {
+    display: flex;
+    flex-direction: column;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Root — mirrors token-replacement-window root rule */
+.tile-image-window {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    flex: 1;
+    background: #232323;
+    border: 1px solid #444;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    font-family: "Signika", sans-serif;
+    color: #e0e0e0;
+    min-width: 500px;
+    min-height: 450px;
+}
+
+/* ---- Tile parameter row inside the option bar ---- */
+.tiw-param-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.tiw-param-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tiw-param-label {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.tiw-param-input {
+    width: 58px;
+    background: rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 3px;
+    color: #e0e0e0 !important;
+    font-size: 0.82em;
+    padding: 2px 4px;
+    text-align: center;
+}
+
+.tiw-param-input:focus {
+    outline: none;
+    border-color: rgba(255, 100, 0, 0.7) !important;
+}
+
+/* ---- Selected thumbnail (pending placement) ---- */
+.tir-thumbnail-item.tiw-selected {
+    border-color: rgba(88, 135, 72, 0.9) !important;
+    box-shadow: 0 0 0 2px rgba(88, 135, 72, 0.6) !important;
+}
+
+/* ---- No-results state ---- */
+.tir-no-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.35);
+    gap: 10px;
+    font-size: 0.9em;
+    text-align: center;
+}
+
+.tir-no-results i { font-size: 2.5em; opacity: 0.4; }

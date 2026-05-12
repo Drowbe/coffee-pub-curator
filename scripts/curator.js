@@ -7,6 +7,7 @@ import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
+import { TileImageWindow } from './tile-image-window.js';
 import { registerSettings } from './settings.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
@@ -118,15 +119,56 @@ function initializeCurator(blacksmith) {
         buttonSelectedTint: null
     });
 
-    // Right-click context menus for Replace Token / Replace Portrait menubar tools (Blacksmith API)
+    blacksmith.registerMenubarTool('placetile', {
+        icon: 'fa-solid fa-map',
+        name: 'placetile',
+        title: 'Place Tile',
+        tooltip: null,
+        onClick: () => TileImageWindow.openWindow(),
+        zone: 'middle',
+        group: 'utility',
+        groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
+        order: 4,
+        moduleId: MODULE.ID,
+        gmOnly: true,
+        leaderOnly: false,
+        visible: true,
+        toggleable: false,
+        active: false,
+        iconColor: null,
+        buttonNormalTint: null,
+        buttonSelectedTint: null
+    });
+
+    // Right-click context menus for menubar tools (Blacksmith API)
     const ContextMenu = blacksmith?.uiContextMenu;
     if (ContextMenu && typeof ContextMenu.show === 'function') {
         document.addEventListener('contextmenu', (event) => {
             const tokenBtn = event.target?.closest?.('[title="Replace Token"]');
             const portraitBtn = event.target?.closest?.('[title="Replace Portrait"]');
+            const tileBtn = event.target?.closest?.('[title="Place Tile"]');
             const mode = tokenBtn ? 'token' : (portraitBtn ? 'portrait' : null);
-            if (!mode) return;
 
+            if (tileBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                ContextMenu.show({
+                    id: `${MODULE.ID}-menubar-context-tile`,
+                    x: event.clientX,
+                    y: event.clientY,
+                    zones: [
+                        {
+                            name: 'Open Tile Image Browser',
+                            icon: 'fa-solid fa-map',
+                            callback: () => TileImageWindow.openWindow()
+                        }
+                    ],
+                    zoneClass: 'core'
+                });
+                return;
+            }
+
+            if (!mode) return;
             event.preventDefault();
             event.stopPropagation();
 
@@ -195,7 +237,8 @@ function initializeCurator(blacksmith) {
             },
             registerImageTileContextMenuItem: ImageCacheManager.registerImageTileContextMenuItem.bind(ImageCacheManager),
             unregisterImageTileContextMenuItem: ImageCacheManager.unregisterImageTileContextMenuItem.bind(ImageCacheManager),
-            openReplacementWindow: (opts) => TokenImageReplacementWindow.openWindow(opts)
+            openReplacementWindow: (opts) => TokenImageReplacementWindow.openWindow(opts),
+            openTileWindow: () => TileImageWindow.openWindow()
         };
     }
 }

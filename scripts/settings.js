@@ -39,6 +39,27 @@ function registerImageReplacementPaths() {
     }
 }
 
+function registerTileImagePaths() {
+    const numSetting = 'numTileImagePaths';
+    if (!game.settings.settings.has(`${MODULE.ID}.${numSetting}`)) return;
+    const numPaths = game.settings.get(MODULE.ID, numSetting) ?? 1;
+    for (let i = 1; i <= numPaths; i++) {
+        const settingKey = `tileImagePath${i}`;
+        if (game.settings.settings.has(`${MODULE.ID}.${settingKey}`)) continue;
+        game.settings.register(MODULE.ID, settingKey, {
+            name: `Folder ${i}`,
+            hint: '',
+            type: String,
+            config: true,
+            scope: 'world',
+            default: '',
+            filePicker: 'folder',
+            requiresReload: false,
+            group: GROUP
+        });
+    }
+}
+
 function registerPortraitImageReplacementPaths() {
     const numSetting = 'numPortraitImageReplacementPaths';
     if (!game.settings.settings.has(`${MODULE.ID}.${numSetting}`)) return;
@@ -75,6 +96,16 @@ export function getPortraitImagePaths() {
     const paths = [];
     for (let i = 1; i <= numPaths; i++) {
         const path = game.settings.get(MODULE.ID, `portraitImageReplacementPath${i}`) || '';
+        if (path && path.trim() !== '') paths.push(path.trim());
+    }
+    return paths;
+}
+
+export function getTileImagePaths() {
+    const numPaths = game.settings.get(MODULE.ID, 'numTileImagePaths') ?? 1;
+    const paths = [];
+    for (let i = 1; i <= numPaths; i++) {
+        const path = game.settings.get(MODULE.ID, `tileImagePath${i}`) || '';
         if (path && path.trim() !== '') paths.push(path.trim());
     }
     return paths;
@@ -882,4 +913,150 @@ export function registerSettings(blacksmithApi) {
         group: GROUP
     });
     registerPortraitImageReplacementPaths();
+
+    // ----- Tile / Map Image Placement -----
+    registerHeader('TileImagePlacement', 'headingH2TileImagePlacement-Label', 'headingH2TileImagePlacement-Hint', 'H2', GROUP, 'world');
+    registerHeader('headingH3TileImagePaths', 'headingH3TileImagePaths-Label', 'headingH3TileImagePaths-Hint', 'H3', GROUP, 'world');
+
+    game.settings.register(MODULE.ID, 'numTileImagePaths', {
+        name: MODULE.ID + '.numTileImagePaths-Label',
+        hint: MODULE.ID + '.numTileImagePaths-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 1,
+        range: { min: 0, max: 15, step: 1 },
+        requiresReload: true,
+        group: GROUP
+    });
+    registerTileImagePaths();
+
+    registerHeader('headingH3TileImageDefaults', 'headingH3TileImageDefaults-Label', 'headingH3TileImageDefaults-Hint', 'H3', GROUP, 'world');
+
+    game.settings.register(MODULE.ID, 'tileDefaultWidth', {
+        name: MODULE.ID + '.tileDefaultWidth-Label',
+        hint: MODULE.ID + '.tileDefaultWidth-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 200,
+        range: { min: 50, max: 3000, step: 50 },
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultHeight', {
+        name: MODULE.ID + '.tileDefaultHeight-Label',
+        hint: MODULE.ID + '.tileDefaultHeight-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 200,
+        range: { min: 50, max: 3000, step: 50 },
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultRotation', {
+        name: MODULE.ID + '.tileDefaultRotation-Label',
+        hint: MODULE.ID + '.tileDefaultRotation-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 0,
+        range: { min: 0, max: 359, step: 1 },
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultAlpha', {
+        name: MODULE.ID + '.tileDefaultAlpha-Label',
+        hint: MODULE.ID + '.tileDefaultAlpha-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 1.0,
+        range: { min: 0.1, max: 1.0, step: 0.05 },
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultLocked', {
+        name: MODULE.ID + '.tileDefaultLocked-Label',
+        hint: MODULE.ID + '.tileDefaultLocked-Hint',
+        type: Boolean,
+        config: true,
+        scope: 'world',
+        default: false,
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultHidden', {
+        name: MODULE.ID + '.tileDefaultHidden-Label',
+        hint: MODULE.ID + '.tileDefaultHidden-Hint',
+        type: Boolean,
+        config: true,
+        scope: 'world',
+        default: false,
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultElevation', {
+        name: MODULE.ID + '.tileDefaultElevation-Label',
+        hint: MODULE.ID + '.tileDefaultElevation-Hint',
+        type: Number,
+        config: true,
+        scope: 'world',
+        default: 0,
+        range: { min: -10, max: 100, step: 1 },
+        requiresReload: false,
+        group: GROUP
+    });
+
+    registerHeader('headingH3TileImageSearch', 'headingH3TileImageSearch-Label', 'headingH3TileImageSearch-Hint', 'H3', GROUP, 'world');
+
+    game.settings.register(MODULE.ID, 'tileImageFuzzySearch', {
+        name: MODULE.ID + '.tileImageFuzzySearch-Label',
+        hint: MODULE.ID + '.tileImageFuzzySearch-Hint',
+        type: Boolean,
+        config: true,
+        scope: 'world',
+        default: false,
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileImageTagSortMode', {
+        name: MODULE.ID + '.tileImageTagSortMode-Label',
+        hint: MODULE.ID + '.tileImageTagSortMode-Hint',
+        scope: 'world',
+        config: true,
+        type: String,
+        choices: { count: 'Count (by frequency)', alpha: 'Alpha (alphabetical)', hidden: 'Hidden (hide tags)' },
+        default: 'count',
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileImageCategoryStyle', {
+        name: MODULE.ID + '.tileImageCategoryStyle-Label',
+        hint: MODULE.ID + '.tileImageCategoryStyle-Hint',
+        scope: 'world',
+        config: true,
+        type: String,
+        choices: { buttons: 'Buttons', tabs: 'Tabs' },
+        default: 'buttons',
+        requiresReload: true,
+        group: GROUP
+    });
+
+    // Hidden / non-config tile settings
+    game.settings.register(MODULE.ID, 'tileImageCache', {
+        scope: 'world',
+        config: false,
+        type: String,
+        default: '',
+        requiresReload: false
+    });
+    game.settings.register(MODULE.ID, 'tileImageDisplayCacheStatus', {
+        scope: 'world',
+        config: false,
+        type: String,
+        default: '',
+        group: GROUP
+    });
 }

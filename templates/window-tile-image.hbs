@@ -1,0 +1,219 @@
+<div class="tile-image-window" id="{{appId}}">
+
+    {{!-- Option Bar: compact tile dimension parameters --}}
+    <div class="tir-global-controls">
+        <div class="tiw-param-row">
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">W</span>
+                <input id="tiw-param-width" type="number" class="tiw-param-input" value="{{tileWidth}}" min="50" max="3000" step="50" title="Tile width (px)">
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">H</span>
+                <input id="tiw-param-height" type="number" class="tiw-param-input" value="{{tileHeight}}" min="50" max="3000" step="50" title="Tile height (px)">
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Rot</span>
+                <input id="tiw-param-rotation" type="number" class="tiw-param-input" value="{{tileRotation}}" min="0" max="359" step="1" title="Rotation (°)">
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Alpha</span>
+                <input id="tiw-param-alpha" type="number" class="tiw-param-input" value="{{tileAlpha}}" min="0.1" max="1.0" step="0.05" title="Opacity (0.1–1.0)">
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Elev</span>
+                <input id="tiw-param-elevation" type="number" class="tiw-param-input" value="{{tileElevation}}" min="-10" max="100" step="1" title="Elevation">
+            </div>
+        </div>
+    </div>
+
+    {{!-- Header: placement status + toggles --}}
+    <div class="tir-header">
+        <div class="tir-header-content">
+            <div class="tir-header-icon">
+                {{#if isPlacementMode}}
+                    <i class="fa-solid fa-crosshairs fa-beat"></i>
+                {{else}}
+                    <i class="fa-solid fa-map"></i>
+                {{/if}}
+            </div>
+            <div class="tir-header-title">
+                {{#if isPlacementMode}}
+                    <div class="tir-main-title">{{pendingImageName}}</div>
+                    <div class="tir-subtitle">Click the canvas to place &mdash; press <strong>Esc</strong> to cancel</div>
+                {{else}}
+                    <div class="tir-main-title">Place Tile</div>
+                    <div class="tir-subtitle">Click a tile image to begin placement</div>
+                {{/if}}
+            </div>
+            <div class="tir-header-controls">
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Locked</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" data-setting-key="tileDefaultLocked" id="tiw-locked" {{#if tileLocked}}checked{{/if}}>
+                        <label for="tiw-locked" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Hidden</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" data-setting-key="tileDefaultHidden" id="tiw-hidden" {{#if tileHidden}}checked{{/if}}>
+                        <label for="tiw-hidden" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Fuzzy Search</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" id="tiw-fuzzy-search" {{#if fuzzySearch}}checked{{/if}}>
+                        <label for="tiw-fuzzy-search" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{!-- Scanning Progress --}}
+        {{#if isScanning}}
+        <div class="tir-scan-progress progress-overall">
+            <div class="tir-progress-bar">
+                <div class="tir-progress-fill" style="width: {{overallProgressPercentage}}%"></div>
+                <div class="tir-progress-text">
+                    <i class="fas fa-sync-alt fa-spin"></i>
+                    <span class="tir-progress-total">{{#if totalSteps}}{{#if showFolderInfo}}Folder {{currentFolderIndex}} of {{totalFolders}} | {{/if}}Phase {{overallProgress}} of {{totalSteps}}{{else}}Initializing...{{/if}}</span>
+                    | <span class="tir-progress-details">{{currentStepName}}</span>
+                </div>
+            </div>
+        </div>
+        <div class="tir-scan-progress progress-current">
+            <div class="tir-progress-bar">
+                <div class="tir-progress-fill" style="width: {{currentStepProgressPercentage}}%"></div>
+                <div class="tir-progress-text">
+                    <i class="fas fa-image"></i>
+                    {{#if currentPath}}<span class="tir-progress-details">{{currentPath}}</span>{{/if}}
+                    <span class="tir-progress-total">{{#if currentStepTotal}}{{currentStepProgress}} of {{currentStepTotal}}{{else}}Initializing...{{/if}}</span>
+                    {{#if currentFileName}} | <span class="tir-progress-file">{{currentFileName}}</span>{{/if}}
+                </div>
+            </div>
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- Filter / Search area --}}
+    <div class="tir-search-tools-container">
+
+        {{!-- Row 1: Category filters + cache status --}}
+        <div class="tir-search-tools-row-container row-category row-style-{{categoryStyle}}">
+            <div id="tir-filter-category-container" class="tir-search-tools-row-left">
+                <span class="tir-filter-category row-style-{{categoryStyle}}" data-category="favorites"><i class="fas fa-heart"></i></span>
+                <span class="tir-filter-category {{#unless currentFilter}}active{{/unless}} row-style-{{categoryStyle}}" data-category="all">All</span>
+                {{#each categories}}
+                    <span class="tir-filter-category {{#if isActive}}active{{/if}} row-style-{{../categoryStyle}}" data-tooltip="{{name}} ({{count}})" data-category="{{key}}">{{name}}</span>
+                {{/each}}
+            </div>
+            <div class="tir-search-tools-row-right">
+                <span>{{cacheStatus}}</span>
+            </div>
+        </div>
+
+        {{!-- Row 2: Search + sort --}}
+        <div class="tir-search-tools-row-container row-search">
+            <div id="tir-search-tools-row-left" class="tir-search-tools-row-left">
+                <div class="tir-search-container">
+                    <span id="tir-results-details-status" class="tir-results-details-status"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" class="tir-search-input" placeholder="Search for tiles..." value="">
+                    <button type="button" class="tir-clear-search-btn" data-action="clearSearch" title="Clear search">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <button type="button" class="tir-filter-toggle-btn" data-action="filterToggle" title="Tag Sort: Count">
+                    <i class="fas fa-filter"></i>
+                </button>
+            </div>
+            <div id="tir-search-tools-row-right" class="tir-search-tools-row-right tir-results-details">
+                <select name="sortOrder" class="blacksmith-select">
+                    <option value="relevance" {{#if (eq sortOrder "relevance")}}selected{{/if}}>Relevance</option>
+                    <option value="atoz" {{#if (eq sortOrder "atoz")}}selected{{/if}}>A to Z</option>
+                    <option value="ztoa" {{#if (eq sortOrder "ztoa")}}selected{{/if}}>Z to A</option>
+                </select>
+            </div>
+        </div>
+
+        {{!-- Row 3: Tags --}}
+        {{#if hasAggregatedTags}}
+        <div id="tir-search-tools-tag-container" class="tir-search-tools-tag-container">
+            {{#if aggregatedTags.primary.length}}
+            <div class="tir-search-tools-tag-group tir-search-tools-tag-group-primary">
+                <div class="tir-search-tools-tag-group-label">Primary Tags</div>
+                <div class="tir-search-tools-tag-row">
+                    {{#each aggregatedTags.primary}}
+                    <span class="tir-search-tools-tag" data-search-term="{{this}}">{{this}}</span>
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+            {{#if aggregatedTags.secondary.length}}
+            <div class="tir-search-tools-tag-group tir-search-tools-tag-group-secondary">
+                <div class="tir-search-tools-tag-group-label">Secondary Tags</div>
+                <div class="tir-search-tools-tag-row">
+                    {{#each aggregatedTags.secondary}}
+                    <span class="tir-search-tools-tag" data-search-term="{{this}}">{{this}}</span>
+                    {{/each}}
+                </div>
+            </div>
+            {{/if}}
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- Results header --}}
+    <div class="tir-token-replacement-header-container">
+        <div class="tir-token-replacement-header-left"><i class="fas fa-map"></i> Matching Tiles</div>
+        <div class="tir-token-replacement-header-right">
+            <span id="tir-results-details-count" class="tir-results-details-count"><i class="fas fa-images"></i>0 of 0 Showing</span>
+        </div>
+    </div>
+
+    {{!-- Image Grid --}}
+    <div class="tir-content">
+        <div class="tir-thumbnails-grid"></div>
+        {{#if isLoadingMore}}
+        <div class="tir-loading-indicator">
+            <i class="fas fa-spinner fa-spin"></i> Loading more...
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- Action Bar --}}
+    <section class="blacksmith-window-template-buttons">
+        <div class="blacksmith-window-template-action-bar">
+            <div class="blacksmith-window-template-action-left">
+                {{#if isScanning}}
+                    <button type="button" class="blacksmith-window-btn-secondary" data-action="pauseCache"
+                        data-tooltip="Stop the current image scan.">
+                        <i class="fas fa-pause"></i> Delay Scan
+                    </button>
+                {{else}}
+                    <button type="button" class="blacksmith-window-btn-secondary" data-action="scanImages"
+                        data-tooltip="Scan configured folders and update the tile image cache.">
+                        <i class="fas fa-search"></i> Scan Images
+                    </button>
+                {{/if}}
+                <button type="button" class="blacksmith-window-btn-critical" data-action="deleteCache"
+                    data-tooltip="Remove all cached tile image data.">
+                    <i class="fas fa-trash"></i> Delete Cache
+                </button>
+            </div>
+            <div class="blacksmith-window-template-action-right">
+                {{#if isPlacementMode}}
+                    <button type="button" class="blacksmith-window-btn-secondary" data-action="cancelPlacement">
+                        <i class="fas fa-times"></i> Cancel Placement
+                    </button>
+                {{else}}
+                    <button type="button" class="blacksmith-window-btn-primary" disabled
+                        data-tooltip="Click any tile image above to begin placement.">
+                        <i class="fa-solid fa-map"></i> Click a Tile to Place
+                    </button>
+                {{/if}}
+            </div>
+        </div>
+    </section>
+
+</div>
