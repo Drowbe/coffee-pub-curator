@@ -2033,9 +2033,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             const statusElement = element.querySelector('#tir-results-details-status');
             if (statusElement) {
                 if (this.isSearching) {
-                    statusElement.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i>Searching for more...';
+                    statusElement.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i>';
                 } else {
-                    statusElement.innerHTML = '<i class="fas fa-check"></i>Complete';
+                    statusElement.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i>';
                 }
             }
             

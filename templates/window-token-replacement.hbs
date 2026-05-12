@@ -141,9 +141,10 @@
         <div class="tir-search-tools-row-container row-search">
             <div id="tir-search-tools-row-left" class="tir-search-tools-row-left">
                 <div class="tir-search-container">
+                    <span id="tir-results-details-status" class="tir-results-details-status"><i class="fa-solid fa-magnifying-glass"></i></span>
                     <input type="text" class="tir-search-input" placeholder="Search for images..." value="">
                     <button type="button" class="tir-clear-search-btn" data-action="clearSearch" title="Clear search">
-                        <i class="fas fa-square-xmark"></i>
+                        <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
                 <button type="button" class="tir-filter-toggle-btn" data-action="filterToggle" title="Tag Sort: Count" data-tag-sort-mode="count">
@@ -151,10 +152,11 @@
                 </button>
             </div>
             <div id="tir-search-tools-row-right" class="tir-search-tools-row-right tir-results-details">
-                <!-- These results get dynamically overridden in token-image-replacement.js -->
-                <span id="tir-results-details-count" class="tir-results-details-count"><i class="fas fa-images"></i>0 of 0 Showing</span>
-                <span class="tir-results-details-divider">|</span>
-                <span id="tir-results-details-status" class="tir-results-details-status"><i class="fas fa-check"></i>Complete</span>
+                <select name="sortOrder" class="tir-select">
+                    <option value="relevance" {{#if (eq sortOrder "relevance")}}selected{{/if}}>Sort by Relevance</option>
+                    <option value="atoz" {{#if (eq sortOrder "atoz")}}selected{{/if}}>A to Z</option>
+                    <option value="ztoa" {{#if (eq sortOrder "ztoa")}}selected{{/if}}>Z to A</option>
+                </select>
             </div>
         </div>
 
@@ -193,16 +195,8 @@
         <div class="tir-token-replacement-header-left"><i class="fas fa-images"></i> Matching Results</div>
         <!-- Actions -->
         <div class="tir-token-replacement-header-right">
-            <!-- Sort Order Selector -->
-            <div class="cpb-form-group">
-                <div class="tir-form-fields">
-                    <select name="sortOrder" class="tir-select">
-                        <option value="relevance" {{#if (eq sortOrder "relevance")}}selected{{/if}}>Sort by Relevance</option>
-                        <option value="atoz" {{#if (eq sortOrder "atoz")}}selected{{/if}}>Alphabetical: A to Z</option>
-                        <option value="ztoa" {{#if (eq sortOrder "ztoa")}}selected{{/if}}>Alphabetical: Z to A</option>
-                    </select>
-                </div>
-            </div>
+            <!-- These results get dynamically overridden in token-image-replacement.js -->
+            <span id="tir-results-details-count" class="tir-results-details-count"><i class="fas fa-images"></i>0 of 0 Showing</span>
         </div>
     </div>
 

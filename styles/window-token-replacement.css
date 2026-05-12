@@ -708,45 +708,54 @@
 /* ----- Search Containner ----- */
 
 .tir-search-container {
-    position: relative;
-    padding: 0px 0px 0px 0px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
     background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
-    margin: 0px 0px 0px 0px;
     flex: 1;
     min-width: 200px;
+}
+
+.tir-results-details-status {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.9em;
 }  
 
 /* Input Box */
 
 .tir-search-input {
     flex: 1;
-    padding-right: 24px;
-    background-color: rgba(255, 255, 255, 0.15) !important;
+    background: transparent !important;
     color: #e0e0e0 !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: 4px;
-    padding: 0.3em 0.5em;
+    border: none !important;
+    border-radius: 0;
+    padding: 0.3em 0.25em;
     font-size: 0.95em;
     caret-color: rgba(255, 47, 47, 1.0);
+    min-width: 0;
 }
 .tir-search-input:focus {
     outline: none;
-    border-color: rgba(255, 100, 0, 0.8) !important;
+    box-shadow: none;
+}
+.tir-search-container:focus-within {
+    border-color: rgba(255, 100, 0, 0.8);
     box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
 }
 /* Clear Button */
 
 .tir-clear-search-btn {
-    position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
+    flex-shrink: 0;
     width: auto;
     height: auto;
     padding: 0;
-    border: 0px solid #ffffff;
+    border: none;
     background: transparent;
     cursor: pointer;
     display: flex;
