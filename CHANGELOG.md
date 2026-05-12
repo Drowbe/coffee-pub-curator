@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [13.1.1] - 2026-05-12
+
+### Added
+- **Tile Image Placement window** (`TileImageWindow`): New browser window for placing map/environment tiles directly onto the canvas from a scanned image library. Accessible from the CoffeePub toolbar (`fa-map` icon).
+  - Full image scanning and tagging pipeline via `ImageCacheManager.MODES.TILE`, sharing the same caching infrastructure as Token and Portrait modes.
+  - **Asset Grid Size** parameter replaces fixed Width/Height. Tiles auto-scale so that the source artwork's grid squares map to the scene's grid size: `placed = natural × (sceneGrid ÷ assetGridSize)`. Preserves aspect ratio regardless of image dimensions.
+  - **Rotation** and **Opacity** sliders use the same `.tir-rangeslider` custom widget as the Token/Portrait window.
+  - **Tint** color picker applies a PIXI tint to the placed tile texture (white = no tint).
+  - **Elevation** number input.
+  - **Locked** and **Hidden** toggles in the header.
+  - **Drop Shadow** toggle (header, only visible when Token Magic FX is installed and active). Applies a TMFX shadow filter via `setFlag('tokenmagic', 'params', [...])` immediately after tile creation using the same parameters as the standard shadow macro.
+  - **Set as Default** button (right of option bar) saves all current parameter values to world settings.
+  - Click-to-place workflow: clicking a thumbnail enters placement mode (crosshair cursor, header banner, ESC to cancel); clicking the canvas places the tile centered on the click point.
+  - Computed placed-size readout (`— × —` → `800 × 600 px`) updates live as Asset Grid Size changes and when an image is selected.
+  - Card thumbnails match the Token/Portrait window style: `tir-thumbnail-image` wrapper, hover overlay showing **Place Tile** with a crosshairs icon, `tir-thumbnail-name`, `tir-thumbnail-score` ("Browse"), `tir-thumbnail-tagset` with `tir-thumbnail-tag` pills, favorite heart badge.
+  - Right-click context menu: Add/Remove Favorites, Place on Canvas, View Full Size.
+  - Post-scan auto-loads results in the All tab.
+
+### Fixed
+- **Post-scan grid empty** (Token and Portrait windows): After a scan completed, `_findMatches()` populated `this.matches` but the immediately following `render(true)` re-rendered the HBS template, replacing the grid with an empty `<div>`. Fixed by adding `_updateResults()` to the `requestAnimationFrame` callback in the `render()` override so the grid is repopulated after every template re-render.
+- **Tile placement dimensions wrong**: Two compounding bugs caused tiles to be placed at the wrong size:
+  1. Option-bar inputs (`#tiw-param-asset-grid-size`, rotation, alpha, etc.) were read from the DOM in `_completePlacement`, but the `render(false)` call inside `_enterPlacementMode` re-rendered the template first, resetting all inputs to their saved-setting defaults. Fixed by snapshotting all params into `_pendingPlacement` at selection time via `_snapshotParams()`, before any re-render fires.
+  2. `_completePlacement` destructured `this._pendingPlacement` after calling `_exitPlacementMode()`, which nulls it. Fixed by capturing the full destructure before the exit call.
+- **`_resolveImageDims` unreliable**: `img.naturalWidth` on lazy-loaded thumbnails could return 0 or the display size. Replaced with `foundry.canvas.loadTexture()` as the primary source, which uses Foundry's PIXI texture cache and always returns intrinsic pixel dimensions.
+- **`loadTexture` deprecation warning**: Updated all calls from the global `loadTexture` to the v13 namespace `foundry.canvas.loadTexture`.
+- **`canvas.grid.size` fallback chain**: `_snapshotParams` now tries `canvas.scene?.grid?.size` before `canvas.grid?.size` to handle both Foundry v12 and v13 grid API paths.
+
+
 ## [13.1.0] - 2026-05-11
 
 ### Changed

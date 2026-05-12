@@ -1010,6 +1010,26 @@ export function registerSettings(blacksmithApi) {
         requiresReload: false,
         group: GROUP
     });
+    game.settings.register(MODULE.ID, 'tileDropShadow', {
+        name: MODULE.ID + '.tileDropShadow-Label',
+        hint: MODULE.ID + '.tileDropShadow-Hint',
+        type: Boolean,
+        config: false,
+        scope: 'world',
+        default: false,
+        requiresReload: false,
+        group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tokenDropShadow', {
+        name: MODULE.ID + '.tokenDropShadow-Label',
+        hint: MODULE.ID + '.tokenDropShadow-Hint',
+        type: Boolean,
+        config: false,
+        scope: 'world',
+        default: false,
+        requiresReload: false,
+        group: GROUP
+    });
     game.settings.register(MODULE.ID, 'tileImageTagSortMode', {
         name: MODULE.ID + '.tileImageTagSortMode-Label',
         hint: MODULE.ID + '.tileImageTagSortMode-Hint',

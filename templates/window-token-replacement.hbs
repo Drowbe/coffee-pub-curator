@@ -84,7 +84,15 @@
                         <label for="updateDropped" class="tir-toggle-slider"></label>
                     </div>
                 </div>
-
+                {{#if tmfxActive}}
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Drop Shadow</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" id="tokenDropShadow" {{#if dropShadow}}checked{{/if}}>
+                        <label for="tokenDropShadow" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                {{/if}}
 
             </div>
         </div>

@@ -34,7 +34,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._activeImageElements = new Set();
 
         this.tileTint = '#ffffff';
-        this.dropShadow = false;
+        this.dropShadow = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', false);
 
         // Placement mode state
         this._pendingPlacement = null;
@@ -180,7 +180,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
             if (e.target?.matches?.('#tiw-fuzzy-search')) { w._onFuzzySearchToggle(e); return; }
             if (e.target?.matches?.('#tiw-param-tint'))    { w.tileTint    = e.target.value;   return; }
-            if (e.target?.matches?.('#tiw-drop-shadow'))  { w.dropShadow  = e.target.checked; return; }
+            if (e.target?.matches?.('#tiw-drop-shadow'))  { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
         });
 
         document.addEventListener('scroll', (e) => {
@@ -410,10 +410,10 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 width, height, rotation, alpha, locked, hidden, elevation
             }]);
 
-            if (this.dropShadow && game.modules.get('tokenmagic')?.active && tileDoc) {
-                await tileDoc.setFlag('tokenmagic', 'params', [{
+            if (this.dropShadow && game.modules.get('tokenmagic')?.active && window.TokenMagic && tileDoc) {
+                const shadowParams = [{
                     filterType: 'shadow',
-                    filterId: 'curator-shadow',
+                    filterId: 'myShadow',
                     rotation: 35,
                     blur: 2,
                     quality: 5,
@@ -427,7 +427,12 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                         blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
                         rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
                     }
-                }]);
+                }];
+                // Wait for the canvas to draw the tile placeable before TMFX can target it
+                setTimeout(() => {
+                    const placeable = tileDoc.object;
+                    if (placeable) TokenMagic.addUpdateFilters(placeable, shadowParams);
+                }, 150);
             }
 
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,

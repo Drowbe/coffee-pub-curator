@@ -455,6 +455,8 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             isTokenMode: this.mode === ImageCacheManager.MODES.TOKEN,
             isPortraitMode: this.mode === ImageCacheManager.MODES.PORTRAIT,
             portraitEnabled: BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false),
+            tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
+            dropShadow: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenDropShadow', false),
             appId: this.id
         };
     }
@@ -513,6 +515,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             if (e.target?.matches?.('#fuzzySearch')) { w._onFuzzySearchToggle(e); return; }
             if (e.target?.matches?.('#convertDeadToLoot')) { w._onConvertDeadToLootToggle(e); return; }
             if (e.target?.matches?.('#deadTokenReplacement')) { w._onDeadTokenReplacementToggle(e); return; }
+            if (e.target?.matches?.('#tokenDropShadow')) { game.settings.set(MODULE.ID, 'tokenDropShadow', e.target.checked); return; }
         });
 
         document.addEventListener('scroll', (e) => {
@@ -3569,10 +3572,36 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         if (updateDroppedTokens) {
             await TokenImageReplacementWindow._processTokenImageReplacement(tokenDocument);
         }
-        
+
         // Process portrait image replacement if enabled
         if (portraitEnabled && updateDroppedPortraits) {
             await TokenImageReplacementWindow._processPortraitImageReplacement(actor, tokenDocument);
+        }
+
+        // Apply TMFX drop shadow if enabled and module is active
+        const tmfxEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenDropShadow', false);
+        if (tmfxEnabled && game.modules.get('tokenmagic')?.active && window.TokenMagic) {
+            const shadowParams = [{
+                filterType: 'shadow',
+                filterId: 'myShadow',
+                rotation: 35,
+                blur: 2,
+                quality: 5,
+                distance: 5,
+                alpha: 0.8,
+                padding: 10,
+                shadowOnly: false,
+                color: 0x000000,
+                zOrder: 6000,
+                animated: {
+                    blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
+                    rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
+                }
+            }];
+            setTimeout(() => {
+                const placeable = tokenDocument?.object;
+                if (placeable) TokenMagic.addUpdateFilters(placeable, shadowParams);
+            }, 150);
         }
     }
     
