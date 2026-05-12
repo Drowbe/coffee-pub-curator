@@ -46,9 +46,9 @@
                     <div class="tir-main-title">{{selectedToken.name}}</div>
                     <div class="tir-subtitle">
                         {{#if selectedToken.actor.name}}{{selectedToken.actor.name}}{{/if}}
-                        {{#if selectedToken.actor.type}}  •  {{selectedToken.actor.type}}{{/if}}
-                        {{#if selectedToken.actor.system.details.type.value}}  •  {{selectedToken.actor.system.details.type.value}}{{/if}}
-                        {{#if selectedToken.actor.system.details.type.subtype}}  •  {{selectedToken.actor.system.details.type.subtype}}{{/if}}
+                        {{#if selectedToken.actor.type}}  &bull;  {{selectedToken.actor.type}}{{/if}}
+                        {{#if selectedToken.actor.system.details.type.value}}  &bull;  {{selectedToken.actor.system.details.type.value}}{{/if}}
+                        {{#if selectedToken.actor.system.details.type.subtype}}  &bull;  {{selectedToken.actor.system.details.type.subtype}}{{/if}}
                     </div>
                 {{else}}
                     <div class="tir-main-title">{{#if isPortraitMode}}No Actor{{else}}No Token{{/if}}</div>
@@ -152,7 +152,7 @@
                 </button>
             </div>
             <div id="tir-search-tools-row-right" class="tir-search-tools-row-right tir-results-details">
-                <select name="sortOrder" class="tir-select">
+                <select name="sortOrder" class="blacksmith-select">
                     <option value="relevance" {{#if (eq sortOrder "relevance")}}selected{{/if}}>Sort by Relevance</option>
                     <option value="atoz" {{#if (eq sortOrder "atoz")}}selected{{/if}}>A to Z</option>
                     <option value="ztoa" {{#if (eq sortOrder "ztoa")}}selected{{/if}}>Z to A</option>

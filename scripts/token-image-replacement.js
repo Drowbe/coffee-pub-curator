@@ -507,7 +507,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
 
-            if (e.target?.matches?.('.tir-select')) { w._onSortOrderChange(e); return; }
+            if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
             if (e.target?.matches?.('#updateDropped')) { w._onUpdateDroppedToggle(e); return; }
             if (e.target?.matches?.('#modeToggle')) { w._onModeToggle(e); return; }
             if (e.target?.matches?.('#fuzzySearch')) { w._onFuzzySearchToggle(e); return; }
@@ -1915,7 +1915,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         
         // Always add current token image first if it exists
         if (this.selectedToken) {
-            const currentImageSrc = this.selectedToken.texture?.src || this.selectedToken.document.texture?.src || '';
+            const currentImageSrc = this.selectedToken.texture?.src || this.selectedToken.document?.texture?.src || '';
             if (currentImageSrc) {
                 const currentImage = {
                     name: currentImageSrc.split('/').pop() || 'Current Image',
