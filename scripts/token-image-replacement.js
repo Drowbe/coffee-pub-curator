@@ -1144,7 +1144,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         try {
             await ImageCacheManager.scanForImages(this.mode);
 
-            // Final render to clear progress bars
+            // Switch to 'all' tab and load results
+            this.currentFilter = 'all';
+            await this._findMatches();
             this.render(true);
 
             const cache = ImageCacheManager.getCache(this.mode);
@@ -1468,6 +1470,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             this._restoreScrollPositions(scrolls);
             this._initializeFilterToggleButton();
             this._initializeThresholdSlider();
+            // Repopulate the grid — HBS template renders an empty div, so we
+            // must push this.matches back into the DOM after every re-render.
+            this._updateResults();
         });
         return result;
     }

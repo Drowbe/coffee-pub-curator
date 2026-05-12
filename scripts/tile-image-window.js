@@ -646,6 +646,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             clearInterval(progressTimer);
         }
 
+        this.currentFilter = 'all';
         await this._findMatches();
         this.render(true);
     }
