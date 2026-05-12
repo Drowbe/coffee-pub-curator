@@ -1275,6 +1275,8 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
         TokenImageReplacementWindow._staticCanvasUpdateInProgress = true;
 
+        const processedPlaceables = [];
+
         try {
             ui.notifications.info(`${label} Image Replacement: Updating canvas...`);
 
@@ -1290,6 +1292,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 for (const token of canvasTokens) {
                     if (!token?.document) continue;
                     await TokenImageReplacementWindow._processTokenImageReplacement(token.document);
+                    if (token.object) processedPlaceables.push(token.object);
                     processed++;
                 }
             } else {
@@ -1307,6 +1310,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                     if (processedActors.has(actor.id)) continue;
                     processedActors.add(actor.id);
                     await TokenImageReplacementWindow._processPortraitImageReplacement(actor, token.document);
+                    if (token.object) processedPlaceables.push(token.object);
                     processed++;
                 }
             }
@@ -1321,6 +1325,42 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         } finally {
             TokenImageReplacementWindow._staticCanvasUpdateInProgress = false;
         }
+
+        // Apply TMFX drop shadow to all processed tokens if enabled
+        if (processedPlaceables.length > 0) {
+            TokenImageReplacementWindow._applyDropShadowToPlaceables(processedPlaceables);
+        }
+    }
+
+    static _tmfxShadowParams() {
+        return [{
+            filterType: 'shadow',
+            filterId: 'myShadow',
+            rotation: 35,
+            blur: 2,
+            quality: 5,
+            distance: 5,
+            alpha: 0.8,
+            padding: 10,
+            shadowOnly: false,
+            color: 0x000000,
+            zOrder: 6000,
+            animated: {
+                blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
+                rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
+            }
+        }];
+    }
+
+    static _applyDropShadowToPlaceables(placeables) {
+        if (!BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenDropShadow', false)) return;
+        if (!game.modules.get('tokenmagic')?.active || !window.TokenMagic) return;
+        const params = TokenImageReplacementWindow._tmfxShadowParams();
+        setTimeout(() => {
+            for (const placeable of placeables) {
+                if (placeable) TokenMagic.addUpdateFilters(placeable, params);
+            }
+        }, 150);
     }
 
 
@@ -3578,31 +3618,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             await TokenImageReplacementWindow._processPortraitImageReplacement(actor, tokenDocument);
         }
 
-        // Apply TMFX drop shadow if enabled and module is active
-        const tmfxEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenDropShadow', false);
-        if (tmfxEnabled && game.modules.get('tokenmagic')?.active && window.TokenMagic) {
-            const shadowParams = [{
-                filterType: 'shadow',
-                filterId: 'myShadow',
-                rotation: 35,
-                blur: 2,
-                quality: 5,
-                distance: 5,
-                alpha: 0.8,
-                padding: 10,
-                shadowOnly: false,
-                color: 0x000000,
-                zOrder: 6000,
-                animated: {
-                    blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
-                    rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
-                }
-            }];
-            setTimeout(() => {
-                const placeable = tokenDocument?.object;
-                if (placeable) TokenMagic.addUpdateFilters(placeable, shadowParams);
-            }, 150);
-        }
+        // Apply TMFX drop shadow if enabled
+        const placeable = tokenDocument?.object;
+        if (placeable) TokenImageReplacementWindow._applyDropShadowToPlaceables([placeable]);
     }
     
     /**
