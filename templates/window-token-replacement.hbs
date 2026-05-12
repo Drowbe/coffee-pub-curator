@@ -116,14 +116,6 @@
 
     </div>
 
-    <!-- Token Info Header -->
-    <div class="tir-token-replacement-header-container">
-        <div class="tir-token-replacement-header-left"><i class="fas fa-search"></i> Search Filters</div>
-        <div class="tir-token-replacement-header-right">
-            <span>{{cacheStatus}}</span>
-        </div>
-    </div>
-
     <!-- Results Summary & Filters -->
     <div class="tir-search-tools-container">
 
@@ -256,27 +248,27 @@
     </div>
 
     <!-- Action Bar -->
-    <section class="tir-window-buttons">
-        <div class="tir-action-bar">
-            <div class="tir-action-left">
-                <button type="button" class="tir-btn-secondary" data-action="deleteCache"
-                    data-tooltip="Delete Cache: Completely removes all cached image data.">
-                    <i class="fas fa-trash"></i> Delete Cache
-                </button>
-            </div>
-            <div class="tir-action-right">
+    <section class="blacksmith-window-template-buttons">
+        <div class="blacksmith-window-template-action-bar">
+            <div class="blacksmith-window-template-action-left">
                 {{#if isScanning}}
-                    <button type="button" class="tir-btn-secondary" data-action="pauseCache"
+                    <button type="button" class="blacksmith-window-btn-secondary" data-action="pauseCache"
                         data-tooltip="Stop Image Scan: Results will be incomplete.">
                         <i class="fas fa-pause"></i> Delay Scan
                     </button>
                 {{else}}
-                    <button type="button" class="tir-btn-secondary" data-action="scanImages"
+                    <button type="button" class="blacksmith-window-btn-secondary" data-action="scanImages"
                         data-tooltip="Scan for Images: Updates the cache with new or changed images.">
                         <i class="fas fa-search"></i> Scan Images
                     </button>
                 {{/if}}
-                <button type="button" class="tir-btn-primary" data-action="updateCanvas"
+                <button type="button" class="blacksmith-window-btn-critical" data-action="deleteCache"
+                    data-tooltip="Delete Cache: Completely removes all cached image data.">
+                    <i class="fas fa-trash"></i> Delete Cache
+                </button>
+            </div>
+            <div class="blacksmith-window-template-action-right">
+                <button type="button" class="blacksmith-window-btn-primary" data-action="updateCanvas"
                     data-tooltip="Update Canvas: Re-run replacements for every token on the current canvas.">
                     <i class="fas fa-sync"></i> Update Canvas
                 </button>
