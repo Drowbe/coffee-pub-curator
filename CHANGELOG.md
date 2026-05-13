@@ -27,9 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Drop Shadow — Tile window**: Persists as world setting (`tileDropShadow`), restored on window open.
 
 ### Changed
-- **Tile option bar**: Elevation field removed. Rotation and Opacity values are now shown inline within their labels rather than as separate trailing spans.
-- **Tile sliders**: Replaced the hand-rolled `.tir-rangeslider` custom widget (fake track + fill + thumb divs driven by JS, `overflow: hidden` clipped thumbs at 0 %/100 %) with Blacksmith's `.blacksmith-slider` — a native `<input type="range">` with CSS pseudo-element styling. No JS-driven fill/thumb, no clipping.
-- **Tint color picker**: Replaced bare `<input type="color">` (OS-native control) with a Blacksmith-style paired hex text input (`blacksmith-input`) + color swatch, synced in both directions via `input` events.
+- **Tile option bar**: Elevation field removed. Rotation and Opacity values shown inline in their labels. Fuzzy Search toggle removed (no token scoring in tile mode makes it meaningless). Sort dropdown now has only A→Z and Z→A (Relevance removed for same reason); default changed to A→Z.
+- **Tile categories**: Now derived from the first-level subfolder of each file's path relative to the configured tile base path, rather than from filename-extracted tags. Categories are sorted alphabetically and match the actual folder structure (e.g. `doors`, `flora`, `storage`).
+- **Tile sliders**: Replaced the hand-rolled `.tir-rangeslider` custom widget (fake track + fill + thumb divs, `overflow: hidden` clipped thumbs at 0 %/100 %) with Blacksmith's `.blacksmith-slider` — a native `<input type="range">` with CSS pseudo-element styling. No JS-driven fill/thumb, no clipping possible.
+- **Tint color picker**: Replaced bare `<input type="color">` with a Blacksmith-style paired hex text input (`blacksmith-input`) + color swatch, synced live in both directions via `input`/`change` events.
 
 ### Fixed
 - **Post-scan grid empty** (Token and Portrait windows): `render(true)` after `_findMatches()` re-rendered the HBS template and cleared the grid. Fixed by calling `_updateResults()` inside the `requestAnimationFrame` callback of the `render()` override so the grid is repopulated after every template re-render.
@@ -38,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2. `_completePlacement` destructured `this._pendingPlacement` after `_exitPlacementMode()` nulled it. Fixed by capturing the full destructure first.
 - **`_resolveImageDims` unreliable**: `img.naturalWidth` on lazy-loaded thumbnails returned 0. Replaced with `foundry.canvas.loadTexture()` (PIXI cache, always correct) with DOM naturalWidth as fallback.
 - **`loadTexture` deprecation**: Updated all calls to `foundry.canvas.loadTexture` (v13 namespace).
-- **TMFX drop shadow not applying**: `tileDoc.setFlag()` set the flag before the canvas placeable existed. Replaced with `TokenMagic.addUpdateFilters(tileDoc.object, params)` inside a 150 ms `setTimeout`. Added `window.TokenMagic` existence check alongside `game.modules.get('tokenmagic')?.active` guard in both tile and token windows.
+- **TMFX drop shadow not applying**: `tileDoc.setFlag()` set the flag before the canvas placeable existed. Replaced with `TokenMagic.addUpdateFilters(tileDoc.object, params)` inside a 150 ms `setTimeout`. Added `window.TokenMagic` guard alongside `game.modules.get('tokenmagic')?.active` in both tile and token windows.
+- **Document event listener leak**: Both `TokenImageReplacementWindow` and `TileImageWindow` reset `_delegationAttached = false` on `close()` but never removed the anonymous arrow functions from `document`, causing a new set of 6 listeners to accumulate on every open/close cycle. Fixed by storing listeners as named functions in a static `_listeners` object so `close()` can call `removeEventListener` with exact function references. Each open/close is now fully symmetric.
 
 
 ## [13.1.0] - 2026-05-11

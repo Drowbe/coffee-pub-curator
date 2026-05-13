@@ -73,6 +73,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     static ROOT_CLASS = 'tile-image-window';
     static _ref = null;
     static _delegationAttached = false;
+    static _listeners = null;
 
     // ------------------------------------------------------------------
     // Lifecycle
@@ -134,32 +135,27 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (TileImageWindow._delegationAttached) return;
         TileImageWindow._delegationAttached = true;
 
-        document.addEventListener('click', (e) => {
+        const onClick = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
-
             const cat = e.target?.closest?.('.tir-filter-category');
             if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
-
             const tag = e.target?.closest?.('.tir-search-tools-tag');
             if (tag) { e.preventDefault(); w._onTagClick(e); return; }
-        });
-
-        document.addEventListener('contextmenu', (e) => {
+        };
+        const onContextMenu = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onImageRightClick(e); return; }
-        });
-
-        document.addEventListener('input', (e) => {
+        };
+        const onInput = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
@@ -176,33 +172,29 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 }
                 return;
             }
-        });
-
-        document.addEventListener('change', (e) => {
+        };
+        const onChange = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
             if (e.target?.matches?.('#tiw-param-tint')) {
-                // Swatch changed — sync text input
                 w.tileTint = e.target.value;
                 const txt = w._getRoot()?.querySelector('#tiw-param-tint-text');
                 if (txt) txt.value = e.target.value;
                 return;
             }
-            if (e.target?.matches?.('#tiw-drop-shadow'))  { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
-        });
-
-        document.addEventListener('scroll', (e) => {
+            if (e.target?.matches?.('#tiw-drop-shadow')) { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
+        };
+        const onScroll = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.tir-thumbnails-grid')) { w._onScroll(e); return; }
-        }, true);
-
-        document.addEventListener('keypress', (e) => {
+        };
+        const onKeypress = (e) => {
             const w = TileImageWindow._ref;
             if (!w) return;
             const root = w._getRoot();
@@ -210,7 +202,16 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (e.target?.matches?.('.tir-search-input') && (e.key === 'Enter' || e.which === 13)) {
                 e.preventDefault();
             }
-        });
+        };
+
+        document.addEventListener('click',       onClick);
+        document.addEventListener('contextmenu', onContextMenu);
+        document.addEventListener('input',       onInput);
+        document.addEventListener('change',      onChange);
+        document.addEventListener('scroll',      onScroll, true);
+        document.addEventListener('keypress',    onKeypress);
+
+        TileImageWindow._listeners = { onClick, onContextMenu, onInput, onChange, onScroll, onKeypress };
     }
 
     async _onFirstRender(_context, options) {
@@ -259,6 +260,16 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     async close(options = {}) {
         this._exitPlacementMode();
         TileImageWindow._ref = null;
+        if (TileImageWindow._listeners) {
+            const l = TileImageWindow._listeners;
+            document.removeEventListener('click',       l.onClick);
+            document.removeEventListener('contextmenu', l.onContextMenu);
+            document.removeEventListener('input',       l.onInput);
+            document.removeEventListener('change',      l.onChange);
+            document.removeEventListener('scroll',      l.onScroll, true);
+            document.removeEventListener('keypress',    l.onKeypress);
+            TileImageWindow._listeners = null;
+        }
         TileImageWindow._delegationAttached = false;
         this._teardownResources();
         return super.close(options);

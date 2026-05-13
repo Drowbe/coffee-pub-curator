@@ -102,6 +102,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
     static _ref = null;
     static _delegationAttached = false;
+    static _listeners = null;
 
     /**
      * Track timeouts for cleanup
@@ -467,48 +468,39 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         if (TokenImageReplacementWindow._delegationAttached) return;
         TokenImageReplacementWindow._delegationAttached = true;
 
-        document.addEventListener('click', (e) => {
+        const onClick = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
-
             const cat = e.target?.closest?.('.tir-filter-category');
             if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
-
             const tag = e.target?.closest?.('.tir-search-tools-tag');
             if (tag) { e.preventDefault(); w._onTagClick(e); return; }
-        });
-
-        document.addEventListener('contextmenu', (e) => {
+        };
+        const onContextMenu = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onImageRightClick(e); return; }
-        });
-
-        document.addEventListener('input', (e) => {
+        };
+        const onInput = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
             if (e.target?.matches?.('.tir-rangeslider-input')) { w._onThresholdSliderChange(e); return; }
-        });
-
-        document.addEventListener('change', (e) => {
+        };
+        const onChange = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
             if (e.target?.matches?.('#updateDropped')) { w._onUpdateDroppedToggle(e); return; }
             if (e.target?.matches?.('#modeToggle')) { w._onModeToggle(e); return; }
@@ -516,27 +508,32 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             if (e.target?.matches?.('#convertDeadToLoot')) { w._onConvertDeadToLootToggle(e); return; }
             if (e.target?.matches?.('#deadTokenReplacement')) { w._onDeadTokenReplacementToggle(e); return; }
             if (e.target?.matches?.('#tokenDropShadow')) { game.settings.set(MODULE.ID, 'tokenDropShadow', e.target.checked); return; }
-        });
-
-        document.addEventListener('scroll', (e) => {
+        };
+        const onScroll = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             if (e.target?.matches?.('.tir-thumbnails-grid')) { w._onScroll(e); return; }
-        }, true);
-
-        document.addEventListener('keypress', (e) => {
+        };
+        const onKeypress = (e) => {
             const w = TokenImageReplacementWindow._ref;
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-
             if (e.target?.matches?.('.tir-search-input') && (e.key === 'Enter' || e.which === 13)) {
                 e.preventDefault();
             }
-        });
+        };
+
+        document.addEventListener('click',       onClick);
+        document.addEventListener('contextmenu', onContextMenu);
+        document.addEventListener('input',       onInput);
+        document.addEventListener('change',      onChange);
+        document.addEventListener('scroll',      onScroll, true);
+        document.addEventListener('keypress',    onKeypress);
+
+        TokenImageReplacementWindow._listeners = { onClick, onContextMenu, onInput, onChange, onScroll, onKeypress };
     }
 
     async _onFirstRender(_context, options) {
@@ -1537,6 +1534,16 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
 
         TokenImageReplacementWindow._ref = null;
+        if (TokenImageReplacementWindow._listeners) {
+            const l = TokenImageReplacementWindow._listeners;
+            document.removeEventListener('click',       l.onClick);
+            document.removeEventListener('contextmenu', l.onContextMenu);
+            document.removeEventListener('input',       l.onInput);
+            document.removeEventListener('change',      l.onChange);
+            document.removeEventListener('scroll',      l.onScroll, true);
+            document.removeEventListener('keypress',    l.onKeypress);
+            TokenImageReplacementWindow._listeners = null;
+        }
         TokenImageReplacementWindow._delegationAttached = false;
 
         this._teardownWindowResources();
