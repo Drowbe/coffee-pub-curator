@@ -595,7 +595,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         let files = Array.from(cache.files.values());
 
         if (this.currentFilter === 'favorites') {
-            files = files.filter(f => f?.metadata?.tags?.includes('favorite'));
+            files = files.filter(f => f?.metadata?.tags?.includes('FAVORITE'));
         } else if (this.currentFilter !== 'all') {
             files = files.filter(f => this._getTopLevelFolder(f) === this.currentFilter);
         }
@@ -780,8 +780,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const imageName = thumb.dataset.imageName;
         if (!imagePath) return;
 
-        const fileInfo = ImageCacheManager.getCache(TILE_MODE).files.get(this._getCacheKeyForPath(imagePath));
-        const isFav = fileInfo?.metadata?.tags?.includes('favorite');
+        // Find the cache entry by fullPath scan — matches how the entry was stored
+        let fileInfo = null;
+        for (const [, f] of ImageCacheManager.getCache(TILE_MODE).files) {
+            if (f.fullPath === imagePath) { fileInfo = f; break; }
+        }
+        if (fileInfo) ImageCacheManager._ensureTagMetadata(fileInfo.metadata);
+        const isFav = fileInfo?.metadata?.tags?.includes('FAVORITE') ?? false;
         const menuRoot = (thumb.ownerDocument || document).body;
 
         const coreItems = [
@@ -827,17 +832,23 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     }
 
     async _toggleFavorite(imagePath, imageName, fileInfo) {
-        const cache = ImageCacheManager.getCache(TILE_MODE);
-        const key = this._getCacheKeyForPath(imagePath);
-        const entry = cache.files.get(key);
-        if (!entry) return;
-        if (!entry.metadata) entry.metadata = {};
-        if (!Array.isArray(entry.metadata.tags)) entry.metadata.tags = [];
-        const idx = entry.metadata.tags.indexOf('favorite');
-        if (idx === -1) entry.metadata.tags.push('favorite');
-        else entry.metadata.tags.splice(idx, 1);
-        await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
-        this.render(true);
+        if (!fileInfo) return;
+        ImageCacheManager._ensureTagMetadata(fileInfo.metadata);
+        const isFavorited = fileInfo.metadata?.tags?.includes('FAVORITE') ?? false;
+        if (isFavorited) {
+            ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
+            await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
+            ui.notifications.info(`Removed ${imageName} from favorites`);
+        } else {
+            ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
+            await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
+            ui.notifications.info(`Added ${imageName} to favorites`);
+        }
+        if (this.currentFilter === 'favorites') {
+            await this._findMatches();
+        } else {
+            this._updateResults();
+        }
     }
 
     async _onScanImages() {

@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [13.1.1] - 2026-05-12
+## [13.1.1] - 2026-05-13
 
 ### Added
 - **Tile Image Placement window** (`TileImageWindow`): New browser window for placing map/environment tiles directly onto the canvas from a scanned image library. Accessible from the CoffeePub toolbar (`fa-map` icon).
@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`loadTexture` deprecation**: Updated all calls to `foundry.canvas.loadTexture` (v13 namespace).
 - **TMFX drop shadow not applying**: `tileDoc.setFlag()` set the flag before the canvas placeable existed. Replaced with `TokenMagic.addUpdateFilters(tileDoc.object, params)` inside a 150 ms `setTimeout`. Added `window.TokenMagic` guard alongside `game.modules.get('tokenmagic')?.active` in both tile and token windows.
 - **Document event listener leak**: Both `TokenImageReplacementWindow` and `TileImageWindow` reset `_delegationAttached = false` on `close()` but never removed the anonymous arrow functions from `document`, causing a new set of 6 listeners to accumulate on every open/close cycle. Fixed by storing listeners as named functions in a static `_listeners` object so `close()` can call `removeEventListener` with exact function references. Each open/close is now fully symmetric.
+- **Tile favorites broken**: Right-click "Add to Favorites" did nothing. Three compounding issues: (1) cache lookup used `imageName` as key but cache is keyed by `relativePath/filename`; (2) `_toggleFavorite` ignored the `fileInfo` reference passed to it and re-fetched from cache, always getting null; (3) metadata structure not initialized before mutation. Fixed by scanning `cache.files` values by `fullPath` match, calling `ImageCacheManager._ensureTagMetadata`, then mutating the live reference directly — matching the token window pattern exactly.
+- **Tile "All" tab not active on load**: Template used `{{#unless currentFilter}}active{{/unless}}` but `currentFilter` is initialized to `'all'` (truthy), so the All tab never received the active class. Changed to `{{#if (eq currentFilter "all")}}active{{/if}}`.
+- **Token/Portrait window closes after applying image**: `_applyImageToToken` called `this.close()` after a successful apply. Removed so the window stays open for continued browsing.
+- **"Click a Tile to Place" dead button removed**: The disabled placeholder button in the tile window action bar (shown when not in placement mode) did nothing and has been removed. The right side of the action bar is now empty until placement mode is active.
+- **ESC did not cancel tile placement**: The `keydown` listener was on the bubble phase, so Foundry's own close-window ESC handler fired first and closed the window. Changed to capture phase with `e.stopPropagation()` so the placement is cancelled and the window stays open.
+- **Tile placement cursor preview**: When a tile thumbnail is clicked to enter placement mode, a floating tooltip follows the cursor showing a thumbnail of the selected tile image, the filename, and "Click to place · Esc to cancel". Uses `canvas.stage.on('mousemove')` (PIXI stage event) to track position, same pattern as Blacksmith's encounter deployment tooltip. Cleaned up automatically on placement or cancel.
 
 
 ## [13.1.0] - 2026-05-11

@@ -113,7 +113,7 @@
         <div class="tir-search-tools-row-container row-category row-style-{{categoryStyle}}">
             <div id="tir-filter-category-container" class="tir-search-tools-row-left">
                 <span class="tir-filter-category row-style-{{categoryStyle}}" data-category="favorites"><i class="fas fa-heart"></i></span>
-                <span class="tir-filter-category {{#unless currentFilter}}active{{/unless}} row-style-{{categoryStyle}}" data-category="all">All</span>
+                <span class="tir-filter-category {{#if (eq currentFilter "all")}}active{{/if}} row-style-{{categoryStyle}}" data-category="all">All</span>
                 {{#each categories}}
                     <span class="tir-filter-category {{#if isActive}}active{{/if}} row-style-{{../categoryStyle}}" data-tooltip="{{name}} ({{count}})" data-category="{{key}}">{{name}}</span>
                 {{/each}}
