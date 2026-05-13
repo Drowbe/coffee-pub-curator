@@ -36,6 +36,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
         this.tileTint = '#ffffff';
         this.dropShadow = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', false);
+        this.selectedLibrary = null; // null = All libraries
 
         // Placement mode state
         this._pendingPlacement = null;
@@ -110,6 +111,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             currentFilter: this.currentFilter,
             categoryStyle: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageCategoryStyle', 'buttons'),
             categories: this._getCategories(),
+            libraries: this._getLibraries(),
+            selectedLibrary: this.selectedLibrary,
+            showLibrarySelector: getTileImagePaths().filter(Boolean).length > 1,
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
             tagSortMode: this.tagSortMode,
@@ -144,6 +148,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (!root?.contains?.(e.target)) return;
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
+            const lib = e.target?.closest?.('.tiw-library-chip');
+            if (lib) { e.preventDefault(); w._onLibraryClick(e); return; }
+
             const cat = e.target?.closest?.('.tir-filter-category');
             if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
             const tag = e.target?.closest?.('.tir-search-tools-tag');
@@ -517,6 +524,15 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         return `${files.toLocaleString()} files, ${ageH} hours old${sizeStr ? ', ' + sizeStr : ''}`;
     }
 
+    _getLibraries() {
+        return getTileImagePaths().filter(Boolean).map(path => {
+            // Use the last non-empty path segment as a human-readable label
+            const parts = path.replace(/\/$/, '').split('/').filter(Boolean);
+            const label = parts[parts.length - 1] ?? path;
+            return { path, label, isActive: this.selectedLibrary === path };
+        });
+    }
+
     _getTopLevelFolder(fileInfo) {
         const fullPath = fileInfo?.fullPath ?? '';
         if (!fullPath) return null;
@@ -547,6 +563,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (!cache.files || cache.files.size === 0) return [];
         const folderCount = new Map();
         for (const [, f] of cache.files) {
+            if (this.selectedLibrary && f?.metadata?.sourcePath !== this.selectedLibrary) continue;
             const folder = this._getTopLevelFolder(f);
             if (folder) folderCount.set(folder, (folderCount.get(folder) ?? 0) + 1);
         }
@@ -593,6 +610,11 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         }
 
         let files = Array.from(cache.files.values());
+
+        // Pre-filter by selected library
+        if (this.selectedLibrary) {
+            files = files.filter(f => f?.metadata?.sourcePath === this.selectedLibrary);
+        }
 
         if (this.currentFilter === 'favorites') {
             files = files.filter(f => f?.metadata?.tags?.includes('FAVORITE'));
@@ -1003,6 +1025,20 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
             if (this.hasMoreResults && !this.isLoadingMore) await this._loadMoreResults();
         }
+    }
+
+    async _onLibraryClick(event) {
+        const chip = event.target.closest('.tiw-library-chip');
+        if (!chip) return;
+        const path = chip.dataset.libraryPath || null; // empty string → null = All
+        // Clicking All, or clicking the already-active library, resets to All
+        this.selectedLibrary = (!path || this.selectedLibrary === path) ? null : path;
+        // Reset category filter to all when switching libraries
+        this.currentFilter = 'all';
+        const root = this._getRoot();
+        root?.querySelectorAll('.tiw-library-chip').forEach(el => el.classList.remove('active'));
+        if (this.selectedLibrary) chip.classList.add('active');
+        await this._findMatches();
     }
 
     async _onCategoryFilterClick(event) {

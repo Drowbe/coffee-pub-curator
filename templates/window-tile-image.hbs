@@ -109,6 +109,16 @@
     {{!-- Filter / Search area --}}
     <div class="tir-search-tools-container">
 
+        {{!-- Library selector (only when 2+ paths configured) --}}
+        {{#if showLibrarySelector}}
+        <div class="tiw-library-row">
+            <span class="tiw-library-chip {{#unless selectedLibrary}}active{{/unless}}" data-library-path="">All Libraries</span>
+            {{#each libraries}}
+                <span class="tiw-library-chip {{#if isActive}}active{{/if}}" data-library-path="{{path}}" data-tooltip="{{path}}">{{label}}</span>
+            {{/each}}
+        </div>
+        {{/if}}
+
         {{!-- Row 1: Category filters + cache status --}}
         <div class="tir-search-tools-row-container row-category row-style-{{categoryStyle}}">
             <div id="tir-filter-category-container" class="tir-search-tools-row-left">
