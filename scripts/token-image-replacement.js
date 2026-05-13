@@ -1104,7 +1104,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 await this.selectedToken.document.update({
                     'texture.src': imagePath
                 });
-                
+
+                // Apply drop shadow if enabled
+                const placeable = this.selectedToken.document?.object ?? this.selectedToken;
+                TokenImageReplacementWindow._applyDropShadowToPlaceables([placeable]);
+
                 // Show success notification
                 ui.notifications.info(`Applied image: ${imageName}`);
             }

@@ -120,7 +120,6 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             tileTint: this.tileTint ?? '#ffffff',
             tileLocked: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
             tileHidden: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
-            tileElevation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0),
             isPlacementMode: this.isPlacementMode,
             pendingImageName: this._pendingPlacement?.imageName ?? '',
             tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
@@ -296,7 +295,6 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             sceneGridSize: canvas.scene?.grid?.size || canvas.grid?.size || 100,
             rotation:      parseFloat(get('#tiw-param-rotation')?.value)           ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
             alpha:         parseFloat(get('#tiw-param-alpha')?.value)              ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
-            elevation:     parseInt(get('#tiw-param-elevation')?.value)            ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultElevation', 0),
             tint:          get('#tiw-param-tint')?.value                           || '#ffffff',
             locked:        get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
             hidden:        get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
@@ -383,7 +381,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const { imagePath, imageName,
                 naturalWidth: naturalW0, naturalHeight: naturalH0,
                 assetGridSize, sceneGridSize,
-                rotation, alpha, elevation, tint, locked, hidden } = this._pendingPlacement;
+                rotation, alpha, tint, locked, hidden } = this._pendingPlacement;
         this._exitPlacementMode(false);
 
         // Convert screen coordinates → canvas stage coordinates
@@ -407,7 +405,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 texture: { src: imagePath, tint: tint !== '#ffffff' ? tint : null },
                 x: Math.round(canvasX - width / 2),
                 y: Math.round(canvasY - height / 2),
-                width, height, rotation, alpha, locked, hidden, elevation
+                width, height, rotation, alpha, locked, hidden
             }]);
 
             if (this.dropShadow && game.modules.get('tokenmagic')?.active && window.TokenMagic && tileDoc) {
@@ -826,14 +824,12 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const assetGridSize = parseInt(get('#tiw-param-asset-grid-size')?.value) || 100;
         const rotation      = parseFloat(get('#tiw-param-rotation')?.value)  ?? 0;
         const alpha         = parseFloat(get('#tiw-param-alpha')?.value)     ?? 1.0;
-        const elevation     = parseInt(get('#tiw-param-elevation')?.value)   ?? 0;
         const locked        = get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? false;
         const hidden        = get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? false;
 
         await game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', assetGridSize);
         await game.settings.set(MODULE.ID, 'tileDefaultRotation',      rotation);
         await game.settings.set(MODULE.ID, 'tileDefaultAlpha',         alpha);
-        await game.settings.set(MODULE.ID, 'tileDefaultElevation',     elevation);
         await game.settings.set(MODULE.ID, 'tileDefaultLocked',        locked);
         await game.settings.set(MODULE.ID, 'tileDefaultHidden',        hidden);
 

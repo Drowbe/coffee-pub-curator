@@ -9,7 +9,7 @@
             </div>
             <span class="tiw-computed-size" id="tiw-computed-size" title="Computed placed size (width × height px)">{{tileComputedSize}}</span>
             <div class="tiw-param-group tiw-param-group-slider">
-                <span class="tiw-param-label">Rotation</span>
+                <span class="tiw-param-label">Rotation <span id="tiw-param-rotation-val">{{tileRotation}}°</span></span>
                 <div class="tir-rangeslider">
                     <input type="range" id="tiw-param-rotation" class="tir-rangeslider-input" min="0" max="359" step="1" value="{{tileRotation}}">
                     <div class="tir-rangeslider-track">
@@ -17,10 +17,9 @@
                         <div class="tir-rangeslider-thumb" style="left: {{tileRotationFillPct}}%"></div>
                     </div>
                 </div>
-                <span class="tir-rangeslider-value" id="tiw-param-rotation-val">{{tileRotation}}°</span>
             </div>
             <div class="tiw-param-group tiw-param-group-slider">
-                <span class="tiw-param-label">Opacity</span>
+                <span class="tiw-param-label">Opacity <span id="tiw-param-alpha-val">{{tileAlphaPercent}}%</span></span>
                 <div class="tir-rangeslider">
                     <input type="range" id="tiw-param-alpha" class="tir-rangeslider-input" min="0.1" max="1.0" step="0.05" value="{{tileAlpha}}">
                     <div class="tir-rangeslider-track">
@@ -28,15 +27,10 @@
                         <div class="tir-rangeslider-thumb" style="left: {{tileAlphaFillPct}}%"></div>
                     </div>
                 </div>
-                <span class="tir-rangeslider-value" id="tiw-param-alpha-val">{{tileAlphaPercent}}%</span>
             </div>
             <div class="tiw-param-group">
                 <span class="tiw-param-label">Tint</span>
                 <input id="tiw-param-tint" type="color" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
-            </div>
-            <div class="tiw-param-group">
-                <span class="tiw-param-label">Elevation</span>
-                <input id="tiw-param-elevation" type="number" class="tiw-param-input tiw-param-input-sm" value="{{tileElevation}}" min="-10" max="100" step="1" title="Elevation">
             </div>
             <button type="button" class="tiw-set-defaults-btn" data-action="setDefaults"
                 title="Save current values as the default for new placements">
