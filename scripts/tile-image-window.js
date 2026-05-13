@@ -690,14 +690,26 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     async _loadMoreResults() {
         if (this.isLoadingMore || !this.hasMoreResults) return;
         this.isLoadingMore = true;
-        const nextPage = this.currentPage + 1;
-        const start = nextPage * this.resultsPerPage;
-        const more = this.allMatches.slice(start, start + this.resultsPerPage);
-        this.matches = [...this.matches, ...more];
+
+        const nextPage  = this.currentPage + 1;
+        const start     = nextPage * this.resultsPerPage;
+        const newBatch  = this.allMatches.slice(start, start + this.resultsPerPage);
+
+        this.matches = [...this.matches, ...newBatch];
         this.currentPage = nextPage;
         this.hasMoreResults = this.allMatches.length > this.matches.length;
+
+        // Append only new cards — no full grid re-render
+        const root = this._getRoot();
+        const grid = root?.querySelector('.tir-thumbnails-grid');
+        if (grid && newBatch.length > 0) {
+            grid.insertAdjacentHTML('beforeend', newBatch.map(f => this._renderThumbnail(f)).join(''));
+            grid.querySelectorAll('img').forEach(img => this._activeImageElements.add(img));
+        }
+        const countEl = root?.querySelector('#tir-results-details-count');
+        if (countEl) countEl.innerHTML = `<i class="fas fa-images"></i>${this.matches.length} of ${this.allMatches.length} Showing`;
+
         this.isLoadingMore = false;
-        this._updateResults();
     }
 
     _onParamSliderInput(event) {

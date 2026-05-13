@@ -2123,6 +2123,44 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
     }
 
+    _renderMatchCard(match) {
+        const tags = this._getTagsForMatch(match);
+        const isRecommended = this.recommendedToken && match.fullPath === this.recommendedToken.fullPath;
+        const recommendedClass = isRecommended ? 'tir-recommended-image' : '';
+        const tooltipText = this._generateTooltipText(match, isRecommended);
+        const scorePercentage = match.searchScore ? Math.round(match.searchScore * 100) : 0;
+        const isBrowseMode = match.isBrowseMode || false;
+        const modeLabel = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token';
+        return `
+            <div class="tir-thumbnail-item ${match.isCurrent ? 'tir-current-image' : ''} ${match.isOriginal ? 'tir-original-image' : ''} ${match.metadata?.tags?.includes('FAVORITE') ? 'tir-favorite-image' : ''} ${recommendedClass}" data-image-path="${match.fullPath}" data-tooltip="${tooltipText}" data-image-name="${match.name}">
+                <div class="tir-thumbnail-image">
+                    <img src="${match.fullPath}" alt="${match.name}" loading="lazy">
+                    ${match.isCurrent ? `
+                        <div class="tir-thumbnail-current-badge"><i class="fas fa-check"></i></div>
+                    ` : isRecommended ? `
+                        <div class="tir-thumbnail-recommended-badge" data-quick-apply="true"><i class="fas fa-star"></i></div>
+                        <div class="tir-thumbnail-overlay"><i class="fas fa-check"></i><span class="tir-overlay-text">Apply to ${modeLabel}</span></div>
+                    ` : `
+                        <div class="tir-thumbnail-overlay"><i class="fas fa-check"></i><span class="tir-overlay-text">Apply to ${modeLabel}</span></div>
+                    `}
+                    ${match.metadata?.tags?.includes('FAVORITE') ? `<div class="tir-thumbnail-favorite-badge"><i class="fas fa-heart"></i></div>` : ''}
+                </div>
+                <div class="tir-thumbnail-name">${match.name}</div>
+                <div class="tir-thumbnail-score">
+                    ${isBrowseMode ? `
+                        <div class="tir-score-text">Browse</div>
+                        <div class="tir-score-bar"><div class="tir-score-fill" style="width: 0%"></div></div>
+                    ` : `
+                        <div class="tir-score-text">${scorePercentage}% Match</div>
+                        <div class="tir-score-bar"><div class="tir-score-fill" style="width: ${scorePercentage}%"></div></div>
+                    `}
+                </div>
+                <div class="tir-thumbnail-tagset">
+                    ${tags.map(tag => `<span class="tir-thumbnail-tag">${tag}</span>`).join('')}
+                </div>
+            </div>`;
+    }
+
     _renderResults() {
         
         // ***** BUILD: NO TOKEN SELECTED *****
@@ -2160,51 +2198,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 `;
             } else if (this.matches.length > 0) {
                 // Show the results for browsing
-                html += this.matches.map(match => {
-                    const tags = this._getTagsForMatch(match);
-                    const tooltipText = this._generateTooltipText(match, false);
-                    const scorePercentage = match.searchScore ? Math.round(match.searchScore * 100) : 0;
-                    const isBrowseMode = match.isBrowseMode || false;
-                    return `
-                        <div class="tir-thumbnail-item ${match.isCurrent ? 'tir-current-image' : ''} ${match.isOriginal ? 'tir-original-image' : ''} ${match.metadata?.tags?.includes('FAVORITE') ? 'tir-favorite-image' : ''}" data-image-path="${match.fullPath}" data-tooltip="${tooltipText}" data-image-name="${match.name}">
-                            <div class="tir-thumbnail-image">
-                                <img src="${match.fullPath}" alt="${match.name}" loading="lazy">
-                                ${match.isCurrent ? `
-                                    <div class="tir-thumbnail-current-badge">
-                                        <i class="fas fa-check"></i>
-                                    </div>
-                                ` : `
-                                    <div class="tir-thumbnail-overlay">
-                                        <i class="fas fa-check"></i>
-                                        <span class="tir-overlay-text">Apply to ${this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token'}</span>
-                                    </div>
-                                `}
-                                ${match.metadata?.tags?.includes('FAVORITE') ? `
-                                    <div class="tir-thumbnail-favorite-badge">
-                                        <i class="fas fa-heart"></i>
-                                    </div>
-                                ` : ''}
-                            </div>
-                            <div class="tir-thumbnail-name">${match.name}</div>
-                            <div class="tir-thumbnail-score">
-                                ${isBrowseMode ? `
-                                    <div class="tir-score-text">Browse</div>
-                                    <div class="tir-score-bar">
-                                        <div class="tir-score-fill" style="width: 0%"></div>
-                                    </div>
-                                ` : `
-                                    <div class="tir-score-text">${scorePercentage}% Match</div>
-                                    <div class="tir-score-bar">
-                                        <div class="tir-score-fill" style="width: ${scorePercentage}%"></div>
-                                    </div>
-                                `}
-                            </div>
-                            <div class="tir-thumbnail-tagset">
-                                ${tags.map(tag => `<span class="tir-thumbnail-tag">${tag}</span>`).join('')}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                html += this.matches.map(match => this._renderMatchCard(match)).join('');
             }
             
             return html;
@@ -2243,65 +2237,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
         
         // ***** BUILD: MATCHING RESULT *****
-        let html = this.matches.map(match => {
-            const tags = this._getTagsForMatch(match);
-            const isRecommended = this.recommendedToken && match.fullPath === this.recommendedToken.fullPath;
-            const recommendedClass = isRecommended ? 'tir-recommended-image' : '';
-            
-            
-            const tooltipText = this._generateTooltipText(match, isRecommended);
-            const scorePercentage = match.searchScore ? Math.round(match.searchScore * 100) : 0;
-            const isBrowseMode = match.isBrowseMode || false;
-            
-            return `
-                <div class="tir-thumbnail-item ${match.isCurrent ? 'tir-current-image' : ''} ${match.isOriginal ? 'tir-original-image' : ''} ${match.metadata?.tags?.includes('FAVORITE') ? 'tir-favorite-image' : ''} ${recommendedClass}" data-image-path="${match.fullPath}" data-tooltip="${tooltipText}" data-image-name="${match.name}">
-                    <div class="tir-thumbnail-image">
-                        <img src="${match.fullPath}" alt="${match.name}" loading="lazy">
-                        ${match.isCurrent ? `
-                            <div class="tir-thumbnail-current-badge">
-                                <i class="fas fa-check"></i>
-                            </div>
-                        ` : isRecommended ? `
-                            <div class="tir-thumbnail-recommended-badge" data-quick-apply="true">
-                                <i class="fas fa-star"></i>
-                            </div>
-                            <div class="tir-thumbnail-overlay">
-                                <i class="fas fa-check"></i>
-                                <span class="tir-overlay-text">Apply to ${this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token'}</span>
-                            </div>
-                        ` : `
-                            <div class="tir-thumbnail-overlay">
-                                <i class="fas fa-check"></i>
-                                <span class="tir-overlay-text">Apply to ${this.mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token'}</span>
-                            </div>
-                        `}
-                        ${match.metadata?.tags?.includes('FAVORITE') ? `
-                            <div class="tir-thumbnail-favorite-badge">
-                                <i class="fas fa-heart"></i>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="tir-thumbnail-name">${match.name}</div>
-                    <div class="tir-thumbnail-score">
-                        ${isBrowseMode ? `
-                            <div class="tir-score-text">Browse</div>
-                            <div class="tir-score-bar">
-                                <div class="tir-score-fill" style="width: 0%"></div>
-                            </div>
-                        ` : `
-                            <div class="tir-score-text">${scorePercentage}% Match</div>
-                            <div class="tir-score-bar">
-                                <div class="tir-score-fill" style="width: ${scorePercentage}%"></div>
-                            </div>
-                        `}
-                    </div>
-                    <div class="tir-thumbnail-tagset">
-                        ${tags.map(tag => `<span class="tir-thumbnail-tag">${tag}</span>`).join('')}
-                        <!-- DEBUG: Tags count: ${tags.length} -->
-                    </div>
-                </div>
-            `;
-        }).join('');
+        let html = this.matches.map(match => this._renderMatchCard(match)).join('');
         
         // If we have matches but only original/current in search mode, add "No Results" message after them
         if (isSearchMode && hasOnlyOriginalCurrent) {
@@ -2371,9 +2307,21 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
     async _loadMoreResults() {
         this.isLoadingMore = true;
+        const prevCount = this.matches.length;
         this.currentPage++;
         this._applyPagination();
-        this._updateResults();
+        const newItems = this.matches.slice(prevCount);
+
+        // Append only the new cards — no full grid re-render
+        const root = this._getRoot();
+        const grid = root?.querySelector('.tir-thumbnails-grid');
+        if (grid && newItems.length > 0) {
+            grid.insertAdjacentHTML('beforeend', newItems.map(m => this._renderMatchCard(m)).join(''));
+            grid.querySelectorAll('img').forEach(img => this._activeImageElements.add(img));
+        }
+        const countEl = root?.querySelector('#tir-results-details-count');
+        if (countEl) countEl.innerHTML = `<i class="fas fa-images"></i>${this.matches.length} of ${this.allMatches.length} Showing`;
+
         this.isLoadingMore = false;
     }
 
