@@ -7,7 +7,7 @@ import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { UIContextMenu } from './ui-context-menu.js';
-import { getTileImagePaths } from './settings.js';
+import { getTileImagePaths, getTileLibraries } from './settings.js';
 
 const TILE_MODE = ImageCacheManager.MODES.TILE;
 
@@ -111,9 +111,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             currentFilter: this.currentFilter,
             categoryStyle: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageCategoryStyle', 'buttons'),
             categories: this._getCategories(),
-            libraries: this._getLibraries(),
+            libraries: this._buildLibraryList(),
             selectedLibrary: this.selectedLibrary,
-            showLibrarySelector: getTileImagePaths().filter(Boolean).length > 1,
+            showLibrarySelector: getTileLibraries().length > 1,
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
             tagSortMode: this.tagSortMode,
@@ -148,7 +148,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (!root?.contains?.(e.target)) return;
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
-            const lib = e.target?.closest?.('.tiw-library-chip');
+            const lib = e.target?.closest?.('.tir-library-chip');
             if (lib) { e.preventDefault(); w._onLibraryClick(e); return; }
 
             const cat = e.target?.closest?.('.tir-filter-category');
@@ -524,13 +524,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         return `${files.toLocaleString()} files, ${ageH} hours old${sizeStr ? ', ' + sizeStr : ''}`;
     }
 
-    _getLibraries() {
-        return getTileImagePaths().filter(Boolean).map(path => {
-            // Use the last non-empty path segment as a human-readable label
-            const parts = path.replace(/\/$/, '').split('/').filter(Boolean);
-            const label = parts[parts.length - 1] ?? path;
-            return { path, label, isActive: this.selectedLibrary === path };
-        });
+    _buildLibraryList() {
+        return getTileLibraries().map(lib => ({ ...lib, isActive: this.selectedLibrary === lib.path }));
     }
 
     _getTopLevelFolder(fileInfo) {
@@ -843,6 +838,37 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                     const ImagePopout = foundry.applications?.apps?.ImagePopout ?? window.ImagePopout;
                     if (ImagePopout) new ImagePopout(imagePath, { title: imageName, shareable: false }).render(true);
                 }
+            },
+            {
+                name: 'Copy',
+                icon: 'fa-solid fa-copy',
+                submenu: [
+                    {
+                        name: 'Copy Image Path',
+                        icon: 'fa-solid fa-file',
+                        callback: () => this._copyToClipboard(imagePath, 'Image path copied to clipboard')
+                    },
+                    {
+                        name: 'Copy Filename',
+                        icon: 'fa-solid fa-file-image',
+                        callback: () => this._copyToClipboard(imageName || imagePath.split('/').pop(), 'Filename copied to clipboard')
+                    },
+                    {
+                        name: 'Copy as HTML img',
+                        icon: 'fa-solid fa-code',
+                        callback: () => this._copyToClipboard(`<img src="${imagePath}" alt="${imageName || ''}" />`, 'HTML img tag copied to clipboard')
+                    },
+                    {
+                        name: 'Copy as Markdown',
+                        icon: 'fa-solid fa-file-code',
+                        callback: () => this._copyToClipboard(`![${imageName || 'image'}](${imagePath})`, 'Markdown copied to clipboard')
+                    }
+                ]
+            },
+            {
+                name: 'Open in New Tab',
+                icon: 'fa-solid fa-external-link-alt',
+                callback: () => window.open(imagePath, '_blank', 'noopener,noreferrer')
             }
         ];
 
@@ -883,6 +909,14 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         } else {
             this._updateResults();
         }
+    }
+
+    _copyToClipboard(text, successMessage = 'Copied to clipboard') {
+        navigator.clipboard.writeText(text).then(() => {
+            ui.notifications.info(successMessage);
+        }).catch(() => {
+            ui.notifications.error('Failed to copy to clipboard');
+        });
     }
 
     async _onScanImages() {
@@ -1028,16 +1062,18 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     }
 
     async _onLibraryClick(event) {
-        const chip = event.target.closest('.tiw-library-chip');
+        const chip = event.target.closest('.tir-library-chip');
         if (!chip) return;
-        const path = chip.dataset.libraryPath || null; // empty string → null = All
-        // Clicking All, or clicking the already-active library, resets to All
+        const path = chip.dataset.libraryPath || null;
         this.selectedLibrary = (!path || this.selectedLibrary === path) ? null : path;
-        // Reset category filter to all when switching libraries
         this.currentFilter = 'all';
         const root = this._getRoot();
-        root?.querySelectorAll('.tiw-library-chip').forEach(el => el.classList.remove('active'));
-        if (this.selectedLibrary) chip.classList.add('active');
+        root?.querySelectorAll('.tir-library-chip').forEach(el => el.classList.remove('active'));
+        if (this.selectedLibrary) {
+            chip.classList.add('active');
+        } else {
+            root?.querySelector('.tir-library-chip[data-library-path=""]')?.classList.add('active');
+        }
         await this._findMatches();
     }
 

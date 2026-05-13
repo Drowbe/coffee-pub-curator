@@ -9,7 +9,7 @@ import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { ImageMatching } from './manager-image-matching.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
-import { getTokenImagePaths, getPortraitImagePaths } from './settings.js';
+import { getTokenImagePaths, getPortraitImagePaths, getTokenLibraries, getPortraitLibraries } from './settings.js';
 import { UIContextMenu } from './ui-context-menu.js';
 
 /**
@@ -20,6 +20,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         super(foundry.utils.mergeObject({}, options));
         // Get last used mode from settings, default to 'token'
         this.mode = game.settings.get(MODULE.ID, 'tokenImageReplacementLastMode') || 'token';
+        this.selectedLibrary = null;
         this.selectedToken = null;
         this.matches = [];
         this.allMatches = [];
@@ -203,13 +204,13 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
         
         // Get all files from cache
-        const allFiles = Array.from(ImageCacheManager.getCache(this.mode).files.values());
-        
-        // Debug: Show sample paths
-        if (allFiles.length > 0) {
-            const samplePaths = allFiles.slice(0, 3).map(f => f.path || f.fullPath || 'NO_PATH').join(', ');
+        let allFiles = Array.from(ImageCacheManager.getCache(this.mode).files.values());
+
+        // Pre-filter by selected library
+        if (this.selectedLibrary) {
+            allFiles = allFiles.filter(f => f?.metadata?.sourcePath === this.selectedLibrary);
         }
-        
+
         // Apply category filter to get the subset of files to search
         if (this.currentFilter === 'all') {
             return allFiles;
@@ -458,6 +459,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             portraitEnabled: BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false),
             tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
             dropShadow: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenDropShadow', false),
+            libraries: this._buildLibraryList(),
+            selectedLibrary: this.selectedLibrary,
+            showLibrarySelector: (this.mode === ImageCacheManager.MODES.PORTRAIT ? getPortraitLibraries() : getTokenLibraries()).length > 1,
             appId: this.id
         };
     }
@@ -475,6 +479,8 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             if (!root?.contains?.(e.target)) return;
             const thumb = e.target?.closest?.('.tir-thumbnail-item');
             if (thumb) { e.preventDefault(); w._onSelectImage(e); return; }
+            const lib = e.target?.closest?.('.tir-library-chip');
+            if (lib) { e.preventDefault(); w._onLibraryClick(e); return; }
             const cat = e.target?.closest?.('.tir-filter-category');
             if (cat) { e.preventDefault(); w._onCategoryFilterClick(e); return; }
             const tag = e.target?.closest?.('.tir-search-tools-tag');
@@ -2601,7 +2607,8 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         this.matches = [];
         this.allMatches = [];
         this.currentPage = 0;
-        
+        this.selectedLibrary = null; // Reset library filter when switching modes
+
         // Redetect selected token/actor in new mode (this will set currentFilter and call _findMatches)
         await this._checkForSelectedToken();
         
@@ -3109,18 +3116,38 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
     }
 
+    _buildLibraryList() {
+        const libs = this.mode === ImageCacheManager.MODES.PORTRAIT
+            ? getPortraitLibraries()
+            : getTokenLibraries();
+        return libs.map(lib => ({ ...lib, isActive: this.selectedLibrary === lib.path }));
+    }
+
+    async _onLibraryClick(event) {
+        const chip = event.target.closest('.tir-library-chip');
+        if (!chip) return;
+        const path = chip.dataset.libraryPath || null;
+        this.selectedLibrary = (!path || this.selectedLibrary === path) ? null : path;
+        this.currentFilter = 'all';
+        const root = this._getRoot();
+        root?.querySelectorAll('.tir-library-chip').forEach(el => el.classList.remove('active'));
+        if (this.selectedLibrary) {
+            chip.classList.add('active');
+        } else {
+            root?.querySelector('.tir-library-chip[data-library-path=""]')?.classList.add('active');
+        }
+        this._showSearchSpinner();
+        await this._findMatches();
+        this._hideSearchSpinner();
+    }
+
     _getCategories() {
-        // Use the new cache-based category discovery with mode
         const discoveredCategories = ImageCacheManager.getDiscoveredCategories(this.mode);
-        
-        // Convert to array of category objects for template
         const categories = [];
-        
         for (const categoryName of discoveredCategories) {
-            // Count files in this category
-            const fileCount = this._countFilesInCategory(categoryName);
+            const fileCount = this._countFilesInCategory(categoryName, this.selectedLibrary);
+            if (fileCount === 0 && this.selectedLibrary) continue;
             const cleanName = ImageCacheManager._cleanCategoryName(categoryName);
-            
             categories.push({
                 name: cleanName,
                 key: categoryName.toLowerCase(),
@@ -3128,7 +3155,6 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 isActive: this.currentFilter === categoryName.toLowerCase()
             });
         }
-        
         return categories;
     }
 
@@ -3137,10 +3163,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
      * @param {string} categoryName - The category name to count files for
      * @returns {number} The number of files in this category
      */
-    _countFilesInCategory(categoryName) {
+    _countFilesInCategory(categoryName, libraryFilter = null) {
         let count = 0;
-        
+
         for (const fileInfo of ImageCacheManager.getCache(this.mode).files.values()) {
+            if (libraryFilter && fileInfo?.metadata?.sourcePath !== libraryFilter) continue;
             // Extract relative path from fullPath if path is empty
             let relativePath = fileInfo.path || '';
             if (!relativePath && fileInfo.fullPath) {

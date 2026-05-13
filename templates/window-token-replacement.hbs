@@ -127,6 +127,16 @@
     <!-- Results Summary & Filters -->
     <div class="tir-search-tools-container">
 
+        {{!-- Library selector (only when 2+ paths configured) --}}
+        {{#if showLibrarySelector}}
+        <div class="tir-library-row">
+            <span class="tir-library-chip {{#unless selectedLibrary}}active{{/unless}}" data-library-path="">All Libraries</span>
+            {{#each libraries}}
+                <span class="tir-library-chip {{#if isActive}}active{{/if}}" data-library-path="{{path}}" data-tooltip="{{path}}">{{label}}</span>
+            {{/each}}
+        </div>
+        {{/if}}
+
         <!-- Row 1: Filters (left) and Result Counts (right) -->
         <div class="tir-search-tools-row-container row-category row-style-{{categoryStyle}}">
             <!-- Filters -->

@@ -18,25 +18,41 @@ function registerHeader(id, labelKey, hintKey, level = 'H2', group = GROUP, scop
     });
 }
 
+function _setSettingName(key, name) {
+    const s = game.settings.settings.get(`${MODULE.ID}.${key}`);
+    if (s) s.name = name;
+}
+
+function _reorderLibrarySettings(pathPrefix, namePrefix, count) {
+    const pairs = [];
+    for (let i = 1; i <= count; i++) {
+        const pk = `${MODULE.ID}.${pathPrefix}${i}`;
+        const nk = `${MODULE.ID}.${namePrefix}${i}`;
+        pairs.push([pk, game.settings.settings.get(pk), nk, game.settings.settings.get(nk)]);
+    }
+    pairs.forEach(([pk, , nk]) => { game.settings.settings.delete(pk); game.settings.settings.delete(nk); });
+    pairs.forEach(([pk, pe, nk, ne]) => { if (pe) game.settings.settings.set(pk, pe); if (ne) game.settings.settings.set(nk, ne); });
+}
+
 function registerImageReplacementPaths() {
     const numSetting = 'numImageReplacementPaths';
     if (!game.settings.settings.has(`${MODULE.ID}.${numSetting}`)) return;
     const numPaths = game.settings.get(MODULE.ID, numSetting) ?? 1;
     for (let i = 1; i <= numPaths; i++) {
-        const settingKey = `tokenImageReplacementPath${i}`;
-        if (game.settings.settings.has(`${MODULE.ID}.${settingKey}`)) continue;
-        game.settings.register(MODULE.ID, settingKey, {
-            name: `Folder ${i}`,
-            hint: '',
-            type: String,
-            config: true,
-            scope: 'world',
-            default: '',
-            filePicker: 'folder',
-            requiresReload: false,
-            group: GROUP
-        });
+        const pathKey = `tokenImageReplacementPath${i}`;
+        const nameKey = `tokenImageReplacementPathName${i}`;
+        if (!game.settings.settings.has(`${MODULE.ID}.${pathKey}`)) {
+            game.settings.register(MODULE.ID, pathKey, { name: `Library ${i} Path`, hint: '', type: String, config: true, scope: 'world', default: '', filePicker: 'folder', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(pathKey, `Library ${i} Path`);
+        }
+        if (!game.settings.settings.has(`${MODULE.ID}.${nameKey}`)) {
+            game.settings.register(MODULE.ID, nameKey, { name: `Library ${i} Label (Optional)`, hint: '', type: String, config: true, scope: 'world', default: '', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(nameKey, `Library ${i} Label (Optional)`);
+        }
     }
+    _reorderLibrarySettings('tokenImageReplacementPath', 'tokenImageReplacementPathName', numPaths);
 }
 
 function registerTileImagePaths() {
@@ -44,20 +60,20 @@ function registerTileImagePaths() {
     if (!game.settings.settings.has(`${MODULE.ID}.${numSetting}`)) return;
     const numPaths = game.settings.get(MODULE.ID, numSetting) ?? 1;
     for (let i = 1; i <= numPaths; i++) {
-        const settingKey = `tileImagePath${i}`;
-        if (game.settings.settings.has(`${MODULE.ID}.${settingKey}`)) continue;
-        game.settings.register(MODULE.ID, settingKey, {
-            name: `Folder ${i}`,
-            hint: '',
-            type: String,
-            config: true,
-            scope: 'world',
-            default: '',
-            filePicker: 'folder',
-            requiresReload: false,
-            group: GROUP
-        });
+        const pathKey = `tileImagePath${i}`;
+        const nameKey = `tileImagePathName${i}`;
+        if (!game.settings.settings.has(`${MODULE.ID}.${pathKey}`)) {
+            game.settings.register(MODULE.ID, pathKey, { name: `Library ${i} Path`, hint: '', type: String, config: true, scope: 'world', default: '', filePicker: 'folder', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(pathKey, `Library ${i} Path`);
+        }
+        if (!game.settings.settings.has(`${MODULE.ID}.${nameKey}`)) {
+            game.settings.register(MODULE.ID, nameKey, { name: `Library ${i} Label (Optional)`, hint: '', type: String, config: true, scope: 'world', default: '', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(nameKey, `Library ${i} Label (Optional)`);
+        }
     }
+    _reorderLibrarySettings('tileImagePath', 'tileImagePathName', numPaths);
 }
 
 function registerPortraitImageReplacementPaths() {
@@ -65,20 +81,20 @@ function registerPortraitImageReplacementPaths() {
     if (!game.settings.settings.has(`${MODULE.ID}.${numSetting}`)) return;
     const numPaths = game.settings.get(MODULE.ID, numSetting) ?? 1;
     for (let i = 1; i <= numPaths; i++) {
-        const settingKey = `portraitImageReplacementPath${i}`;
-        if (game.settings.settings.has(`${MODULE.ID}.${settingKey}`)) continue;
-        game.settings.register(MODULE.ID, settingKey, {
-            name: `Folder ${i}`,
-            hint: '',
-            type: String,
-            config: true,
-            scope: 'world',
-            default: '',
-            filePicker: 'folder',
-            requiresReload: false,
-            group: GROUP
-        });
+        const pathKey = `portraitImageReplacementPath${i}`;
+        const nameKey = `portraitImageReplacementPathName${i}`;
+        if (!game.settings.settings.has(`${MODULE.ID}.${pathKey}`)) {
+            game.settings.register(MODULE.ID, pathKey, { name: `Library ${i} Path`, hint: '', type: String, config: true, scope: 'world', default: '', filePicker: 'folder', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(pathKey, `Library ${i} Path`);
+        }
+        if (!game.settings.settings.has(`${MODULE.ID}.${nameKey}`)) {
+            game.settings.register(MODULE.ID, nameKey, { name: `Library ${i} Label (Optional)`, hint: '', type: String, config: true, scope: 'world', default: '', requiresReload: false, group: GROUP });
+        } else {
+            _setSettingName(nameKey, `Library ${i} Label (Optional)`);
+        }
     }
+    _reorderLibrarySettings('portraitImageReplacementPath', 'portraitImageReplacementPathName', numPaths);
 }
 
 export function getTokenImagePaths() {
@@ -109,6 +125,55 @@ export function getTileImagePaths() {
         if (path && path.trim() !== '') paths.push(path.trim());
     }
     return paths;
+}
+
+function _getPathName(settingKey) {
+    try {
+        if (!game.settings.settings.has(`${MODULE.ID}.${settingKey}`)) return '';
+        return game.settings.get(MODULE.ID, settingKey) || '';
+    } catch { return ''; }
+}
+
+function _pathToLabel(path, nameOverride) {
+    if (nameOverride?.trim()) return nameOverride.trim();
+    const parts = path.replace(/\/$/, '').split('/').filter(Boolean);
+    return parts[parts.length - 1] ?? path;
+}
+
+export function getTokenLibraries() {
+    const numPaths = game.settings.get(MODULE.ID, 'numImageReplacementPaths') ?? 1;
+    const libraries = [];
+    for (let i = 1; i <= numPaths; i++) {
+        const path = game.settings.get(MODULE.ID, `tokenImageReplacementPath${i}`) || '';
+        if (!path.trim()) continue;
+        const name = _getPathName(`tokenImageReplacementPathName${i}`);
+        libraries.push({ path: path.trim(), label: _pathToLabel(path, name) });
+    }
+    return libraries;
+}
+
+export function getPortraitLibraries() {
+    const numPaths = game.settings.get(MODULE.ID, 'numPortraitImageReplacementPaths') ?? 1;
+    const libraries = [];
+    for (let i = 1; i <= numPaths; i++) {
+        const path = game.settings.get(MODULE.ID, `portraitImageReplacementPath${i}`) || '';
+        if (!path.trim()) continue;
+        const name = _getPathName(`portraitImageReplacementPathName${i}`);
+        libraries.push({ path: path.trim(), label: _pathToLabel(path, name) });
+    }
+    return libraries;
+}
+
+export function getTileLibraries() {
+    const numPaths = game.settings.get(MODULE.ID, 'numTileImagePaths') ?? 1;
+    const libraries = [];
+    for (let i = 1; i <= numPaths; i++) {
+        const path = game.settings.get(MODULE.ID, `tileImagePath${i}`) || '';
+        if (!path.trim()) continue;
+        const name = _getPathName(`tileImagePathName${i}`);
+        libraries.push({ path: path.trim(), label: _pathToLabel(path, name) });
+    }
+    return libraries;
 }
 
 export function getTokenImageReplacementCacheStats() {

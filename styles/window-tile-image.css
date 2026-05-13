@@ -184,40 +184,6 @@
     color: #e0e0e0;
 }
 
-/* ---- Library selector row ---- */
-.tiw-library-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    flex-wrap: wrap;
-}
-
-.tiw-library-chip {
-    font-size: 0.72em;
-    padding: 2px 8px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.6);
-    cursor: pointer;
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.tiw-library-chip:hover {
-    border-color: rgba(255, 100, 0, 0.5);
-    color: #e0e0e0;
-}
-
-.tiw-library-chip.active {
-    background: rgba(255, 100, 0, 0.2);
-    border-color: rgba(255, 100, 0, 0.7);
-    color: #e0e0e0;
-}
-
 /* ---- Selected thumbnail (pending placement) ---- */
 .tir-thumbnail-item.tiw-selected {
     border-color: rgba(88, 135, 72, 0.9) !important;

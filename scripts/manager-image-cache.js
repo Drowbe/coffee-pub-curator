@@ -1999,7 +1999,7 @@ export class ImageCacheManager {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning directory: ${basePath}`, "", true, false);
             
             // Use Foundry's FilePicker to browse the directory (v13: use namespaced FilePicker)
-            const response = await ImageCacheManager.FilePicker.browse("data", basePath);
+            const response = await ImageCacheManager._browseDirectory(basePath);
             
             // Log what we found for debugging
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Directory scan results - Files: ${response.files?.length || 0}, Subdirectories: ${response.dirs?.length || 0}`, "", true, false);
@@ -2174,8 +2174,7 @@ export class ImageCacheManager {
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
         
         try {
-            // v13: use namespaced FilePicker
-            const response = await ImageCacheManager.FilePicker.browse("data", subDir);
+            const response = await ImageCacheManager._browseDirectory(subDir);
             
             if (response.files && response.files.length > 0) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in ${subDir}`, "", true, false);
@@ -2329,6 +2328,31 @@ export class ImageCacheManager {
     /**
      * Check if a file path contains invalid characters or patterns
      */
+    static async _browseDirectory(path) {
+        // User-data paths start with recognized prefixes; everything else is likely a
+        // Foundry built-in (icons/, ui/, sounds/) served from the public static root.
+        const p = (path || '').replace(/\/$/, '').toLowerCase();
+        const isUserData = ['modules/', 'worlds/', 'systems/', 'assets/', 'files/', 'backups/', 'packs/']
+            .some(pfx => p.startsWith(pfx));
+        // Try sources in priority order. Foundry v13 uses 'data' for user files and
+        // 'public' for bundled assets (what the UI labels "Core Data"). 'core' is the
+        // legacy name for the same thing in older builds.
+        const sources = isUserData ? ['data', 'public', 'core'] : ['public', 'core', 'data'];
+        for (const source of sources) {
+            try {
+                const result = await ImageCacheManager.FilePicker.browse(source, path);
+                if ((result.files?.length || 0) > 0 || (result.dirs?.length || 0) > 0) {
+                    console.log(`[Curator] _browseDirectory("${path}") succeeded with source="${source}" — ${result.files?.length ?? 0} files, ${result.dirs?.length ?? 0} dirs`);
+                    return result;
+                }
+            } catch (e) {
+                console.log(`[Curator] _browseDirectory("${path}") source="${source}" threw: ${e.message}`);
+            }
+        }
+        console.warn(`[Curator] _browseDirectory("${path}") — all sources returned empty. Tried: ${sources.join(', ')}`);
+        return { files: [], dirs: [] };
+    }
+
     static _isInvalidFilePath(filePath) {
         // Guard against null/undefined/empty
         if (!filePath || typeof filePath !== 'string') return true;
@@ -3377,9 +3401,7 @@ export class ImageCacheManager {
             let errorCount = 0;
             async function collectPaths(dir) {
                 try {
-                    // v13: FilePicker is now namespaced
-                    const FilePicker = foundry.applications.apps.FilePicker.implementation;
-                    const result = await FilePicker.browse('data', dir);
+                    const result = await ImageCacheManager._browseDirectory(dir);
                     // Add directories (for traversal only, not for fingerprint)
                     for (const subdir of result.dirs) {
                         await collectPaths(subdir);

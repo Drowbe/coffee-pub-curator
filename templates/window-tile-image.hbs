@@ -111,10 +111,10 @@
 
         {{!-- Library selector (only when 2+ paths configured) --}}
         {{#if showLibrarySelector}}
-        <div class="tiw-library-row">
-            <span class="tiw-library-chip {{#unless selectedLibrary}}active{{/unless}}" data-library-path="">All Libraries</span>
+        <div class="tir-library-row">
+            <span class="tir-library-chip {{#unless selectedLibrary}}active{{/unless}}" data-library-path="">All Libraries</span>
             {{#each libraries}}
-                <span class="tiw-library-chip {{#if isActive}}active{{/if}}" data-library-path="{{path}}" data-tooltip="{{path}}">{{label}}</span>
+                <span class="tir-library-chip {{#if isActive}}active{{/if}}" data-library-path="{{path}}" data-tooltip="{{path}}">{{label}}</span>
             {{/each}}
         </div>
         {{/if}}
