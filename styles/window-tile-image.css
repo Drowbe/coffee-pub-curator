@@ -120,6 +120,48 @@
 .tiw-param-color::-webkit-color-swatch-wrapper { padding: 0; }
 .tiw-param-color::-webkit-color-swatch { border: none; border-radius: 3px; }
 
+/* ---- Placement cursor tooltip ---- */
+.tiw-placement-tooltip {
+    position: fixed;
+    background: rgba(0, 0, 0, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    pointer-events: none;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    max-width: 160px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.tiw-placement-tooltip-img {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+.tiw-placement-tooltip-name {
+    font-size: 0.75em;
+    font-weight: bold;
+    color: rgba(255, 215, 0, 0.9);
+    text-align: center;
+    word-break: break-word;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tiw-placement-tooltip-hint {
+    font-size: 0.68em;
+    color: rgba(200, 200, 200, 0.8);
+    text-align: center;
+}
+
 /* ---- Set as Default button (pushed to the far right) ---- */
 .tiw-set-defaults-btn {
     margin-left: auto;

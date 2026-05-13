@@ -1110,9 +1110,6 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 ui.notifications.info(`Applied image: ${imageName}`);
             }
             
-            // Close the window
-            this.close();
-            
         } catch (error) {
             ui.notifications.error(`Failed to apply image: ${error.message}`);
         }

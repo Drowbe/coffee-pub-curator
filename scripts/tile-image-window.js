@@ -40,6 +40,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         // Placement mode state
         this._pendingPlacement = null;
         this._placementCleanup = null;
+        this._placementTooltip = null;
+        this._placementTooltipMouseMove = null;
         this.isPlacementMode = false;
     }
 
@@ -351,6 +353,24 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const canvasEl = canvas.app?.view;
         if (canvasEl) canvasEl.style.cursor = 'crosshair';
 
+        // Cursor-following placement preview (mirrors Blacksmith encounter tooltip)
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tiw-placement-tooltip';
+        tooltip.innerHTML = `
+            <img class="tiw-placement-tooltip-img" src="${imagePath}" alt="${imageName}">
+            <div class="tiw-placement-tooltip-name">${imageName}</div>
+            <div class="tiw-placement-tooltip-hint">Click to place &nbsp;&middot;&nbsp; Esc to cancel</div>
+        `;
+        document.body.appendChild(tooltip);
+        this._placementTooltip = tooltip;
+
+        const onMouseMove = (event) => {
+            tooltip.style.left = (event.data.global.x + 16) + 'px';
+            tooltip.style.top  = (event.data.global.y - 60) + 'px';
+        };
+        canvas.stage?.on?.('mousemove', onMouseMove);
+        this._placementTooltipMouseMove = onMouseMove;
+
         // One-shot canvas click handler — only fires on direct canvas clicks
         const onCanvasClick = (e) => {
             if (e.target !== canvasEl) return; // ignore clicks on UI overlays
@@ -359,9 +379,10 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             this._completePlacement(e);
         };
 
-        // ESC cancels
+        // ESC cancels — use capture so we intercept before Foundry's window-close handler
         const onKeyDown = (e) => {
             if (e.key === 'Escape') {
+                e.stopPropagation();
                 cleanup();
                 this._exitPlacementMode(true);
             }
@@ -369,14 +390,22 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
         const cleanup = () => {
             canvasEl?.removeEventListener?.('click', onCanvasClick, true);
-            document.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('keydown', onKeyDown, true);
             if (canvasEl) canvasEl.style.cursor = '';
+            if (this._placementTooltip) {
+                this._placementTooltip.remove();
+                this._placementTooltip = null;
+            }
+            if (this._placementTooltipMouseMove) {
+                canvas.stage?.off?.('mousemove', this._placementTooltipMouseMove);
+                this._placementTooltipMouseMove = null;
+            }
             this._placementCleanup = null;
         };
 
         this._placementCleanup = cleanup;
         canvasEl?.addEventListener?.('click', onCanvasClick, true);
-        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keydown', onKeyDown, true);
 
         this._refreshComputedSize();
         this.render(false);
@@ -751,7 +780,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const imageName = thumb.dataset.imageName;
         if (!imagePath) return;
 
-        const fileInfo = ImageCacheManager.getCache(TILE_MODE).files.get(imageName?.toLowerCase());
+        const fileInfo = ImageCacheManager.getCache(TILE_MODE).files.get(this._getCacheKeyForPath(imagePath));
         const isFav = fileInfo?.metadata?.tags?.includes('favorite');
         const menuRoot = (thumb.ownerDocument || document).body;
 
@@ -788,9 +817,18 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         });
     }
 
+    _getCacheKeyForPath(fullPath) {
+        const bases = getTileImagePaths().filter(Boolean);
+        for (const base of bases) {
+            const prefix = base.endsWith('/') ? base : base + '/';
+            if (fullPath.startsWith(prefix)) return fullPath.slice(prefix.length).toLowerCase();
+        }
+        return fullPath.toLowerCase();
+    }
+
     async _toggleFavorite(imagePath, imageName, fileInfo) {
         const cache = ImageCacheManager.getCache(TILE_MODE);
-        const key = imageName?.toLowerCase();
+        const key = this._getCacheKeyForPath(imagePath);
         const entry = cache.files.get(key);
         if (!entry) return;
         if (!entry.metadata) entry.metadata = {};
