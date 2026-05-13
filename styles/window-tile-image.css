@@ -90,31 +90,35 @@
     border-color: rgba(255, 100, 0, 0.7) !important;
 }
 
-/* ---- Slider — reuse tir-rangeslider widget, compact width for option bar ---- */
-.tiw-param-group-slider .tir-rangeslider {
-    width: 80px;
+/* ---- Slider — constrain blacksmith-slider width in the compact option bar ---- */
+.tiw-param-group-slider .blacksmith-slider {
+    width: 100px;
 }
 
-.tiw-param-group-slider .tir-rangeslider-value {
-    margin-left: 2px;
-    min-width: 38px;
+/* ---- Color row (hex text + swatch — matches Blacksmith pin config pattern) ---- */
+.tiw-color-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-/* ---- Color picker ---- */
+
 .tiw-param-color {
     -webkit-appearance: none;
     appearance: none;
-    width: 30px;
-    height: 22px;
-    padding: 1px 2px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 3px;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 4px;
+    overflow: hidden;
     cursor: pointer;
 }
 
-.tiw-param-color::-webkit-color-swatch-wrapper { padding: 2px; }
-.tiw-param-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+.tiw-param-color::-webkit-color-swatch-wrapper { padding: 0; }
+.tiw-param-color::-webkit-color-swatch { border: none; border-radius: 3px; }
 
 /* ---- Set as Default button (pushed to the far right) ---- */
 .tiw-set-defaults-btn {

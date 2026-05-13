@@ -10,27 +10,22 @@
             <span class="tiw-computed-size" id="tiw-computed-size" title="Computed placed size (width × height px)">{{tileComputedSize}}</span>
             <div class="tiw-param-group tiw-param-group-slider">
                 <span class="tiw-param-label">Rotation <span id="tiw-param-rotation-val">{{tileRotation}}°</span></span>
-                <div class="tir-rangeslider">
-                    <input type="range" id="tiw-param-rotation" class="tir-rangeslider-input" min="0" max="359" step="1" value="{{tileRotation}}">
-                    <div class="tir-rangeslider-track">
-                        <div class="tir-rangeslider-fill" style="width: {{tileRotationFillPct}}%"></div>
-                        <div class="tir-rangeslider-thumb" style="left: {{tileRotationFillPct}}%"></div>
-                    </div>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-param-rotation" class="tiw-param-slider" min="0" max="359" step="1" value="{{tileRotation}}">
                 </div>
             </div>
             <div class="tiw-param-group tiw-param-group-slider">
                 <span class="tiw-param-label">Opacity <span id="tiw-param-alpha-val">{{tileAlphaPercent}}%</span></span>
-                <div class="tir-rangeslider">
-                    <input type="range" id="tiw-param-alpha" class="tir-rangeslider-input" min="0.1" max="1.0" step="0.05" value="{{tileAlpha}}">
-                    <div class="tir-rangeslider-track">
-                        <div class="tir-rangeslider-fill" style="width: {{tileAlphaFillPct}}%"></div>
-                        <div class="tir-rangeslider-thumb" style="left: {{tileAlphaFillPct}}%"></div>
-                    </div>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-param-alpha" class="tiw-param-slider" min="0.1" max="1.0" step="0.05" value="{{tileAlpha}}">
                 </div>
             </div>
             <div class="tiw-param-group">
                 <span class="tiw-param-label">Tint</span>
-                <input id="tiw-param-tint" type="color" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
+                <div class="tiw-color-row">
+                    <input type="text" id="tiw-param-tint-text" class="blacksmith-input" value="{{tileTint}}" maxlength="7" placeholder="#ffffff" title="Tint color hex value">
+                    <input type="color" id="tiw-param-tint" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
+                </div>
             </div>
             <button type="button" class="tiw-set-defaults-btn" data-action="setDefaults"
                 title="Save current values as the default for new placements">
@@ -71,13 +66,6 @@
                     <div class="tir-toggle">
                         <input type="checkbox" data-setting-key="tileDefaultHidden" id="tiw-hidden" {{#if tileHidden}}checked{{/if}}>
                         <label for="tiw-hidden" class="tir-toggle-slider"></label>
-                    </div>
-                </div>
-                <div class="tir-toggle-container">
-                    <span class="tir-toggle-label">Fuzzy Search</span>
-                    <div class="tir-toggle">
-                        <input type="checkbox" id="tiw-fuzzy-search" {{#if fuzzySearch}}checked{{/if}}>
-                        <label for="tiw-fuzzy-search" class="tir-toggle-slider"></label>
                     </div>
                 </div>
                 {{#if tmfxActive}}
@@ -151,7 +139,6 @@
             </div>
             <div id="tir-search-tools-row-right" class="tir-search-tools-row-right tir-results-details">
                 <select name="sortOrder" class="blacksmith-select">
-                    <option value="relevance" {{#if (eq sortOrder "relevance")}}selected{{/if}}>Relevance</option>
                     <option value="atoz" {{#if (eq sortOrder "atoz")}}selected{{/if}}>A to Z</option>
                     <option value="ztoa" {{#if (eq sortOrder "ztoa")}}selected{{/if}}>Z to A</option>
                 </select>

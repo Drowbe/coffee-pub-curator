@@ -11,27 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Tile Image Placement window** (`TileImageWindow`): New browser window for placing map/environment tiles directly onto the canvas from a scanned image library. Accessible from the CoffeePub toolbar (`fa-map` icon).
   - Full image scanning and tagging pipeline via `ImageCacheManager.MODES.TILE`, sharing the same caching infrastructure as Token and Portrait modes.
-  - **Asset Grid Size** parameter replaces fixed Width/Height. Tiles auto-scale so that the source artwork's grid squares map to the scene's grid size: `placed = natural × (sceneGrid ÷ assetGridSize)`. Preserves aspect ratio regardless of image dimensions.
-  - **Rotation** and **Opacity** sliders use the same `.tir-rangeslider` custom widget as the Token/Portrait window.
-  - **Tint** color picker applies a PIXI tint to the placed tile texture (white = no tint).
-  - **Elevation** number input.
+  - **Asset Grid Size** — replaces fixed Width/Height. Tiles auto-scale so source artwork grid squares map to the scene's grid size: `placed = natural × (sceneGrid ÷ assetGridSize)`. Aspect ratio always preserved. Image natural dimensions are resolved via `foundry.canvas.loadTexture()` at selection time.
+  - **Rotation** slider (Blacksmith `.blacksmith-slider` widget, 0–359°). Value shown inline in the label.
+  - **Opacity** slider (Blacksmith `.blacksmith-slider` widget, 10–100%). Value shown inline in the label.
+  - **Tint** — hex text input + color swatch pair, matching Blacksmith's pin-config color row pattern. White (`#ffffff`) = no tint.
   - **Locked** and **Hidden** toggles in the header.
-  - **Drop Shadow** toggle (header, only visible when Token Magic FX is installed and active). Applies a TMFX shadow filter via `setFlag('tokenmagic', 'params', [...])` immediately after tile creation using the same parameters as the standard shadow macro.
-  - **Set as Default** button (right of option bar) saves all current parameter values to world settings.
+  - **Drop Shadow** toggle (header, token mode only, only visible when Token Magic FX is active). Applies `TokenMagic.addUpdateFilters` 150 ms after tile creation so the canvas placeable is guaranteed to exist.
+  - **Set as Default** button saves current Asset Grid Size, Rotation, Opacity, Locked, and Hidden to world settings.
   - Click-to-place workflow: clicking a thumbnail enters placement mode (crosshair cursor, header banner, ESC to cancel); clicking the canvas places the tile centered on the click point.
-  - Computed placed-size readout (`— × —` → `800 × 600 px`) updates live as Asset Grid Size changes and when an image is selected.
-  - Card thumbnails match the Token/Portrait window style: `tir-thumbnail-image` wrapper, hover overlay showing **Place Tile** with a crosshairs icon, `tir-thumbnail-name`, `tir-thumbnail-score` ("Browse"), `tir-thumbnail-tagset` with `tir-thumbnail-tag` pills, favorite heart badge.
+  - Computed placed-size readout (`— × —` → `800 × 600 px`) updates live as Asset Grid Size changes and refreshes when an image is selected.
+  - Card thumbnails match the Token/Portrait window style: hover overlay shows **Place Tile** with crosshairs icon, Browse score bar, tag pills, favorite heart badge.
   - Right-click context menu: Add/Remove Favorites, Place on Canvas, View Full Size.
-  - Post-scan auto-loads results in the All tab.
+  - Post-scan auto-loads All tab with results.
+- **Drop Shadow — Token window**: Drop Shadow toggle added to the Token window header (hidden in Portrait mode and when Token Magic FX is inactive). Persists as a world setting (`tokenDropShadow`). Applied on token drop, manual image apply, and Update Canvas. All TMFX shadow logic centralised in `_tmfxShadowParams()` / `_applyDropShadowToPlaceables()` static helpers.
+- **Drop Shadow — Tile window**: Persists as world setting (`tileDropShadow`), restored on window open.
+
+### Changed
+- **Tile option bar**: Elevation field removed. Rotation and Opacity values are now shown inline within their labels rather than as separate trailing spans.
+- **Tile sliders**: Replaced the hand-rolled `.tir-rangeslider` custom widget (fake track + fill + thumb divs driven by JS, `overflow: hidden` clipped thumbs at 0 %/100 %) with Blacksmith's `.blacksmith-slider` — a native `<input type="range">` with CSS pseudo-element styling. No JS-driven fill/thumb, no clipping.
+- **Tint color picker**: Replaced bare `<input type="color">` (OS-native control) with a Blacksmith-style paired hex text input (`blacksmith-input`) + color swatch, synced in both directions via `input` events.
 
 ### Fixed
-- **Post-scan grid empty** (Token and Portrait windows): After a scan completed, `_findMatches()` populated `this.matches` but the immediately following `render(true)` re-rendered the HBS template, replacing the grid with an empty `<div>`. Fixed by adding `_updateResults()` to the `requestAnimationFrame` callback in the `render()` override so the grid is repopulated after every template re-render.
-- **Tile placement dimensions wrong**: Two compounding bugs caused tiles to be placed at the wrong size:
-  1. Option-bar inputs (`#tiw-param-asset-grid-size`, rotation, alpha, etc.) were read from the DOM in `_completePlacement`, but the `render(false)` call inside `_enterPlacementMode` re-rendered the template first, resetting all inputs to their saved-setting defaults. Fixed by snapshotting all params into `_pendingPlacement` at selection time via `_snapshotParams()`, before any re-render fires.
-  2. `_completePlacement` destructured `this._pendingPlacement` after calling `_exitPlacementMode()`, which nulls it. Fixed by capturing the full destructure before the exit call.
-- **`_resolveImageDims` unreliable**: `img.naturalWidth` on lazy-loaded thumbnails could return 0 or the display size. Replaced with `foundry.canvas.loadTexture()` as the primary source, which uses Foundry's PIXI texture cache and always returns intrinsic pixel dimensions.
-- **`loadTexture` deprecation warning**: Updated all calls from the global `loadTexture` to the v13 namespace `foundry.canvas.loadTexture`.
-- **`canvas.grid.size` fallback chain**: `_snapshotParams` now tries `canvas.scene?.grid?.size` before `canvas.grid?.size` to handle both Foundry v12 and v13 grid API paths.
+- **Post-scan grid empty** (Token and Portrait windows): `render(true)` after `_findMatches()` re-rendered the HBS template and cleared the grid. Fixed by calling `_updateResults()` inside the `requestAnimationFrame` callback of the `render()` override so the grid is repopulated after every template re-render.
+- **Tile placement dimensions wrong**: Two compounding bugs:
+  1. DOM inputs were re-read in `_completePlacement` after `render(false)` inside `_enterPlacementMode` had already reset them to saved-setting defaults. Fixed by snapshotting all params into `_pendingPlacement` via `_snapshotParams()` before any re-render.
+  2. `_completePlacement` destructured `this._pendingPlacement` after `_exitPlacementMode()` nulled it. Fixed by capturing the full destructure first.
+- **`_resolveImageDims` unreliable**: `img.naturalWidth` on lazy-loaded thumbnails returned 0. Replaced with `foundry.canvas.loadTexture()` (PIXI cache, always correct) with DOM naturalWidth as fallback.
+- **`loadTexture` deprecation**: Updated all calls to `foundry.canvas.loadTexture` (v13 namespace).
+- **TMFX drop shadow not applying**: `tileDoc.setFlag()` set the flag before the canvas placeable existed. Replaced with `TokenMagic.addUpdateFilters(tileDoc.object, params)` inside a 150 ms `setTimeout`. Added `window.TokenMagic` existence check alongside `game.modules.get('tokenmagic')?.active` guard in both tile and token windows.
 
 
 ## [13.1.0] - 2026-05-11

@@ -7,6 +7,7 @@ import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { UIContextMenu } from './ui-context-menu.js';
+import { getTileImagePaths } from './settings.js';
 
 const TILE_MODE = ImageCacheManager.MODES.TILE;
 
@@ -20,7 +21,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this.isLoadingMore = false;
         this.hasMoreResults = false;
         this.isSearching = false;
-        this.sortOrder = 'relevance';
+        this.sortOrder = 'atoz';
         this.currentFilter = 'all';
         this.searchTerm = '';
         this._cachedSearchTerms = null;
@@ -109,14 +110,11 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
             tagSortMode: this.tagSortMode,
-            fuzzySearch: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageFuzzySearch', false),
             tileAssetGridSize: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAssetGridSize', 100),
             tileComputedSize: this._getComputedSizeLabel(),
             tileRotation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
-            tileRotationFillPct: Math.round((BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0) / 359) * 100),
             tileAlpha: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
             tileAlphaPercent: Math.round(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0) * 100),
-            tileAlphaFillPct: Math.round(((BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0) - 0.1) / 0.9) * 100),
             tileTint: this.tileTint ?? '#ffffff',
             tileLocked: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
             tileHidden: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
@@ -167,8 +165,17 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
-            if (e.target?.matches?.('.tir-rangeslider-input')) { w._onParamSliderInput(e); return; }
+            if (e.target?.matches?.('.tiw-param-slider')) { w._onParamSliderInput(e); return; }
             if (e.target?.matches?.('#tiw-param-asset-grid-size')) { w._refreshComputedSize(); return; }
+            if (e.target?.matches?.('#tiw-param-tint-text')) {
+                const val = e.target.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                    w.tileTint = val;
+                    const swatch = w._getRoot()?.querySelector('#tiw-param-tint');
+                    if (swatch) swatch.value = val;
+                }
+                return;
+            }
         });
 
         document.addEventListener('change', (e) => {
@@ -177,8 +184,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
             if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
-            if (e.target?.matches?.('#tiw-fuzzy-search')) { w._onFuzzySearchToggle(e); return; }
-            if (e.target?.matches?.('#tiw-param-tint'))    { w.tileTint    = e.target.value;   return; }
+            if (e.target?.matches?.('#tiw-param-tint')) {
+                // Swatch changed — sync text input
+                w.tileTint = e.target.value;
+                const txt = w._getRoot()?.querySelector('#tiw-param-tint-text');
+                if (txt) txt.value = e.target.value;
+                return;
+            }
             if (e.target?.matches?.('#tiw-drop-shadow'))  { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
         });
 
@@ -465,18 +477,42 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         return `${files.toLocaleString()} files, ${ageH} hours old${sizeStr ? ', ' + sizeStr : ''}`;
     }
 
+    _getTopLevelFolder(fileInfo) {
+        const fullPath = fileInfo?.fullPath ?? '';
+        if (!fullPath) return null;
+        const bases = getTileImagePaths().filter(Boolean);
+        for (const base of bases) {
+            const prefix = base.endsWith('/') ? base : base + '/';
+            if (fullPath.startsWith(prefix)) {
+                const relative = fullPath.slice(prefix.length);
+                const slash = relative.indexOf('/');
+                return slash !== -1 ? relative.slice(0, slash) : null;
+            }
+        }
+        // Fallback: use sourcePath stored in metadata
+        const sourcePath = fileInfo?.metadata?.sourcePath ?? '';
+        if (sourcePath) {
+            const prefix = sourcePath.endsWith('/') ? sourcePath : sourcePath + '/';
+            if (fullPath.startsWith(prefix)) {
+                const relative = fullPath.slice(prefix.length);
+                const slash = relative.indexOf('/');
+                return slash !== -1 ? relative.slice(0, slash) : null;
+            }
+        }
+        return null;
+    }
+
     _getCategories() {
         const cache = ImageCacheManager.getCache(TILE_MODE);
         if (!cache.files || cache.files.size === 0) return [];
-        const tagCount = new Map();
+        const folderCount = new Map();
         for (const [, f] of cache.files) {
-            for (const tag of (f?.metadata?.primaryTags ?? []))
-                tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
+            const folder = this._getTopLevelFolder(f);
+            if (folder) folderCount.set(folder, (folderCount.get(folder) ?? 0) + 1);
         }
-        return Array.from(tagCount.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 12)
-            .map(([tag, count]) => ({ key: tag, name: tag, count, isActive: this.currentFilter === tag }));
+        return Array.from(folderCount.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([folder, count]) => ({ key: folder, name: folder, count, isActive: this.currentFilter === folder }));
     }
 
     _getAggregatedTags() {
@@ -521,10 +557,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (this.currentFilter === 'favorites') {
             files = files.filter(f => f?.metadata?.tags?.includes('favorite'));
         } else if (this.currentFilter !== 'all') {
-            files = files.filter(f =>
-                f?.metadata?.primaryTags?.includes(this.currentFilter) ||
-                f?.metadata?.secondaryTags?.includes(this.currentFilter)
-            );
+            files = files.filter(f => this._getTopLevelFolder(f) === this.currentFilter);
         }
 
         if (this.selectedTags.size > 0) {
@@ -629,21 +662,11 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     _onParamSliderInput(event) {
         const input = event.target;
-        const slider = input.closest('.tir-rangeslider');
-        const fill  = slider?.querySelector('.tir-rangeslider-fill');
-        const thumb = slider?.querySelector('.tir-rangeslider-thumb');
         const root  = this._getRoot();
-
         if (input.id === 'tiw-param-rotation') {
-            const pct = (parseFloat(input.value) / 359) * 100;
-            if (fill)  fill.style.width = `${pct}%`;
-            if (thumb) thumb.style.left = `${pct}%`;
             const val = root?.querySelector('#tiw-param-rotation-val');
             if (val) val.textContent = `${Math.round(input.value)}°`;
         } else if (input.id === 'tiw-param-alpha') {
-            const pct = ((parseFloat(input.value) - 0.1) / 0.9) * 100;
-            if (fill)  fill.style.width = `${pct}%`;
-            if (thumb) thumb.style.left = `${pct}%`;
             const val = root?.querySelector('#tiw-param-alpha-val');
             if (val) val.textContent = `${Math.round(parseFloat(input.value) * 100)}%`;
         }
@@ -668,29 +691,15 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     _initializeParamSliders() {
         const root = this._getRoot();
         if (!root) return;
-
         const rotInput = root.querySelector('#tiw-param-rotation');
         if (rotInput) {
-            const pct = (parseFloat(rotInput.value) / 359) * 100;
-            const slider = rotInput.closest('.tir-rangeslider');
-            const fill  = slider?.querySelector('.tir-rangeslider-fill');
-            const thumb = slider?.querySelector('.tir-rangeslider-thumb');
-            const val   = root.querySelector('#tiw-param-rotation-val');
-            if (fill)  fill.style.width = `${pct}%`;
-            if (thumb) thumb.style.left = `${pct}%`;
-            if (val)   val.textContent  = `${Math.round(rotInput.value)}°`;
+            const val = root.querySelector('#tiw-param-rotation-val');
+            if (val) val.textContent = `${Math.round(rotInput.value)}°`;
         }
-
         const alphaInput = root.querySelector('#tiw-param-alpha');
         if (alphaInput) {
-            const pct = ((parseFloat(alphaInput.value) - 0.1) / 0.9) * 100;
-            const slider = alphaInput.closest('.tir-rangeslider');
-            const fill  = slider?.querySelector('.tir-rangeslider-fill');
-            const thumb = slider?.querySelector('.tir-rangeslider-thumb');
-            const val   = root.querySelector('#tiw-param-alpha-val');
-            if (fill)  fill.style.width = `${pct}%`;
-            if (thumb) thumb.style.left = `${pct}%`;
-            if (val)   val.textContent  = `${Math.round(parseFloat(alphaInput.value) * 100)}%`;
+            const val = root.querySelector('#tiw-param-alpha-val');
+            if (val) val.textContent = `${Math.round(parseFloat(alphaInput.value) * 100)}%`;
         }
     }
 
