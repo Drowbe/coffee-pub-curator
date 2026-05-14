@@ -48,6 +48,25 @@ Hooks.once('ready', async function () {
         }
     });
 
+    // Pin double-click — register for all users via the API (ownership/visibility handled by Blacksmith)
+    const pinsAPI = game.modules.get('coffee-pub-blacksmith')?.api?.pins;
+    if (pinsAPI?.isAvailable()) {
+        pinsAPI.registerPinType(MODULE.ID, 'placed-image', 'Placed Image');
+
+        const offDoubleClick = pinsAPI.on('doubleClick', (evt) => {
+            const imagePath = evt.pin?.image;
+            if (!imagePath) return;
+            const imageName = imagePath.split('/').pop().replace(/\.[^.]+$/, '');
+            if (game.user.isGM) {
+                game.socket.emit(`module.${MODULE.ID}`, { action: 'showImage', src: imagePath, title: imageName });
+            }
+            const ImagePopout = foundry.applications?.apps?.ImagePopout ?? window.ImagePopout;
+            if (ImagePopout) new ImagePopout(imagePath, { title: imageName, shareable: false }).render(true);
+        }, { moduleId: MODULE.ID });
+
+        Hooks.once('unloadModule', (id) => { if (id === MODULE.ID) offDoubleClick?.(); });
+    }
+
     if (!game.user.isGM) return;
 
     if (typeof blacksmith.registerMenubarTool !== 'function') {

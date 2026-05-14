@@ -31,13 +31,21 @@
 
 /* ---- Tile/Pin mode toggle in the option bar ---- */
 .tiw-mode-toggle {
-    padding-right: 8px;
-    border-right: 1px solid rgba(255, 255, 255, 0.12);
-    margin-right: 4px;
     flex-shrink: 0;
 }
 
-/* ---- Tile parameter row inside the option bar ---- */
+/* ---- Parameter bar: secondary toolbar below the header ---- */
+.tiw-param-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 5px 10px;
+    background: #1e1e1e;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    min-height: 36px;
+}
+
+/* ---- Tile parameter row inside the param bar ---- */
 .tiw-param-row {
     display: flex;
     align-items: center;
@@ -150,8 +158,8 @@
     text-align: center;
 }
 
-/* ---- Set as Default button (pushed to the far right) ---- */
-.tiw-set-defaults-btn {
+/* ---- Reset Options button (pushed to the far right of the option bar) ---- */
+.tiw-reset-defaults-btn {
     margin-left: auto;
     padding: 3px 9px;
     font-size: 0.78em;
@@ -167,7 +175,7 @@
     transition: border-color 0.15s, color 0.15s;
 }
 
-.tiw-set-defaults-btn:hover {
+.tiw-reset-defaults-btn:hover {
     border-color: rgba(255, 100, 0, 0.7) !important;
     color: #e0e0e0;
 }

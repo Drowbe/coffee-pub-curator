@@ -1031,6 +1031,9 @@ export function registerSettings(blacksmithApi) {
         requiresReload: false,
         group: GROUP
     });
+    game.settings.register(MODULE.ID, 'tileDefaultTint', {
+        type: String, config: false, scope: 'world', default: '#ffffff', group: GROUP
+    });
     game.settings.register(MODULE.ID, 'tileDefaultLocked', {
         name: MODULE.ID + '.tileDefaultLocked-Label',
         hint: MODULE.ID + '.tileDefaultLocked-Hint',
@@ -1050,6 +1053,9 @@ export function registerSettings(blacksmithApi) {
         default: false,
         requiresReload: false,
         group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'tileDefaultForeground', {
+        type: Boolean, config: false, scope: 'world', default: false, group: GROUP
     });
     game.settings.register(MODULE.ID, 'tileDefaultElevation', {
         name: MODULE.ID + '.tileDefaultElevation-Label',
@@ -1081,18 +1087,36 @@ export function registerSettings(blacksmithApi) {
         type: Boolean,
         config: false,
         scope: 'world',
-        default: false,
+        default: true,
         requiresReload: false,
         group: GROUP
     });
+    game.settings.register(MODULE.ID, 'tilePlacementLastMode', {
+        type: Boolean, config: false, scope: 'world', default: false, group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultSize', {
+        type: Number, config: false, scope: 'world', default: 200, group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultShape', {
+        type: String, config: false, scope: 'world', default: 'square', group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultBorderColor', {
+        type: String, config: false, scope: 'world', default: '#ffffff', group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultBorderWidth', {
+        type: Number, config: false, scope: 'world', default: 10, group: GROUP
+    });
     game.settings.register(MODULE.ID, 'pinDefaultImageFit', {
-        type: String, config: false, scope: 'world', default: 'contain', group: GROUP
+        type: String, config: false, scope: 'world', default: 'cover', group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultImageZoom', {
+        type: Number, config: false, scope: 'world', default: 1.0, group: GROUP
     });
     game.settings.register(MODULE.ID, 'pinDefaultVisibility', {
         type: String, config: false, scope: 'world', default: 'observer', group: GROUP
     });
     game.settings.register(MODULE.ID, 'pinDefaultDropShadow', {
-        type: Boolean, config: false, scope: 'world', default: false, group: GROUP
+        type: Boolean, config: false, scope: 'world', default: true, group: GROUP
     });
     game.settings.register(MODULE.ID, 'tokenDropShadow', {
         name: MODULE.ID + '.tokenDropShadow-Label',

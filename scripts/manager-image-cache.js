@@ -3043,7 +3043,8 @@ export class ImageCacheManager {
                 pt: fileData.metadata.primaryTags || [],
                 st: fileData.metadata.secondaryTags || [],
                 tt: fileData.metadata.tagTypes || {},
-                ct: fileData.metadata.creatureType || ''
+                ct: fileData.metadata.creatureType || '',
+                sp: fileData.metadata.sourcePath || ''
             };
         }
         
@@ -3307,7 +3308,8 @@ export class ImageCacheManager {
                             primaryTags: m.primaryTags || m.pt || [],
                             secondaryTags: m.secondaryTags || m.st || [],
                             tagTypes: m.tagTypes || m.tt || {},
-                            creatureType: m.creatureType || m.ct || ''
+                            creatureType: m.creatureType || m.ct || '',
+                            sourcePath: m.sourcePath || m.sp || ''
                         }
                     };
                 } else {

@@ -34,15 +34,21 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._teardownExecuted = false;
         this._activeImageElements = new Set();
 
-        this.tileTint = '#ffffff';
-        this.dropShadow = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', false);
+        this.tileTint       = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultTint', '#ffffff');
+        this.tileForeground = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultForeground', false);
+        this.dropShadow     = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', true);
         this.selectedLibrary = null;
 
         // Pin mode state
-        this.pinMode = false;
-        this.pinImageFit    = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultImageFit',    'contain');
+        this.pinMode        = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tilePlacementLastMode', false);
+        this.pinSize        = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultSize',        200);
+        this.pinShape       = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultShape',       'square');
+        this.pinBorderColor = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultBorderColor', '#ffffff');
+        this.pinBorderWidth = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultBorderWidth', 10);
+        this.pinImageFit    = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultImageFit',    'cover');
+        this.pinImageZoom   = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultImageZoom',   1.0);
         this.pinVisibility  = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultVisibility',  'observer');
-        this.pinDropShadow  = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultDropShadow',  false);
+        this.pinDropShadow  = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultDropShadow',  true);
 
         // Placement mode state
         this._pendingPlacement = null;
@@ -70,7 +76,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 cancelPlacement: TileImageWindow._actionCancelPlacement,
                 clearSearch: TileImageWindow._actionClearSearch,
                 filterToggle: TileImageWindow._actionFilterToggle,
-                setDefaults: TileImageWindow._actionSetDefaults
+                resetDefaults: TileImageWindow._actionResetDefaults
             }
         }
     );
@@ -128,18 +134,26 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             tileRotation: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
             tileAlpha: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
             tileAlphaPercent: Math.round(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0) * 100),
-            tileTint: this.tileTint ?? '#ffffff',
-            tileLocked: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
-            tileHidden: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            tileTint: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultTint', '#ffffff'),
+            tileLocked:      BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
+            tileHidden:      BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            tileForeground:  this.tileForeground,
             isPlacementMode: this.isPlacementMode,
             pendingImageName: this._pendingPlacement?.imageName ?? '',
             tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
             dropShadow: this.dropShadow,
             isPinMode: this.pinMode,
             pinsAvailable: !!(game.modules.get('coffee-pub-blacksmith')?.api?.pins?.isAvailable?.()),
-            pinImageFit: this.pinImageFit,
-            pinVisibility: this.pinVisibility,
-            pinDropShadow: this.pinDropShadow
+            pinSize:        this.pinSize,
+            pinShape:       this.pinShape,
+            pinBorderColor: this.pinBorderColor,
+            pinBorderWidth: this.pinBorderWidth,
+            pinImageFit:         this.pinImageFit,
+            pinImageZoom:        this.pinImageZoom,
+            pinImageZoomPercent: Math.round(this.pinImageZoom * 100),
+            isZoomFit:           this.pinImageFit === 'zoom',
+            pinVisibility:       this.pinVisibility,
+            pinDropShadow:       this.pinDropShadow
         };
     }
 
@@ -183,11 +197,21 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (e.target?.matches?.('.tir-search-input')) { w._onSearchInput(e); return; }
             if (e.target?.matches?.('.tiw-param-slider')) { w._onParamSliderInput(e); return; }
             if (e.target?.matches?.('#tiw-param-asset-grid-size')) { w._refreshComputedSize(); return; }
+            if (e.target?.matches?.('#tiw-pin-size')) { w.pinSize = parseInt(e.target.value) || 200; return; }
             if (e.target?.matches?.('#tiw-param-tint-text')) {
                 const val = e.target.value.trim();
                 if (/^#[0-9a-fA-F]{6}$/.test(val)) {
                     w.tileTint = val;
                     const swatch = w._getRoot()?.querySelector('#tiw-param-tint');
+                    if (swatch) swatch.value = val;
+                }
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-border-text')) {
+                const val = e.target.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                    w.pinBorderColor = val;
+                    const swatch = w._getRoot()?.querySelector('#tiw-pin-border-color');
                     if (swatch) swatch.value = val;
                 }
                 return;
@@ -198,18 +222,115 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             if (!w) return;
             const root = w._getRoot();
             if (!root?.contains?.(e.target)) return;
-            if (e.target?.matches?.('.blacksmith-select')) { w._onSortOrderChange(e); return; }
-            if (e.target?.matches?.('#tiw-param-tint')) {
-                w.tileTint = e.target.value;
-                const txt = w._getRoot()?.querySelector('#tiw-param-tint-text');
-                if (txt) txt.value = e.target.value;
+            if (e.target?.matches?.('[name="sortOrder"]')) { w._onSortOrderChange(e); return; }
+            // Tile params — save immediately
+            if (e.target?.matches?.('#tiw-param-asset-grid-size')) {
+                const v = parseInt(e.target.value) || 100;
+                game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', v);
                 return;
             }
-            if (e.target?.matches?.('#tiw-drop-shadow')) { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
-            if (e.target?.matches?.('#tiw-pin-mode'))       { w._onPinModeToggle(e); return; }
-            if (e.target?.matches?.('#tiw-pin-imageFit'))   { w.pinImageFit   = e.target.value;   return; }
-            if (e.target?.matches?.('#tiw-pin-visibility')) { w.pinVisibility = e.target.checked ? 'observer' : 'gm'; return; }
-            if (e.target?.matches?.('#tiw-pin-shadow'))     { w.pinDropShadow = e.target.checked; return; }
+            if (e.target?.matches?.('#tiw-param-rotation')) {
+                game.settings.set(MODULE.ID, 'tileDefaultRotation', parseFloat(e.target.value) ?? 0);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-param-alpha')) {
+                game.settings.set(MODULE.ID, 'tileDefaultAlpha', parseFloat(e.target.value) ?? 1.0);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-param-tint')) {
+                w.tileTint = e.target.value;
+                const txt = root?.querySelector('#tiw-param-tint-text');
+                if (txt) txt.value = e.target.value;
+                game.settings.set(MODULE.ID, 'tileDefaultTint', e.target.value);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-param-tint-text')) {
+                const val = e.target.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                    w.tileTint = val;
+                    const swatch = root?.querySelector('#tiw-param-tint');
+                    if (swatch) swatch.value = val;
+                    game.settings.set(MODULE.ID, 'tileDefaultTint', val);
+                }
+                return;
+            }
+            if (e.target?.matches?.('#tiw-foreground'))  {
+                w.tileForeground = e.target.checked;
+                game.settings.set(MODULE.ID, 'tileDefaultForeground', e.target.checked);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-locked'))  {
+                game.settings.set(MODULE.ID, 'tileDefaultLocked', e.target.checked);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-hidden'))  {
+                game.settings.set(MODULE.ID, 'tileDefaultHidden', e.target.checked);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-drop-shadow')) {
+                w.dropShadow = e.target.checked;
+                game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-mode')) { w._onPinModeToggle(e); return; }
+            // Pin params — save immediately
+            if (e.target?.matches?.('#tiw-pin-size')) {
+                const v = parseInt(e.target.value) || 200;
+                w.pinSize = v;
+                game.settings.set(MODULE.ID, 'pinDefaultSize', v);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-shape')) {
+                w.pinShape = e.target.value;
+                game.settings.set(MODULE.ID, 'pinDefaultShape', e.target.value);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-border-color')) {
+                w.pinBorderColor = e.target.value;
+                const t = root?.querySelector('#tiw-pin-border-text');
+                if (t) t.value = e.target.value;
+                game.settings.set(MODULE.ID, 'pinDefaultBorderColor', e.target.value);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-border-text')) {
+                const val = e.target.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                    w.pinBorderColor = val;
+                    const swatch = root?.querySelector('#tiw-pin-border-color');
+                    if (swatch) swatch.value = val;
+                    game.settings.set(MODULE.ID, 'pinDefaultBorderColor', val);
+                }
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-border-width')) {
+                const v = parseInt(e.target.value);
+                w.pinBorderWidth = v;
+                game.settings.set(MODULE.ID, 'pinDefaultBorderWidth', v);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-imageFit')) {
+                w.pinImageFit = e.target.value;
+                game.settings.set(MODULE.ID, 'pinDefaultImageFit', e.target.value);
+                const zoomGroup = root?.querySelector('.tiw-pin-zoom-group');
+                if (zoomGroup) zoomGroup.style.display = (e.target.value === 'zoom') ? '' : 'none';
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-zoom')) {
+                const v = parseFloat(e.target.value);
+                w.pinImageZoom = v;
+                game.settings.set(MODULE.ID, 'pinDefaultImageZoom', v);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-visibility')) {
+                w.pinVisibility = e.target.checked ? 'observer' : 'gm';
+                game.settings.set(MODULE.ID, 'pinDefaultVisibility', w.pinVisibility);
+                return;
+            }
+            if (e.target?.matches?.('#tiw-pin-shadow')) {
+                w.pinDropShadow = e.target.checked;
+                game.settings.set(MODULE.ID, 'pinDefaultDropShadow', e.target.checked);
+                return;
+            }
         };
         const onScroll = (e) => {
             const w = TileImageWindow._ref;
@@ -309,7 +430,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     static _actionCancelPlacement(event, target){ TileImageWindow._ref?._exitPlacementMode(true); }
     static _actionClearSearch(event, target)    { TileImageWindow._ref?._onClearSearch(event); }
     static _actionFilterToggle(event, target)   { TileImageWindow._ref?._onFilterToggle(event); }
-    static _actionSetDefaults(event, target)    { TileImageWindow._ref?._onSetDefaults(); }
+    static _actionResetDefaults(event, target)  { TileImageWindow._ref?._onResetDefaults(); }
 
     // ------------------------------------------------------------------
     // openWindow
@@ -344,13 +465,19 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             rotation: parseFloat(get('#tiw-param-rotation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
             alpha:    parseFloat(get('#tiw-param-alpha')?.value)    ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
             tint:     get('#tiw-param-tint')?.value                 || '#ffffff',
-            locked:   get('[data-setting-key="tileDefaultLocked"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
-            hidden:   get('[data-setting-key="tileDefaultHidden"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            locked:     get('[data-setting-key="tileDefaultLocked"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
+            hidden:     get('[data-setting-key="tileDefaultHidden"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            foreground: this.tileForeground,
             // Pin-specific (instance state — not DOM inputs)
-            pinMode:       this.pinMode,
-            pinImageFit:   this.pinImageFit,
-            pinVisibility: this.pinVisibility,
-            pinDropShadow: this.pinDropShadow,
+            pinMode:        this.pinMode,
+            pinSize:        this.pinSize,
+            pinShape:       this.pinShape,
+            pinBorderColor: this.pinBorderColor,
+            pinBorderWidth: this.pinBorderWidth,
+            pinImageFit:    this.pinImageFit,
+            pinImageZoom:   this.pinImageZoom,
+            pinVisibility:  this.pinVisibility,
+            pinDropShadow:  this.pinDropShadow,
         };
     }
 
@@ -476,7 +603,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     async _completeTilePlacement(canvasX, canvasY, pending) {
         const { imagePath, imageName, naturalWidth: naturalW0, naturalHeight: naturalH0,
-                assetGridSize, sceneGridSize, rotation, alpha, tint, locked, hidden } = pending;
+                assetGridSize, sceneGridSize, rotation, alpha, tint, locked, hidden, foreground } = pending;
         const naturalW = naturalW0 || sceneGridSize;
         const naturalH = naturalH0 || sceneGridSize;
         const scale    = sceneGridSize / assetGridSize;
@@ -486,10 +613,14 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             `Tile dims: natural=${naturalW}×${naturalH} assetGrid=${assetGridSize} sceneGrid=${sceneGridSize} → placed=${width}×${height}`, '', true, false);
         try {
             const [tileDoc] = await canvas.scene.createEmbeddedDocuments('Tile', [{
-                texture: { src: imagePath, tint: tint !== '#ffffff' ? tint : null },
-                x: Math.round(canvasX - width / 2),
-                y: Math.round(canvasY - height / 2),
-                width, height, rotation, alpha, locked, hidden
+                texture:   { src: imagePath, tint: tint !== '#ffffff' ? tint : null },
+                x:         Math.round(canvasX - width  / 2),
+                y:         Math.round(canvasY - height / 2),
+                width, height, rotation, alpha, locked, hidden,
+                overhead:  foreground,
+                occlusion: foreground
+                    ? { mode: CONST.OCCLUSION_MODES.FADE, alpha: 0.25 }
+                    : { mode: CONST.OCCLUSION_MODES.NONE ?? 0 }
             }]);
             if (this.dropShadow && game.modules.get('tokenmagic')?.active && window.TokenMagic && tileDoc) {
                 const shadowParams = [{
@@ -520,28 +651,28 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             return;
         }
         await pinsAPI.whenReady();
-        const { imagePath, imageName, naturalWidth: naturalW0, naturalHeight: naturalH0,
-                assetGridSize, sceneGridSize, pinImageFit, pinVisibility, pinDropShadow } = pending;
-        const naturalW = naturalW0 || sceneGridSize;
-        const naturalH = naturalH0 || sceneGridSize;
-        const scale    = sceneGridSize / assetGridSize;
-        const width    = Math.round(naturalW * scale);
-        const height   = Math.round(naturalH * scale);
+        const { imagePath, imageName,
+                pinSize, pinShape, pinBorderColor, pinBorderWidth,
+                pinImageFit, pinImageZoom, pinVisibility, pinDropShadow } = pending;
+        const size = Math.max(1, pinSize || 100);
         try {
             await pinsAPI.create({
                 id:         crypto.randomUUID(),
                 moduleId:   MODULE.ID,
-                x:          Math.round(canvasX - width  / 2),
-                y:          Math.round(canvasY - height / 2),
+                type:       'placed-image',
+                x:          Math.round(canvasX - size / 2),
+                y:          Math.round(canvasY - size / 2),
                 image:      imagePath,
-                shape:      'none',
                 imageFit:   pinImageFit,
-                size:       { w: width, h: height },
+                imageZoom:  pinImageFit === 'zoom' ? pinImageZoom : undefined,
+                shape:      pinShape,
+                size:       { w: size, h: size },
                 dropShadow: pinDropShadow,
+                style:      pinBorderWidth > 0 ? { stroke: pinBorderColor, strokeWidth: pinBorderWidth } : undefined,
                 ownership:  { default: pinVisibility === 'observer' ? 2 : 0 }
             }, { sceneId: canvas.scene.id });
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
-                `Tile Image: Pinned "${imageName}" (${width}×${height})`, '', true, false);
+                `Tile Image: Pinned "${imageName}" (${size}×${size})`, '', true, false);
         } catch (err) {
             ui.notifications.error(`Pin placement failed — ${err.message}`);
         }
@@ -783,6 +914,14 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         } else if (input.id === 'tiw-param-alpha') {
             const val = root?.querySelector('#tiw-param-alpha-val');
             if (val) val.textContent = `${Math.round(parseFloat(input.value) * 100)}%`;
+        } else if (input.id === 'tiw-pin-border-width') {
+            const val = root?.querySelector('#tiw-pin-border-width-val');
+            if (val) val.textContent = Math.round(input.value);
+            this.pinBorderWidth = parseInt(input.value);
+        } else if (input.id === 'tiw-pin-zoom') {
+            const val = root?.querySelector('#tiw-pin-zoom-val');
+            if (val) val.textContent = `${Math.round(parseFloat(input.value) * 100)}%`;
+            this.pinImageZoom = parseFloat(input.value);
         }
     }
 
@@ -814,6 +953,16 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (alphaInput) {
             const val = root.querySelector('#tiw-param-alpha-val');
             if (val) val.textContent = `${Math.round(parseFloat(alphaInput.value) * 100)}%`;
+        }
+        const borderWidthInput = root.querySelector('#tiw-pin-border-width');
+        if (borderWidthInput) {
+            const val = root.querySelector('#tiw-pin-border-width-val');
+            if (val) val.textContent = Math.round(borderWidthInput.value);
+        }
+        const zoomInput = root.querySelector('#tiw-pin-zoom');
+        if (zoomInput) {
+            const val = root.querySelector('#tiw-pin-zoom-val');
+            if (val) val.textContent = `${Math.round(parseFloat(zoomInput.value) * 100)}%`;
         }
     }
 
@@ -1002,32 +1151,43 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     _onPinModeToggle(event) {
         this.pinMode = event.target.checked;
+        game.settings.set(MODULE.ID, 'tilePlacementLastMode', this.pinMode);
         if (this.isPlacementMode) this._exitPlacementMode(false);
         this.render(false);
     }
 
-    async _onSetDefaults() {
-        const root = this._getRoot();
-        const get  = (sel) => root?.querySelector(sel);
-        const assetGridSize = parseInt(get('#tiw-param-asset-grid-size')?.value) || 100;
-        await game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', assetGridSize);
-
+    async _onResetDefaults() {
         if (this.pinMode) {
-            await game.settings.set(MODULE.ID, 'pinDefaultImageFit',   this.pinImageFit);
-            await game.settings.set(MODULE.ID, 'pinDefaultVisibility', this.pinVisibility);
-            await game.settings.set(MODULE.ID, 'pinDefaultDropShadow', this.pinDropShadow);
-            ui.notifications.info('Pin defaults saved.');
+            this.pinSize        = 200;
+            this.pinShape       = 'square';
+            this.pinBorderColor = '#ffffff';
+            this.pinBorderWidth = 10;
+            this.pinImageFit    = 'cover';
+            this.pinImageZoom   = 1.0;
+            this.pinVisibility  = 'observer';
+            this.pinDropShadow  = true;
+            await game.settings.set(MODULE.ID, 'pinDefaultSize',        200);
+            await game.settings.set(MODULE.ID, 'pinDefaultShape',       'square');
+            await game.settings.set(MODULE.ID, 'pinDefaultBorderColor', '#ffffff');
+            await game.settings.set(MODULE.ID, 'pinDefaultBorderWidth', 10);
+            await game.settings.set(MODULE.ID, 'pinDefaultImageFit',    'cover');
+            await game.settings.set(MODULE.ID, 'pinDefaultImageZoom',   1.0);
+            await game.settings.set(MODULE.ID, 'pinDefaultVisibility',  'observer');
+            await game.settings.set(MODULE.ID, 'pinDefaultDropShadow',  true);
         } else {
-            const rotation = parseFloat(get('#tiw-param-rotation')?.value) ?? 0;
-            const alpha    = parseFloat(get('#tiw-param-alpha')?.value)    ?? 1.0;
-            const locked   = get('[data-setting-key="tileDefaultLocked"]')?.checked ?? false;
-            const hidden   = get('[data-setting-key="tileDefaultHidden"]')?.checked ?? false;
-            await game.settings.set(MODULE.ID, 'tileDefaultRotation', rotation);
-            await game.settings.set(MODULE.ID, 'tileDefaultAlpha',    alpha);
-            await game.settings.set(MODULE.ID, 'tileDefaultLocked',   locked);
-            await game.settings.set(MODULE.ID, 'tileDefaultHidden',   hidden);
-            ui.notifications.info('Tile defaults saved.');
+            this.tileTint       = '#ffffff';
+            this.tileForeground = false;
+            this.dropShadow     = true;
+            await game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', 100);
+            await game.settings.set(MODULE.ID, 'tileDefaultRotation',      0);
+            await game.settings.set(MODULE.ID, 'tileDefaultAlpha',         1.0);
+            await game.settings.set(MODULE.ID, 'tileDefaultTint',          '#ffffff');
+            await game.settings.set(MODULE.ID, 'tileDefaultForeground',    false);
+            await game.settings.set(MODULE.ID, 'tileDefaultLocked',        false);
+            await game.settings.set(MODULE.ID, 'tileDefaultHidden',        false);
+            await game.settings.set(MODULE.ID, 'tileDropShadow',           true);
         }
+        this.render(false);
     }
 
     async _onDeleteCache() {
@@ -1124,14 +1284,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const path = chip.dataset.libraryPath || null;
         this.selectedLibrary = (!path || this.selectedLibrary === path) ? null : path;
         this.currentFilter = 'all';
-        const root = this._getRoot();
-        root?.querySelectorAll('.tir-library-chip').forEach(el => el.classList.remove('active'));
-        if (this.selectedLibrary) {
-            chip.classList.add('active');
-        } else {
-            root?.querySelector('.tir-library-chip[data-library-path=""]')?.classList.add('active');
-        }
         await this._findMatches();
+        this.render(false); // re-render so category chips reflect the selected library
     }
 
     async _onCategoryFilterClick(event) {

@@ -1,79 +1,19 @@
 <div class="tile-image-window" id="{{appId}}">
 
-    {{!-- Option Bar --}}
+    {{!-- Option Bar: mode toggle + reset button --}}
     <div class="tir-global-controls">
-        <div class="tiw-param-row">
-
-            {{!-- Tile / Pin mode toggle --}}
-            <div class="tir-toggle-container tiw-mode-toggle" {{#unless pinsAvailable}}title="Blacksmith Pin API not available"{{/unless}}>
-                <span class="tir-toggle-label-left">Tile</span>
-                <div class="tir-toggle">
-                    <input type="checkbox" id="tiw-pin-mode" {{#if isPinMode}}checked{{/if}} {{#unless pinsAvailable}}disabled{{/unless}}>
-                    <label for="tiw-pin-mode" class="tir-toggle-slider"></label>
-                </div>
-                <span class="tir-toggle-label-right">Pin</span>
+        <div class="tir-toggle-container tir-mode-toggle tiw-mode-toggle" {{#unless pinsAvailable}}title="Blacksmith Pin API not available"{{/unless}}>
+            <span class="tir-toggle-label-left">Tile</span>
+            <div class="tir-toggle">
+                <input type="checkbox" id="tiw-pin-mode" {{#if isPinMode}}checked{{/if}} {{#unless pinsAvailable}}disabled{{/unless}}>
+                <label for="tiw-pin-mode" class="tir-toggle-slider"></label>
             </div>
-
-            {{!-- Shared: Asset Grid Size + computed size --}}
-            <div class="tiw-param-group">
-                <span class="tiw-param-label">Asset Grid Size</span>
-                <input id="tiw-param-asset-grid-size" type="number" class="blacksmith-input tiw-param-number" value="{{tileAssetGridSize}}" min="16" max="1000" step="1" title="Pixel size of one grid square in the source artwork.">
-            </div>
-            <span class="tiw-computed-size" id="tiw-computed-size" title="Computed placed size (width × height px)">{{tileComputedSize}}</span>
-
-            {{!-- Tile-only params --}}
-            {{#unless isPinMode}}
-            <div class="tiw-param-group tiw-param-group-slider">
-                <span class="tiw-param-label">Rotation <span id="tiw-param-rotation-val">{{tileRotation}}°</span></span>
-                <div class="blacksmith-slider">
-                    <input type="range" id="tiw-param-rotation" class="tiw-param-slider" min="0" max="359" step="1" value="{{tileRotation}}">
-                </div>
-            </div>
-            <div class="tiw-param-group tiw-param-group-slider">
-                <span class="tiw-param-label">Opacity <span id="tiw-param-alpha-val">{{tileAlphaPercent}}%</span></span>
-                <div class="blacksmith-slider">
-                    <input type="range" id="tiw-param-alpha" class="tiw-param-slider" min="0.1" max="1.0" step="0.05" value="{{tileAlpha}}">
-                </div>
-            </div>
-            <div class="tiw-param-group">
-                <span class="tiw-param-label">Tint</span>
-                <div class="tiw-color-row">
-                    <input type="text" id="tiw-param-tint-text" class="blacksmith-input" value="{{tileTint}}" maxlength="7" placeholder="#ffffff" title="Tint color hex value">
-                    <input type="color" id="tiw-param-tint" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
-                </div>
-            </div>
-            {{/unless}}
-
-            {{!-- Pin-only params --}}
-            {{#if isPinMode}}
-            <div class="tiw-param-group">
-                <span class="tiw-param-label">Image Fit</span>
-                <select id="tiw-pin-imageFit" class="blacksmith-select tiw-param-select" title="How the image fills the pin bounds">
-                    <option value="contain" {{#if (eq pinImageFit "contain")}}selected{{/if}}>Contain</option>
-                    <option value="cover"   {{#if (eq pinImageFit "cover")}}selected{{/if}}>Cover</option>
-                </select>
-            </div>
-            <div class="tir-toggle-container">
-                <span class="tir-toggle-label">Players See</span>
-                <div class="tir-toggle">
-                    <input type="checkbox" id="tiw-pin-visibility" {{#if (eq pinVisibility "observer")}}checked{{/if}} title="Observer = visible to players; unchecked = GM only">
-                    <label for="tiw-pin-visibility" class="tir-toggle-slider"></label>
-                </div>
-            </div>
-            <div class="tir-toggle-container">
-                <span class="tir-toggle-label">Drop Shadow</span>
-                <div class="tir-toggle">
-                    <input type="checkbox" id="tiw-pin-shadow" {{#if pinDropShadow}}checked{{/if}}>
-                    <label for="tiw-pin-shadow" class="tir-toggle-slider"></label>
-                </div>
-            </div>
-            {{/if}}
-
-            <button type="button" class="tiw-set-defaults-btn" data-action="setDefaults"
-                title="Save current values as the default for new placements">
-                <i class="fa-solid fa-floppy-disk"></i> Set as Default
-            </button>
+            <span class="tir-toggle-label-right">Pin</span>
         </div>
+        <button type="button" class="tiw-reset-defaults-btn" data-action="resetDefaults"
+            title="Reset all {{#if isPinMode}}pin{{else}}tile{{/if}} options to their factory defaults">
+            <i class="fa-solid fa-rotate-left"></i> Reset Options
+        </button>
     </div>
 
     {{!-- Header: placement status + toggles --}}
@@ -108,6 +48,13 @@
                 {{!-- Tile-only header toggles --}}
                 {{#unless isPinMode}}
                 <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Foreground</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" data-setting-key="tileDefaultForeground" id="tiw-foreground" {{#if tileForeground}}checked{{/if}} title="Place on the Foreground layer (above tokens). Automatically sets Fade occlusion.">
+                        <label for="tiw-foreground" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                <div class="tir-toggle-container">
                     <span class="tir-toggle-label">Locked</span>
                     <div class="tir-toggle">
                         <input type="checkbox" data-setting-key="tileDefaultLocked" id="tiw-locked" {{#if tileLocked}}checked{{/if}}>
@@ -131,6 +78,23 @@
                 </div>
                 {{/if}}
                 {{/unless}}
+                {{!-- Pin-only header toggles --}}
+                {{#if isPinMode}}
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Visible</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" id="tiw-pin-visibility" {{#if (eq pinVisibility "observer")}}checked{{/if}} title="Checked = players see pin (Observer); unchecked = GM only">
+                        <label for="tiw-pin-visibility" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                <div class="tir-toggle-container">
+                    <span class="tir-toggle-label">Drop Shadow</span>
+                    <div class="tir-toggle">
+                        <input type="checkbox" id="tiw-pin-shadow" {{#if pinDropShadow}}checked{{/if}}>
+                        <label for="tiw-pin-shadow" class="tir-toggle-slider"></label>
+                    </div>
+                </div>
+                {{/if}}
             </div>
         </div>
 
@@ -158,6 +122,87 @@
             </div>
         </div>
         {{/if}}
+    </div>
+
+    {{!-- Param Bar: placement parameters + Set as Default --}}
+    <div class="tiw-param-bar">
+        <div class="tiw-param-row">
+
+            {{!-- Tile-only params --}}
+            {{#unless isPinMode}}
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Asset Grid Size</span>
+                <input id="tiw-param-asset-grid-size" type="number" class="blacksmith-input tiw-param-number" value="{{tileAssetGridSize}}" min="16" max="1000" step="1" title="Pixel size of one grid square in the source artwork. Tiles auto-scale so this maps to the scene grid.">
+            </div>
+            <span class="tiw-computed-size" id="tiw-computed-size" title="Computed placed size (width × height px)">{{tileComputedSize}}</span>
+            <div class="tiw-param-group tiw-param-group-slider">
+                <span class="tiw-param-label">Rotation <span id="tiw-param-rotation-val">{{tileRotation}}°</span></span>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-param-rotation" class="tiw-param-slider" min="0" max="359" step="1" value="{{tileRotation}}">
+                </div>
+            </div>
+            <div class="tiw-param-group tiw-param-group-slider">
+                <span class="tiw-param-label">Opacity <span id="tiw-param-alpha-val">{{tileAlphaPercent}}%</span></span>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-param-alpha" class="tiw-param-slider" min="0.1" max="1.0" step="0.05" value="{{tileAlpha}}">
+                </div>
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Tint</span>
+                <div class="tiw-color-row">
+                    <input type="text" id="tiw-param-tint-text" class="blacksmith-input" value="{{tileTint}}" maxlength="7" placeholder="#ffffff" title="Tint color hex value">
+                    <input type="color" id="tiw-param-tint" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
+                </div>
+            </div>
+            {{/unless}}
+
+            {{!-- Pin-only params --}}
+            {{#if isPinMode}}
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Pin Size</span>
+                <input id="tiw-pin-size" type="number" class="blacksmith-input tiw-param-number" value="{{pinSize}}" min="1" max="2000" step="1" title="Pin dimensions in canvas units (width and height)">
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Shape</span>
+                <select id="tiw-pin-shape" class="blacksmith-select tiw-param-select">
+                    <option value="square" {{#if (eq pinShape "square")}}selected{{/if}}>Square</option>
+                    <option value="circle" {{#if (eq pinShape "circle")}}selected{{/if}}>Circle</option>
+                    <option value="none"   {{#if (eq pinShape "none")}}selected{{/if}}>None</option>
+                </select>
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Border Color</span>
+                <div class="tiw-color-row">
+                    <input type="text" id="tiw-pin-border-text" class="blacksmith-input tiw-param-number" value="{{pinBorderColor}}" maxlength="7" placeholder="#ffffff" title="Border color">
+                    <input type="color" id="tiw-pin-border-color" class="tiw-param-color" value="{{pinBorderColor}}" title="Border color">
+                </div>
+            </div>
+            <div class="tiw-param-group tiw-param-group-slider">
+                <span class="tiw-param-label">Border Width <span id="tiw-pin-border-width-val">{{pinBorderWidth}}</span></span>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-pin-border-width" class="tiw-param-slider" min="0" max="25" step="1" value="{{pinBorderWidth}}">
+                </div>
+            </div>
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Image Fit</span>
+                <select id="tiw-pin-imageFit" class="blacksmith-select tiw-param-select" title="How the image fills the pin bounds">
+                    <option value="cover"       {{#if (eq pinImageFit "cover")}}selected{{/if}}>Cover</option>
+                    <option value="contain"     {{#if (eq pinImageFit "contain")}}selected{{/if}}>Contain</option>
+                    <option value="fill"        {{#if (eq pinImageFit "fill")}}selected{{/if}}>Fill</option>
+                    <option value="none"        {{#if (eq pinImageFit "none")}}selected{{/if}}>Actual Size</option>
+                    <option value="scale-down"  {{#if (eq pinImageFit "scale-down")}}selected{{/if}}>Scale Down</option>
+                    <option value="zoom"        {{#if (eq pinImageFit "zoom")}}selected{{/if}}>Zoom</option>
+                </select>
+            </div>
+            <div class="tiw-param-group tiw-param-group-slider tiw-pin-zoom-group"{{#unless isZoomFit}} style="display:none"{{/unless}}>
+                <span class="tiw-param-label">Zoom <span id="tiw-pin-zoom-val">{{pinImageZoomPercent}}%</span></span>
+                <div class="blacksmith-slider">
+                    <input type="range" id="tiw-pin-zoom" class="tiw-param-slider" min="1" max="2" step="0.05" value="{{pinImageZoom}}">
+                </div>
+            </div>
+            {{/if}}
+
+        </div>
     </div>
 
     {{!-- Filter / Search area --}}
