@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [13.1.2] - 2026-05-13
+
+### Added
+- **Tile window — param bar**: Placement parameters (Asset Grid Size, Rotation, Opacity, Tint for tile mode; Pin Size, Shape, Border, Image Fit, Zoom for pin mode) moved from the option bar into a dedicated secondary toolbar row between the header and the search area. The option bar now contains only the Tile/Pin toggle and the Reset Options button.
+- **Tile window — Visible and Drop Shadow to header**: In pin mode, the Visible and Drop Shadow toggles moved into the header controls area, consistent with the tile-mode toggles (Foreground, Locked, Hidden, Drop Shadow).
+- **Pin mode — Image Fit options**: All six Foundry image-fit values now available in the dropdown — Cover, Contain, Fill, Actual Size, Scale Down, Zoom. Selecting Zoom reveals an inline **Zoom** slider (100–200%) that passes `imageZoom` to the Pins API.
+- **Pin double-click — image viewer**: Double-clicking a placed-image pin on the canvas opens the Foundry `ImagePopout` with the pin's image. GMs also broadcast the image to all connected players via socket. Registered at module `ready` for all users via `pins.on('doubleClick', …, { moduleId })` so it works whether or not the tile window is open. Cleaned up via `Hooks.once('unloadModule', …)`.
+- **Pin type registration moved to module ready**: `pins.registerPinType(MODULE.ID, 'placed-image', 'Placed Image')` now called at module `ready` for all clients, not inside the GM-only `openWindow()`.
+
+### Changed
+- **Tile/Pin defaults — auto-save**: All placement parameters are now saved to their world settings immediately on change. There is no longer a "Set as Default" button. The **Reset Options** button (right side of the option bar) resets all options for the current mode to factory defaults: tile (Asset Grid Size 100, Rotation 0°, Opacity 100%, Tint #ffffff, Foreground off, Locked off, Hidden off, Drop Shadow on); pin (Pin Size 200, Shape Square, Border #ffffff width 10, Image Fit Cover, Zoom 1.0, Visible on, Drop Shadow on).
+- **Tile default Drop Shadow**: Default changed from `false` to `true`. Pin defaults updated to match reset values: size 200, imageFit `cover`, dropShadow `true`.
+
+### Fixed
+- **Library filter empty after refresh**: `_compressFileData` did not save `metadata.sourcePath` in the compressed cache format (`m` object). After a page reload, `sourcePath` was missing on all entries, so any library chip click filtered to 0 results. Fixed by adding `sp` to the compressed metadata and restoring it in `_loadCacheFromStorage`. A one-time rescan is needed to rebuild the cache with the new format.
+- **Category chips not updating on library click**: Clicking a library chip called `_findMatches()` / `_updateResults()`, which only refreshes the image grid. The category chips are Handlebars-rendered and never reflected the selected library. Fixed by calling `render(false)` after `_findMatches()` in `_onLibraryClick`, which re-runs `_getCategories()` scoped to the selected library.
+- **Pin select dropdowns triggering sort re-render**: The `onChange` delegation handler matched `.blacksmith-select` which caught the pin Shape and Image Fit selects (both use that class), incorrectly calling `_onSortOrderChange` and setting `sortOrder` to e.g. `'square'`. Fixed by changing the sort match to `[name="sortOrder"]`.
+
 ## [13.1.1] - 2026-05-13
 
 ### Added
