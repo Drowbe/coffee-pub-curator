@@ -141,7 +141,7 @@ function initializeCurator(blacksmith) {
     blacksmith.registerMenubarTool('placetile', {
         icon: 'fa-solid fa-map',
         name: 'placetile',
-        title: 'Place Tile',
+        title: 'Place Image',
         tooltip: null,
         onClick: () => TileImageWindow.openWindow(),
         zone: 'middle',
@@ -165,7 +165,7 @@ function initializeCurator(blacksmith) {
         document.addEventListener('contextmenu', (event) => {
             const tokenBtn = event.target?.closest?.('[title="Replace Token"]');
             const portraitBtn = event.target?.closest?.('[title="Replace Portrait"]');
-            const tileBtn = event.target?.closest?.('[title="Place Tile"]');
+            const tileBtn = event.target?.closest?.('[title="Place Image"]');
             const mode = tokenBtn ? 'token' : (portraitBtn ? 'portrait' : null);
 
             if (tileBtn) {

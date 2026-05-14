@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pin type registration moved to module ready**: `pins.registerPinType(MODULE.ID, 'placed-image', 'Placed Image')` now called at module `ready` for all clients, not inside the GM-only `openWindow()`.
 
 ### Changed
+- **Menubar button renamed**: "Place Tile" → **"Place Image"** to reflect that the window places both tiles and pins.
+- **Foreground tile placement fixed**: Foreground tiles now correctly render above tokens. Root cause: Foundry v13 determines foreground vs background by `elevation >= scene.foregroundElevation`, not by `overhead` alone. Added `elevation: canvas.scene.foregroundElevation ?? 20` to the tile creation data when foreground mode is on. `overhead: true` is still set (enables the occlusion/fade system); `elevation` is the v13 gate that actually routes the tile to the overhead layer.
 - **Tile/Pin defaults — auto-save**: All placement parameters are now saved to their world settings immediately on change. There is no longer a "Set as Default" button. The **Reset Options** button (right side of the option bar) resets all options for the current mode to factory defaults: tile (Asset Grid Size 100, Rotation 0°, Opacity 100%, Tint #ffffff, Foreground off, Locked off, Hidden off, Drop Shadow on); pin (Pin Size 200, Shape Square, Border #ffffff width 10, Image Fit Cover, Zoom 1.0, Visible on, Drop Shadow on).
 - **Tile default Drop Shadow**: Default changed from `false` to `true`. Pin defaults updated to match reset values: size 200, imageFit `cover`, dropShadow `true`.
 

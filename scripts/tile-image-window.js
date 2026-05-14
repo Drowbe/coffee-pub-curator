@@ -618,6 +618,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 y:         Math.round(canvasY - height / 2),
                 width, height, rotation, alpha, locked, hidden,
                 overhead:  foreground,
+                elevation: foreground ? (canvas.scene.foregroundElevation ?? 20) : 0,
                 occlusion: foreground
                     ? { mode: CONST.OCCLUSION_MODES.FADE, alpha: 0.25 }
                     : { mode: CONST.OCCLUSION_MODES.NONE ?? 0 }
