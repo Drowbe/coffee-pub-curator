@@ -29,6 +29,14 @@
     min-height: 450px;
 }
 
+/* ---- Tile/Pin mode toggle in the option bar ---- */
+.tiw-mode-toggle {
+    padding-right: 8px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
 /* ---- Tile parameter row inside the option bar ---- */
 .tiw-param-row {
     display: flex;
@@ -56,24 +64,9 @@
     white-space: nowrap;
 }
 
-.tiw-param-input {
-    width: 62px;
-    background: rgba(0, 0, 0, 0.5) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    border-radius: 3px;
-    color: #e0e0e0 !important;
-    font-size: 0.82em;
-    padding: 2px 4px;
-    text-align: center;
-}
-
-.tiw-param-input-sm {
-    width: 50px !important;
-}
-
-.tiw-param-input-wide {
-    width: 70px !important;
-}
+/* Width-only size helpers — Blacksmith provides all visual styling */
+.tiw-param-number { width: 70px; text-align: center; }
+.tiw-param-select { width: 90px; }
 
 /* Computed placed-size readout (updates when an image is selected) */
 .tiw-computed-size {
@@ -83,11 +76,6 @@
     padding: 0 4px;
     border-left: 1px solid rgba(255, 255, 255, 0.1);
     margin-left: 2px;
-}
-
-.tiw-param-input:focus {
-    outline: none;
-    border-color: rgba(255, 100, 0, 0.7) !important;
 }
 
 /* ---- Slider — constrain blacksmith-slider width in the compact option bar ---- */

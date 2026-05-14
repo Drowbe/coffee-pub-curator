@@ -1085,6 +1085,15 @@ export function registerSettings(blacksmithApi) {
         requiresReload: false,
         group: GROUP
     });
+    game.settings.register(MODULE.ID, 'pinDefaultImageFit', {
+        type: String, config: false, scope: 'world', default: 'contain', group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultVisibility', {
+        type: String, config: false, scope: 'world', default: 'observer', group: GROUP
+    });
+    game.settings.register(MODULE.ID, 'pinDefaultDropShadow', {
+        type: Boolean, config: false, scope: 'world', default: false, group: GROUP
+    });
     game.settings.register(MODULE.ID, 'tokenDropShadow', {
         name: MODULE.ID + '.tokenDropShadow-Label',
         hint: MODULE.ID + '.tokenDropShadow-Hint',

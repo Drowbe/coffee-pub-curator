@@ -36,7 +36,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
         this.tileTint = '#ffffff';
         this.dropShadow = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', false);
-        this.selectedLibrary = null; // null = All libraries
+        this.selectedLibrary = null;
+
+        // Pin mode state
+        this.pinMode = false;
+        this.pinImageFit    = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultImageFit',    'contain');
+        this.pinVisibility  = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultVisibility',  'observer');
+        this.pinDropShadow  = BlacksmithUtils.getSettingSafely(MODULE.ID, 'pinDefaultDropShadow',  false);
 
         // Placement mode state
         this._pendingPlacement = null;
@@ -128,7 +134,12 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             isPlacementMode: this.isPlacementMode,
             pendingImageName: this._pendingPlacement?.imageName ?? '',
             tmfxActive: game.modules.get('tokenmagic')?.active ?? false,
-            dropShadow: this.dropShadow
+            dropShadow: this.dropShadow,
+            isPinMode: this.pinMode,
+            pinsAvailable: !!(game.modules.get('coffee-pub-blacksmith')?.api?.pins?.isAvailable?.()),
+            pinImageFit: this.pinImageFit,
+            pinVisibility: this.pinVisibility,
+            pinDropShadow: this.pinDropShadow
         };
     }
 
@@ -195,6 +206,10 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 return;
             }
             if (e.target?.matches?.('#tiw-drop-shadow')) { w.dropShadow = e.target.checked; game.settings.set(MODULE.ID, 'tileDropShadow', e.target.checked); return; }
+            if (e.target?.matches?.('#tiw-pin-mode'))       { w._onPinModeToggle(e); return; }
+            if (e.target?.matches?.('#tiw-pin-imageFit'))   { w.pinImageFit   = e.target.value;   return; }
+            if (e.target?.matches?.('#tiw-pin-visibility')) { w.pinVisibility = e.target.checked ? 'observer' : 'gm'; return; }
+            if (e.target?.matches?.('#tiw-pin-shadow'))     { w.pinDropShadow = e.target.checked; return; }
         };
         const onScroll = (e) => {
             const w = TileImageWindow._ref;
@@ -317,7 +332,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     // ------------------------------------------------------------------
 
     _snapshotParams(naturalWidth, naturalHeight) {
-        // Read all option-bar values NOW, before any re-render can reset them.
+        // Capture ALL option-bar values now, before any re-render can reset them.
         const root = this._getRoot();
         const get  = s => root?.querySelector(s);
         return {
@@ -325,11 +340,17 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             naturalHeight,
             assetGridSize: parseInt(get('#tiw-param-asset-grid-size')?.value) || BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAssetGridSize', 100),
             sceneGridSize: canvas.scene?.grid?.size || canvas.grid?.size || 100,
-            rotation:      parseFloat(get('#tiw-param-rotation')?.value)           ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
-            alpha:         parseFloat(get('#tiw-param-alpha')?.value)              ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
-            tint:          get('#tiw-param-tint')?.value                           || '#ffffff',
-            locked:        get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
-            hidden:        get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            // Tile-specific
+            rotation: parseFloat(get('#tiw-param-rotation')?.value) ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultRotation', 0),
+            alpha:    parseFloat(get('#tiw-param-alpha')?.value)    ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAlpha', 1.0),
+            tint:     get('#tiw-param-tint')?.value                 || '#ffffff',
+            locked:   get('[data-setting-key="tileDefaultLocked"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultLocked', false),
+            hidden:   get('[data-setting-key="tileDefaultHidden"]')?.checked ?? BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultHidden', false),
+            // Pin-specific (instance state — not DOM inputs)
+            pinMode:       this.pinMode,
+            pinImageFit:   this.pinImageFit,
+            pinVisibility: this.pinVisibility,
+            pinDropShadow: this.pinDropShadow,
         };
     }
 
@@ -366,7 +387,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         tooltip.innerHTML = `
             <img class="tiw-placement-tooltip-img" src="${imagePath}" alt="${imageName}">
             <div class="tiw-placement-tooltip-name">${imageName}</div>
-            <div class="tiw-placement-tooltip-hint">Click to place &nbsp;&middot;&nbsp; Esc to cancel</div>
+            <div class="tiw-placement-tooltip-hint">${this.pinMode ? 'Click to pin' : 'Click to place'} &nbsp;&middot;&nbsp; Esc to cancel</div>
         `;
         document.body.appendChild(tooltip);
         this._placementTooltip = tooltip;
@@ -435,22 +456,27 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     async _completePlacement(clickEvent) {
         if (!this._pendingPlacement) return;
-
-        // Capture snapshot BEFORE _exitPlacementMode nulls _pendingPlacement
-        const { imagePath, imageName,
-                naturalWidth: naturalW0, naturalHeight: naturalH0,
-                assetGridSize, sceneGridSize,
-                rotation, alpha, tint, locked, hidden } = this._pendingPlacement;
+        const pending = { ...this._pendingPlacement };
         this._exitPlacementMode(false);
 
         // Convert screen coordinates → canvas stage coordinates
         const canvasEl = canvas.app?.view;
         const rect = canvasEl?.getBoundingClientRect() ?? { left: 0, top: 0 };
-        const screenX = clickEvent.clientX - rect.left;
-        const screenY = clickEvent.clientY - rect.top;
         const t = canvas.stage?.worldTransform;
-        const canvasX = t ? (screenX - t.tx) / t.a : screenX;
-        const canvasY = t ? (screenY - t.ty) / t.d : screenY;
+        const canvasX = t ? (clickEvent.clientX - rect.left - t.tx) / t.a : (clickEvent.clientX - rect.left);
+        const canvasY = t ? (clickEvent.clientY - rect.top  - t.ty) / t.d : (clickEvent.clientY - rect.top);
+
+        if (pending.pinMode) {
+            await this._completePinPlacement(canvasX, canvasY, pending);
+        } else {
+            await this._completeTilePlacement(canvasX, canvasY, pending);
+        }
+        this.render(false);
+    }
+
+    async _completeTilePlacement(canvasX, canvasY, pending) {
+        const { imagePath, imageName, naturalWidth: naturalW0, naturalHeight: naturalH0,
+                assetGridSize, sceneGridSize, rotation, alpha, tint, locked, hidden } = pending;
         const naturalW = naturalW0 || sceneGridSize;
         const naturalH = naturalH0 || sceneGridSize;
         const scale    = sceneGridSize / assetGridSize;
@@ -458,7 +484,6 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         const height   = Math.round(naturalH * scale);
         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
             `Tile dims: natural=${naturalW}×${naturalH} assetGrid=${assetGridSize} sceneGrid=${sceneGridSize} → placed=${width}×${height}`, '', true, false);
-
         try {
             const [tileDoc] = await canvas.scene.createEmbeddedDocuments('Tile', [{
                 texture: { src: imagePath, tint: tint !== '#ffffff' ? tint : null },
@@ -466,40 +491,60 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 y: Math.round(canvasY - height / 2),
                 width, height, rotation, alpha, locked, hidden
             }]);
-
             if (this.dropShadow && game.modules.get('tokenmagic')?.active && window.TokenMagic && tileDoc) {
                 const shadowParams = [{
-                    filterType: 'shadow',
-                    filterId: 'myShadow',
-                    rotation: 35,
-                    blur: 2,
-                    quality: 5,
-                    distance: 5,
-                    alpha: 0.8,
-                    padding: 10,
-                    shadowOnly: false,
-                    color: 0x000000,
-                    zOrder: 6000,
+                    filterType: 'shadow', filterId: 'myShadow',
+                    rotation: 35, blur: 2, quality: 5, distance: 5,
+                    alpha: 0.8, padding: 10, shadowOnly: false, color: 0x000000, zOrder: 6000,
                     animated: {
                         blur:     { active: false, loopDuration: 1,   animType: 'syncCosOscillation', val1: 2,  val2: 4  },
                         rotation: { active: false, loopDuration: 100, animType: 'syncSinOscillation', val1: 33, val2: 37 }
                     }
                 }];
-                // Wait for the canvas to draw the tile placeable before TMFX can target it
                 setTimeout(() => {
                     const placeable = tileDoc.object;
                     if (placeable) TokenMagic.addUpdateFilters(placeable, shadowParams);
                 }, 150);
             }
-
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
-                `Tile Image: Placed "${imageName}" (${width}x${height})`, '', true, false);
+                `Tile Image: Placed "${imageName}" (${width}×${height})`, '', true, false);
         } catch (err) {
             ui.notifications.error(`Tile Image: Failed to place tile — ${err.message}`);
         }
+    }
 
-        // Re-render to clear placement mode banner
-        this.render(false);
+    async _completePinPlacement(canvasX, canvasY, pending) {
+        const pinsAPI = game.modules.get('coffee-pub-blacksmith')?.api?.pins;
+        if (!pinsAPI?.isAvailable()) {
+            ui.notifications.warn('Pin placement requires the Blacksmith module with the Pins API active.');
+            return;
+        }
+        await pinsAPI.whenReady();
+        const { imagePath, imageName, naturalWidth: naturalW0, naturalHeight: naturalH0,
+                assetGridSize, sceneGridSize, pinImageFit, pinVisibility, pinDropShadow } = pending;
+        const naturalW = naturalW0 || sceneGridSize;
+        const naturalH = naturalH0 || sceneGridSize;
+        const scale    = sceneGridSize / assetGridSize;
+        const width    = Math.round(naturalW * scale);
+        const height   = Math.round(naturalH * scale);
+        try {
+            await pinsAPI.create({
+                id:         crypto.randomUUID(),
+                moduleId:   MODULE.ID,
+                x:          Math.round(canvasX - width  / 2),
+                y:          Math.round(canvasY - height / 2),
+                image:      imagePath,
+                shape:      'none',
+                imageFit:   pinImageFit,
+                size:       { w: width, h: height },
+                dropShadow: pinDropShadow,
+                ownership:  { default: pinVisibility === 'observer' ? 2 : 0 }
+            }, { sceneId: canvas.scene.id });
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
+                `Tile Image: Pinned "${imageName}" (${width}×${height})`, '', true, false);
+        } catch (err) {
+            ui.notifications.error(`Pin placement failed — ${err.message}`);
+        }
     }
 
     _highlightSelectedThumb(imagePath) {
@@ -955,22 +1000,34 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this.render(true);
     }
 
+    _onPinModeToggle(event) {
+        this.pinMode = event.target.checked;
+        if (this.isPlacementMode) this._exitPlacementMode(false);
+        this.render(false);
+    }
+
     async _onSetDefaults() {
         const root = this._getRoot();
-        const get = (sel) => root?.querySelector(sel);
+        const get  = (sel) => root?.querySelector(sel);
         const assetGridSize = parseInt(get('#tiw-param-asset-grid-size')?.value) || 100;
-        const rotation      = parseFloat(get('#tiw-param-rotation')?.value)  ?? 0;
-        const alpha         = parseFloat(get('#tiw-param-alpha')?.value)     ?? 1.0;
-        const locked        = get('[data-setting-key="tileDefaultLocked"]')?.checked  ?? false;
-        const hidden        = get('[data-setting-key="tileDefaultHidden"]')?.checked  ?? false;
-
         await game.settings.set(MODULE.ID, 'tileDefaultAssetGridSize', assetGridSize);
-        await game.settings.set(MODULE.ID, 'tileDefaultRotation',      rotation);
-        await game.settings.set(MODULE.ID, 'tileDefaultAlpha',         alpha);
-        await game.settings.set(MODULE.ID, 'tileDefaultLocked',        locked);
-        await game.settings.set(MODULE.ID, 'tileDefaultHidden',        hidden);
 
-        ui.notifications.info('Tile defaults saved.');
+        if (this.pinMode) {
+            await game.settings.set(MODULE.ID, 'pinDefaultImageFit',   this.pinImageFit);
+            await game.settings.set(MODULE.ID, 'pinDefaultVisibility', this.pinVisibility);
+            await game.settings.set(MODULE.ID, 'pinDefaultDropShadow', this.pinDropShadow);
+            ui.notifications.info('Pin defaults saved.');
+        } else {
+            const rotation = parseFloat(get('#tiw-param-rotation')?.value) ?? 0;
+            const alpha    = parseFloat(get('#tiw-param-alpha')?.value)    ?? 1.0;
+            const locked   = get('[data-setting-key="tileDefaultLocked"]')?.checked ?? false;
+            const hidden   = get('[data-setting-key="tileDefaultHidden"]')?.checked ?? false;
+            await game.settings.set(MODULE.ID, 'tileDefaultRotation', rotation);
+            await game.settings.set(MODULE.ID, 'tileDefaultAlpha',    alpha);
+            await game.settings.set(MODULE.ID, 'tileDefaultLocked',   locked);
+            await game.settings.set(MODULE.ID, 'tileDefaultHidden',   hidden);
+            ui.notifications.info('Tile defaults saved.');
+        }
     }
 
     async _onDeleteCache() {

@@ -1,13 +1,28 @@
 <div class="tile-image-window" id="{{appId}}">
 
-    {{!-- Option Bar: tile placement parameters --}}
+    {{!-- Option Bar --}}
     <div class="tir-global-controls">
         <div class="tiw-param-row">
+
+            {{!-- Tile / Pin mode toggle --}}
+            <div class="tir-toggle-container tiw-mode-toggle" {{#unless pinsAvailable}}title="Blacksmith Pin API not available"{{/unless}}>
+                <span class="tir-toggle-label-left">Tile</span>
+                <div class="tir-toggle">
+                    <input type="checkbox" id="tiw-pin-mode" {{#if isPinMode}}checked{{/if}} {{#unless pinsAvailable}}disabled{{/unless}}>
+                    <label for="tiw-pin-mode" class="tir-toggle-slider"></label>
+                </div>
+                <span class="tir-toggle-label-right">Pin</span>
+            </div>
+
+            {{!-- Shared: Asset Grid Size + computed size --}}
             <div class="tiw-param-group">
                 <span class="tiw-param-label">Asset Grid Size</span>
-                <input id="tiw-param-asset-grid-size" type="number" class="tiw-param-input tiw-param-input-wide" value="{{tileAssetGridSize}}" min="16" max="1000" step="1" title="Pixel size of one grid square in the source artwork. Tiles auto-scale to match the scene grid.">
+                <input id="tiw-param-asset-grid-size" type="number" class="blacksmith-input tiw-param-number" value="{{tileAssetGridSize}}" min="16" max="1000" step="1" title="Pixel size of one grid square in the source artwork.">
             </div>
             <span class="tiw-computed-size" id="tiw-computed-size" title="Computed placed size (width × height px)">{{tileComputedSize}}</span>
+
+            {{!-- Tile-only params --}}
+            {{#unless isPinMode}}
             <div class="tiw-param-group tiw-param-group-slider">
                 <span class="tiw-param-label">Rotation <span id="tiw-param-rotation-val">{{tileRotation}}°</span></span>
                 <div class="blacksmith-slider">
@@ -27,6 +42,33 @@
                     <input type="color" id="tiw-param-tint" class="tiw-param-color" value="{{tileTint}}" title="Tint color (white = none)">
                 </div>
             </div>
+            {{/unless}}
+
+            {{!-- Pin-only params --}}
+            {{#if isPinMode}}
+            <div class="tiw-param-group">
+                <span class="tiw-param-label">Image Fit</span>
+                <select id="tiw-pin-imageFit" class="blacksmith-select tiw-param-select" title="How the image fills the pin bounds">
+                    <option value="contain" {{#if (eq pinImageFit "contain")}}selected{{/if}}>Contain</option>
+                    <option value="cover"   {{#if (eq pinImageFit "cover")}}selected{{/if}}>Cover</option>
+                </select>
+            </div>
+            <div class="tir-toggle-container">
+                <span class="tir-toggle-label">Players See</span>
+                <div class="tir-toggle">
+                    <input type="checkbox" id="tiw-pin-visibility" {{#if (eq pinVisibility "observer")}}checked{{/if}} title="Observer = visible to players; unchecked = GM only">
+                    <label for="tiw-pin-visibility" class="tir-toggle-slider"></label>
+                </div>
+            </div>
+            <div class="tir-toggle-container">
+                <span class="tir-toggle-label">Drop Shadow</span>
+                <div class="tir-toggle">
+                    <input type="checkbox" id="tiw-pin-shadow" {{#if pinDropShadow}}checked{{/if}}>
+                    <label for="tiw-pin-shadow" class="tir-toggle-slider"></label>
+                </div>
+            </div>
+            {{/if}}
+
             <button type="button" class="tiw-set-defaults-btn" data-action="setDefaults"
                 title="Save current values as the default for new placements">
                 <i class="fa-solid fa-floppy-disk"></i> Set as Default
@@ -40,6 +82,8 @@
             <div class="tir-header-icon">
                 {{#if isPlacementMode}}
                     <i class="fa-solid fa-crosshairs fa-beat"></i>
+                {{else if isPinMode}}
+                    <i class="fa-solid fa-map-pin"></i>
                 {{else}}
                     <i class="fa-solid fa-map"></i>
                 {{/if}}
@@ -47,13 +91,22 @@
             <div class="tir-header-title">
                 {{#if isPlacementMode}}
                     <div class="tir-main-title">{{pendingImageName}}</div>
-                    <div class="tir-subtitle">Click the canvas to place &mdash; press <strong>Esc</strong> to cancel</div>
+                    {{#if isPinMode}}
+                        <div class="tir-subtitle">Click the canvas to pin &mdash; press <strong>Esc</strong> to cancel</div>
+                    {{else}}
+                        <div class="tir-subtitle">Click the canvas to place &mdash; press <strong>Esc</strong> to cancel</div>
+                    {{/if}}
+                {{else if isPinMode}}
+                    <div class="tir-main-title">Pin Image</div>
+                    <div class="tir-subtitle">Click an image to begin pinning</div>
                 {{else}}
                     <div class="tir-main-title">Place Tile</div>
                     <div class="tir-subtitle">Click a tile image to begin placement</div>
                 {{/if}}
             </div>
             <div class="tir-header-controls">
+                {{!-- Tile-only header toggles --}}
+                {{#unless isPinMode}}
                 <div class="tir-toggle-container">
                     <span class="tir-toggle-label">Locked</span>
                     <div class="tir-toggle">
@@ -77,6 +130,7 @@
                     </div>
                 </div>
                 {{/if}}
+                {{/unless}}
             </div>
         </div>
 
@@ -184,7 +238,9 @@
 
     {{!-- Results header --}}
     <div class="tir-token-replacement-header-container">
-        <div class="tir-token-replacement-header-left"><i class="fas fa-map"></i> Matching Tiles</div>
+        <div class="tir-token-replacement-header-left">
+            {{#if isPinMode}}<i class="fas fa-map-pin"></i> Matching Images{{else}}<i class="fas fa-map"></i> Matching Tiles{{/if}}
+        </div>
         <div class="tir-token-replacement-header-right">
             <span id="tir-results-details-count" class="tir-results-details-count"><i class="fas fa-images"></i>0 of 0 Showing</span>
         </div>
@@ -223,7 +279,7 @@
             <div class="blacksmith-window-template-action-right">
                 {{#if isPlacementMode}}
                     <button type="button" class="blacksmith-window-btn-secondary" data-action="cancelPlacement">
-                        <i class="fas fa-times"></i> Cancel Placement
+                        <i class="fas fa-times"></i> {{#if isPinMode}}Cancel Pin{{else}}Cancel Placement{{/if}}
                     </button>
                 {{/if}}
             </div>

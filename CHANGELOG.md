@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [13.1.1] - 2026-05-13
 
 ### Added
+- **Pin Mode — Tile window**: A **Tile / Pin** toggle in the option bar switches the placement engine from Foundry tiles to Blacksmith Pins. The toggle is disabled (greyed out) when the Blacksmith Pin API is not available. In Pin Mode:
+  - **Image Fit** (Contain / Cover) — controls how the image fills the pin bounds. Contain preserves aspect ratio; Cover crops to fill.
+  - **Players See** toggle — sets pin ownership to `OBSERVER` (players see the pin) or `NONE` (GM-only).
+  - **Drop Shadow** toggle — uses the Pin API's native `dropShadow` flag; no TMFX dependency.
+  - Tile-specific controls (Rotation, Opacity, Tint, Locked, Hidden, TMFX Drop Shadow) are hidden in Pin Mode.
+  - Header icon changes to `fa-map-pin`, subtitle and action bar button label update accordingly.
+  - **Set as Default** saves pin defaults (Image Fit, Visibility, Drop Shadow) separately from tile defaults; Asset Grid Size is shared.
+  - Placement uses `pins.create({ shape: 'none', imageFit, size, dropShadow, ownership }, { sceneId })` — single call, no separate `place()` step needed.
+  - Switching mode while in placement mode cancels the active placement cleanly.
 - **Tile Image Placement window** (`TileImageWindow`): New browser window for placing map/environment tiles directly onto the canvas from a scanned image library. Accessible from the CoffeePub toolbar (`fa-map` icon).
   - Full image scanning and tagging pipeline via `ImageCacheManager.MODES.TILE`, sharing the same caching infrastructure as Token and Portrait modes.
   - **Asset Grid Size** — replaces fixed Width/Height. Tiles auto-scale so source artwork grid squares map to the scene's grid size: `placed = natural × (sceneGrid ÷ assetGridSize)`. Aspect ratio always preserved. Image natural dimensions are resolved via `foundry.canvas.loadTexture()` at selection time.
