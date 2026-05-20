@@ -915,15 +915,14 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                     name: 'Copy as Markdown',
                     icon: 'fa-solid fa-file-code',
                     callback: () => this._copyToClipboard(`![${imageName || 'image'}](${imagePath})`, 'Markdown copied to clipboard')
+                },
+                {
+                    name: 'Copy To Location...',
+                    icon: 'fa-solid fa-folder-plus',
+                    description: 'Copy this image to another folder with a new name',
+                    callback: () => this._showCopyToDialog(imagePath, imageName)
                 }
             ]
-        });
-
-        coreItems.push({
-            name: 'Copy To Location...',
-            icon: 'fa-solid fa-folder-plus',
-            description: 'Copy this image to another folder with a new name',
-            callback: () => this._showCopyToDialog(imagePath, imageName)
         });
 
         coreItems.push({
