@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [13.1.3] - 2026-05-19
+
+### Added
+- **Pin tags from image metadata**: When a pin is placed, the image's `primaryTags` and `secondaryTags` from the tile cache are automatically applied as pin tags. Tags appear in Blacksmith's pin manager and can be used for filtering and visibility profiles.
+
+### Changed
+- **Pin type renamed**: `placed-image` → `curator-image`. Registered with Blacksmith as `"Curator Image"`. Existing pins with the old type remain in scene flags unchanged.
+- **Pin visibility model updated for Blacksmith schema v7**: Pin creation now sets `config.blacksmithAccess: 'gm'` (only the GM can edit/move/delete placed pins) and `config.blacksmithVisibility: 'visible' | 'hidden'` alongside `ownership`, matching the decoupled access + visibility model introduced in Blacksmith schema v7. The Visible toggle still controls both the ownership level (OBSERVER vs NONE) and the new visibility field.
+- **Menubar button renamed**: "Place Tile" → **"Place Image"** to reflect that the window places both tiles and pins.
+
+### Fixed
+- **Foreground tile placement**: Foreground tiles now correctly render above tokens on the Foundry v13 canvas. Root cause: v13 determines layer by `elevation >= scene.foregroundElevation`, not `overhead` alone. Added `elevation: canvas.scene.foregroundElevation ?? 20` when foreground mode is on. `overhead: true` is kept to enable the occlusion/fade system.
+- **Pins not appearing after placement**: When the Blacksmith layer was never activated in the current session, `PinRenderer.getContainer()` returned null and `create()` silently skipped rendering. Fixed by calling `await pinsAPI.reload()` after `create()`, which initializes the layer container if needed.
+
 ## [13.1.2] - 2026-05-13
 
 ### Added
