@@ -656,11 +656,21 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 pinSize, pinShape, pinBorderColor, pinBorderWidth,
                 pinImageFit, pinImageZoom, pinVisibility, pinDropShadow } = pending;
         const size = Math.max(1, pinSize || 100);
+        const isVisible = pinVisibility === 'observer';
+
+        // Gather the image's primary + secondary tags from the cache
+        const cache = ImageCacheManager.getCache(TILE_MODE);
+        const fileInfo = Array.from(cache.files.values()).find(f => f.fullPath === imagePath);
+        const pinTags = [...new Set([
+            ...(fileInfo?.metadata?.primaryTags   ?? []),
+            ...(fileInfo?.metadata?.secondaryTags ?? [])
+        ])];
+
         try {
             await pinsAPI.create({
                 id:         crypto.randomUUID(),
                 moduleId:   MODULE.ID,
-                type:       'placed-image',
+                type:       'curator-image',
                 x:          Math.round(canvasX - size / 2),
                 y:          Math.round(canvasY - size / 2),
                 image:      imagePath,
@@ -670,8 +680,17 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                 size:       { w: size, h: size },
                 dropShadow: pinDropShadow,
                 style:      pinBorderWidth > 0 ? { stroke: pinBorderColor, strokeWidth: pinBorderWidth } : undefined,
-                ownership:  { default: pinVisibility === 'observer' ? 2 : 0 }
+                tags:       pinTags.length > 0 ? pinTags : undefined,
+                ownership:  { default: isVisible ? 2 : 0 },
+                config: {
+                    blacksmithAccess:     'gm',
+                    blacksmithVisibility: isVisible ? 'visible' : 'hidden'
+                }
             }, { sceneId: canvas.scene.id });
+            // Ensure the Blacksmith layer container is initialized so the pin renders.
+            // create() updates the renderer automatically when the layer is already active,
+            // but reload() is needed when the layer was never activated this session.
+            await pinsAPI.reload().catch(() => {});
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
                 `Tile Image: Pinned "${imageName}" (${size}×${size})`, '', true, false);
         } catch (err) {

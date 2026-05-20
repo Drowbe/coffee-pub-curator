@@ -51,7 +51,7 @@ Hooks.once('ready', async function () {
     // Pin double-click — register for all users via the API (ownership/visibility handled by Blacksmith)
     const pinsAPI = game.modules.get('coffee-pub-blacksmith')?.api?.pins;
     if (pinsAPI?.isAvailable()) {
-        pinsAPI.registerPinType(MODULE.ID, 'placed-image', 'Placed Image');
+        pinsAPI.registerPinType(MODULE.ID, 'curator-image', 'Curator Image');
 
         const offDoubleClick = pinsAPI.on('doubleClick', (evt) => {
             const imagePath = evt.pin?.image;
