@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [13.1.4] - 2026-05-20
+
+### Added
+- **Copy To Location** — right-click any image in the Token, Portrait, or Tile windows and choose **Copy → Copy To Location...** to copy the file into any folder with a new name. A `DialogV2` form pre-fills the current filename and folder; the Browse button opens Foundry's folder picker so you can navigate to any destination without typing a path. Uses `FilePicker.upload` to write the file server-side, making it easy to bring existing tokens and images into a campaign library without leaving the client.
+
 ## [13.1.3] - 2026-05-19
 
 ### Added
