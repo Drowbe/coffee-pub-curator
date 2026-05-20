@@ -920,6 +920,13 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         });
 
         coreItems.push({
+            name: 'Copy To Location...',
+            icon: 'fa-solid fa-folder-plus',
+            description: 'Copy this image to another folder with a new name',
+            callback: () => this._showCopyToDialog(imagePath, imageName)
+        });
+
+        coreItems.push({
             name: 'Open in New Tab',
             icon: 'fa-solid fa-external-link-alt',
             callback: () => window.open(imagePath, '_blank', 'noopener,noreferrer')
@@ -936,6 +943,85 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 className: 'context-menu-above-dialogs',
                 zones: { module: moduleItems, core: coreItems, gm: [] }
             });
+        }
+    }
+
+    async _showCopyToDialog(imagePath, imageName) {
+        const currentFileName = imageName || imagePath.split('/').pop();
+        const currentFolder = imagePath.lastIndexOf('/') > -1
+            ? imagePath.substring(0, imagePath.lastIndexOf('/'))
+            : '';
+
+        const result = await foundry.applications.api.DialogV2.wait({
+            window: { title: 'Copy Image To...' },
+            content: `
+                <div class="form-group stacked">
+                    <label>New Filename</label>
+                    <div class="form-fields">
+                        <input type="text" name="newName" value="${currentFileName}" />
+                    </div>
+                </div>
+                <div class="form-group stacked">
+                    <label>Destination Folder</label>
+                    <div class="form-fields">
+                        <input type="text" name="destFolder" value="${currentFolder}" />
+                        <button type="button" class="curator-copy-browse-btn" title="Browse for folder">
+                            <i class="fas fa-folder-open"></i> Browse
+                        </button>
+                    </div>
+                </div>
+            `,
+            rejectClose: false,
+            render: (app, element) => {
+                const root = element?.element ?? element;
+                root?.querySelector('.curator-copy-browse-btn')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const FP = foundry.applications.apps.FilePicker.implementation;
+                    new FP({
+                        type: 'folder',
+                        current: root?.querySelector('[name="destFolder"]')?.value ?? currentFolder,
+                        callback: (path) => {
+                            const inp = root?.querySelector('[name="destFolder"]');
+                            if (inp) inp.value = path;
+                        }
+                    }).render(true);
+                });
+            },
+            buttons: [
+                {
+                    action: 'copy',
+                    label: 'Copy',
+                    icon: 'fas fa-copy',
+                    default: true,
+                    callback: (event, button, dialog) => {
+                        const root = dialog?.element ?? dialog;
+                        return {
+                            newName: (root?.querySelector('[name="newName"]')?.value ?? '').trim(),
+                            folder: (root?.querySelector('[name="destFolder"]')?.value ?? '').trim()
+                        };
+                    }
+                },
+                { action: 'cancel', label: 'Cancel' }
+            ]
+        });
+
+        if (!result || typeof result !== 'object') return;
+        if (!result.newName) { ui.notifications.warn('Please enter a filename.'); return; }
+        await this._copyFileTo(imagePath, result.folder, result.newName);
+    }
+
+    async _copyFileTo(sourcePath, destFolder, newName) {
+        try {
+            const response = await fetch(sourcePath);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const blob = await response.blob();
+            const file = new File([blob], newName, { type: blob.type });
+            const FP = foundry.applications.apps.FilePicker.implementation;
+            await FP.upload('data', destFolder, file, {});
+            ui.notifications.info(`Copied to ${destFolder}/${newName}`);
+        } catch (err) {
+            console.error('[Curator] Copy To failed:', err);
+            ui.notifications.error(`Failed to copy image: ${err.message}`);
         }
     }
 
