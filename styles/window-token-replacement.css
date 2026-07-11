@@ -1092,14 +1092,22 @@
     padding: var(--pad);
     cursor: pointer;
     position: relative;
-  
+
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start; /* image then name */
     gap: var(--gap-v);
-  
+
     transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+
+    /* Performance: let the browser skip layout/paint/decode for off-screen
+       cards in the (very long) results grid. The intrinsic-size hint reserves
+       the correct box so skipped cards don't shift the scrollbar. This keeps
+       scrolling smooth and prevents thousands of full-res images from being
+       decoded and held in memory at once. */
+    content-visibility: auto;
+    contain-intrinsic-size: var(--tile) var(--tile-total-h);
   }
   
   .tir-thumbnail-item:hover {

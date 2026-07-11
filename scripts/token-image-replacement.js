@@ -59,6 +59,26 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         this._hookRegistrationTimeoutId = null;
         this._activeImageElements = new Set();
         this._canvasUpdateInProgress = false;
+
+        // Memoization for _getAggregatedTags() - avoids re-sweeping the full
+        // cache (12k+ files) on every render/tab switch. Keyed by filter state
+        // plus a cache-content signature (lastScan + files.size).
+        this._aggregatedTagsCache = null;
+        this._aggregatedTagsCacheKey = null;
+
+        // IntersectionObserver used to unload off-screen thumbnail images so
+        // memory stays flat regardless of how far the user scrolls.
+        this._thumbnailObserver = null;
+    }
+
+    /**
+     * Invalidate the memoized aggregated-tags result. Call whenever the
+     * underlying tag data changes in a way not captured by the cache signature
+     * (e.g. toggling a FAVORITE tag, which mutates metadata without a rescan).
+     */
+    _invalidateAggregatedTagsCache() {
+        this._aggregatedTagsCache = null;
+        this._aggregatedTagsCacheKey = null;
     }
 
     /**
@@ -145,6 +165,12 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         this._hookRegistrationTimeoutId = this._cancelTrackedTimeout(this._hookRegistrationTimeoutId);
         this._tokenSelectionDebounceTimer = this._cancelTrackedTimeout(this._tokenSelectionDebounceTimer);
         this._cancelAllTrackedTimeouts();
+
+        // Stop watching thumbnails for off-screen unloading
+        if (this._thumbnailObserver) {
+            try { this._thumbnailObserver.disconnect(); } catch (error) { /* ignore */ }
+            this._thumbnailObserver = null;
+        }
 
         // Release image references so decoded textures can be GC'd
         this._activeImageElements.forEach(img => {
@@ -842,6 +868,8 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                     await ImageCacheManager._saveMetadataToStorage(this.mode);
                     ui.notifications.info(`Added ${imageName} to favorites`);
                 }
+                // Tag data changed without a rescan; drop the memoized aggregation.
+                this._invalidateAggregatedTagsCache();
                 if (this.currentFilter === 'favorites') {
                     this._showSearchSpinner();
                     await this._findMatches();
@@ -2184,10 +2212,20 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 });
                 this._activeImageElements.clear();
 
+                // The grid's children are about to be replaced; drop the old
+                // observer (its observed nodes are now detached) and rebuild it
+                // against the fresh set below.
+                if (this._thumbnailObserver) {
+                    try { this._thumbnailObserver.disconnect(); } catch (error) { /* ignore */ }
+                    this._thumbnailObserver = null;
+                }
+
                 grid.innerHTML = resultsHtml;
-                grid.querySelectorAll('img').forEach((img) => {
+                const renderedImgs = grid.querySelectorAll('img');
+                renderedImgs.forEach((img) => {
                     this._activeImageElements.add(img);
                 });
+                this._observeThumbnails(renderedImgs);
             }
             
             // Update the results summary with current counts
@@ -2225,7 +2263,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         return `
             <div class="tir-thumbnail-item ${match.isCurrent ? 'tir-current-image' : ''} ${match.isOriginal ? 'tir-original-image' : ''} ${match.metadata?.tags?.includes('FAVORITE') ? 'tir-favorite-image' : ''} ${recommendedClass}" data-image-path="${match.fullPath}" data-tooltip="${tooltipText}" data-image-name="${match.name}">
                 <div class="tir-thumbnail-image">
-                    <img src="${match.fullPath}" alt="${match.name}" loading="lazy">
+                    <img src="${match.fullPath}" alt="${match.name}" loading="lazy" decoding="async">
                     ${match.isCurrent ? `
                         <div class="tir-thumbnail-current-badge"><i class="fas fa-check"></i></div>
                     ` : isRecommended ? `
@@ -2385,6 +2423,63 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         
     }
 
+    /**
+     * Lazily create the IntersectionObserver that keeps the number of decoded
+     * thumbnails bounded. Infinite scroll appends cards without removing them,
+     * so without this the decoded bitmaps for every card the user has scrolled
+     * past stay resident in memory. When a card scrolls well outside the
+     * viewport we drop its <img> src (stashing it in data-src); when it scrolls
+     * back near the viewport we restore it. Combined with content-visibility on
+     * the cards, this keeps memory roughly flat regardless of scroll depth.
+     * @returns {IntersectionObserver|null}
+     */
+    _getThumbnailObserver() {
+        if (this._thumbnailObserver) return this._thumbnailObserver;
+
+        const grid = this._getRoot()?.querySelector('.tir-thumbnails-grid');
+        if (!grid) return null;
+
+        this._thumbnailObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                const img = entry.target;
+                if (entry.isIntersecting) {
+                    // Coming into range: restore the source if we unloaded it.
+                    if (!img.getAttribute('src') && img.dataset.src) {
+                        img.src = img.dataset.src;
+                        delete img.dataset.src;
+                    }
+                } else {
+                    // Scrolled well out of range: unload to free decoded memory.
+                    const current = img.getAttribute('src');
+                    if (current) {
+                        img.dataset.src = current;
+                        img.removeAttribute('src');
+                    }
+                }
+            }
+        }, {
+            root: grid,
+            // Keep a generous buffer (~1.5 screens) loaded on each side so
+            // normal scrolling never reveals an unloaded image.
+            rootMargin: '900px 0px 900px 0px',
+            threshold: 0
+        });
+
+        return this._thumbnailObserver;
+    }
+
+    /**
+     * Register a set of thumbnail <img> elements with the off-screen observer.
+     * @param {Iterable<HTMLImageElement>} imgs
+     */
+    _observeThumbnails(imgs) {
+        const observer = this._getThumbnailObserver();
+        if (!observer) return;
+        for (const img of imgs) {
+            observer.observe(img);
+        }
+    }
+
     async _onScroll(event) {
         const element = event.target;
         const threshold = 100; // Load more when 100px from bottom
@@ -2407,8 +2502,13 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         const root = this._getRoot();
         const grid = root?.querySelector('.tir-thumbnails-grid');
         if (grid && newItems.length > 0) {
+            const before = grid.querySelectorAll('img').length;
             grid.insertAdjacentHTML('beforeend', newItems.map(m => this._renderMatchCard(m)).join(''));
-            grid.querySelectorAll('img').forEach(img => this._activeImageElements.add(img));
+            // Only touch the newly appended <img> nodes, not the whole grid.
+            const allImgs = grid.querySelectorAll('img');
+            const appended = Array.from(allImgs).slice(before);
+            appended.forEach(img => this._activeImageElements.add(img));
+            this._observeThumbnails(appended);
         }
         const countEl = root?.querySelector('#tir-results-details-count');
         if (countEl) countEl.innerHTML = `<i class="fas fa-images"></i>${this.matches.length} of ${this.allMatches.length} Showing`;
@@ -3308,6 +3408,31 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
     }
 
     _getAggregatedTags() {
+        // Memoization: this function sweeps the entire cache (12k+ files) in
+        // category mode and is called on every getData() render and every
+        // _updateResults(). Return a cached result when nothing that affects
+        // the output has changed. The cache-content signature (lastScan +
+        // files.size) invalidates the memo whenever the cache is rescanned.
+        const cache = ImageCacheManager.getCache(this.mode);
+        const cacheKey = [
+            this.mode,
+            this.currentFilter,
+            this.selectedLibrary || '',
+            this.selectedToken?.id || this.selectedToken?.document?.id || '',
+            this.searchTerm || '',
+            this.tagSortMode,
+            Array.from(this.selectedTags).sort().join('|'),
+            cache?.lastScan || 0,
+            cache?.files?.size || 0,
+            // Search/Selected mode aggregates from the visible matches, so the
+            // current match count is part of the identity in that branch.
+            this.searchTerm ? `m:${this.matches.length}` : 'cat'
+        ].join('::');
+
+        if (this._aggregatedTagsCacheKey === cacheKey && this._aggregatedTagsCache) {
+            return this._aggregatedTagsCache;
+        }
+
         const primaryCounts = new Map();
         const secondaryCounts = new Map();
         const addTag = (tag, metadata) => {
@@ -3417,10 +3542,14 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 return this._sortTagsByMode(a, b);
             });
 
-        return {
+        const result = {
             primary: sortEntries(primaryCounts).map(([tag]) => tag),
             secondary: sortEntries(secondaryCounts).map(([tag]) => tag)
         };
+
+        this._aggregatedTagsCacheKey = cacheKey;
+        this._aggregatedTagsCache = result;
+        return result;
     }
 
     /**
