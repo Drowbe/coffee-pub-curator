@@ -34,7 +34,8 @@ export class ImageCacheManager {
         files: new Map(),           // filename -> full path mapping
         folders: new Map(),         // folder path -> array of files
         creatureTypes: new Map(),   // creature type -> array of files
-        categoryIndex: new Map(),   // category -> Set(fileId)
+        categoryIndex: new Map(),   // lowercase category -> Set(fileId)
+        categoryCounts: new Map(),  // raw category -> file count (precomputed at build/load)
         tagIndex: new Map(),        // tag -> Set(fileId)
         lastScan: null,            // timestamp of last scan
         isScanning: false,         // prevent multiple simultaneous scans
@@ -61,6 +62,7 @@ export class ImageCacheManager {
         folders: new Map(),
         creatureTypes: new Map(),
         categoryIndex: new Map(),
+        categoryCounts: new Map(),  // raw category -> file count (precomputed at build/load)
         tagIndex: new Map(),
         lastScan: null,
         isScanning: false,
@@ -86,7 +88,8 @@ export class ImageCacheManager {
         files: new Map(),           // filename -> full path mapping
         folders: new Map(),         // folder path -> array of files
         creatureTypes: new Map(),   // creature type -> array of files
-        categoryIndex: new Map(),   // category -> Set(fileId)
+        categoryIndex: new Map(),   // lowercase category -> Set(fileId)
+        categoryCounts: new Map(),  // raw category -> file count (precomputed at build/load)
         tagIndex: new Map(),        // tag -> Set(fileId)
         lastScan: null,            // timestamp of last scan
         isScanning: false,         // prevent multiple simultaneous scans
@@ -599,33 +602,106 @@ export class ImageCacheManager {
         return metadata;
     }
 
-    static _buildIndexes() {
-        this.cache.categoryIndex = new Map();
-        this.cache.tagIndex = new Map();
+    /**
+     * Derive the raw (original-case) category folder for a file. This is the
+     * single source of truth for "what category does this file belong to",
+     * including the special handling for root-level files (which requires a
+     * lookup through cache.folders). Kept here so it can be computed ONCE at
+     * cache build/load time instead of repeatedly at render time in the window.
+     * @param {Object} fileInfo
+     * @param {string} mode
+     * @returns {string|null}
+     */
+    static _deriveFileCategory(fileInfo, mode = 'token') {
+        if (!fileInfo) return null;
+        const cache = this.getCache(mode);
 
-        for (const [key, file] of this.cache.files.entries()) {
-            const metadata = file.metadata || {};
+        let relativePath = fileInfo.path || '';
+        if (!relativePath && fileInfo.fullPath) {
+            const imagePaths = this.getTokenImagePathsForMode(mode);
+            const basePath = fileInfo.metadata?.sourcePath || (imagePaths[0] || '');
+            if (basePath) {
+                relativePath = fileInfo.fullPath.replace(`${basePath}/`, '');
+            }
+        }
 
-            if (metadata.folderPath && metadata.folderPath.length) {
-                const category = (metadata.folderPath[0] || '').toLowerCase();
-                if (category) {
-                    if (!this.cache.categoryIndex.has(category)) {
-                        this.cache.categoryIndex.set(category, new Set());
+        const pathParts = relativePath.split('/').filter(p => p);
+        let fileCategory = null;
+        if (pathParts.length > 0) {
+            if (pathParts.length === 1 && !relativePath.includes('/')) {
+                // Root file: find the root folder that contains it
+                for (const [folderPath, files] of cache.folders.entries()) {
+                    const folderFiles = Array.isArray(files) ? files : (files?.files || []);
+                    if (!folderPath.includes('/') && folderFiles.includes(pathParts[0])) {
+                        fileCategory = folderPath;
+                        break;
                     }
-                    this.cache.categoryIndex.get(category).add(key);
                 }
+                if (!fileCategory) {
+                    const sourcePath = fileInfo.metadata?.sourcePath;
+                    if (sourcePath) {
+                        const sourceParts = sourcePath.split('/').filter(p => p);
+                        if (sourceParts.length > 0) {
+                            fileCategory = sourceParts[sourceParts.length - 1];
+                        }
+                    }
+                }
+            } else {
+                fileCategory = pathParts[0];
+            }
+        }
+
+        return fileCategory;
+    }
+
+    /**
+     * Precompute per-file category and aggregate indexes for a mode's cache in a
+     * single pass. Runs at cache build/load time (scan finalize + load-from-storage)
+     * so the window never has to recompute category membership at render time.
+     *
+     * Populates:
+     *   - file._tirCategoryRaw (non-enumerable): the file's raw category folder
+     *   - cache.categoryCounts: Map<rawCategory, count>
+     *   - cache.categoryIndex:  Map<lowercaseCategory, Set<fileKey>>
+     *   - cache.tagIndex:       Map<lowercaseTag, Set<fileKey>>
+     * @param {string} mode
+     */
+    static _buildIndexes(mode = 'token') {
+        const cache = this.getCache(mode);
+        if (!cache || !cache.files) return;
+
+        const categoryIndex = new Map();
+        const categoryCounts = new Map();
+        const tagIndex = new Map();
+
+        for (const [key, file] of cache.files.entries()) {
+            if (!file) continue;
+
+            const rawCategory = this._deriveFileCategory(file, mode);
+            // Store non-enumerably so it never bloats serialization or leaks into
+            // spread copies. The window reads this same property.
+            Object.defineProperty(file, '_tirCategoryRaw', { value: rawCategory ?? null, writable: true, configurable: true, enumerable: false });
+
+            if (rawCategory) {
+                categoryCounts.set(rawCategory, (categoryCounts.get(rawCategory) || 0) + 1);
+                const lower = rawCategory.toLowerCase();
+                if (!categoryIndex.has(lower)) categoryIndex.set(lower, new Set());
+                categoryIndex.get(lower).add(key);
             }
 
-            if (Array.isArray(metadata.tags)) {
-                for (const tag of metadata.tags) {
+            const tags = file.metadata?.tags;
+            if (Array.isArray(tags)) {
+                for (const tag of tags) {
                     const tagKey = String(tag).toLowerCase();
-                    if (!this.cache.tagIndex.has(tagKey)) {
-                        this.cache.tagIndex.set(tagKey, new Set());
-                    }
-                    this.cache.tagIndex.get(tagKey).add(key);
+                    if (!tagIndex.has(tagKey)) tagIndex.set(tagKey, new Set());
+                    tagIndex.get(tagKey).add(key);
                 }
             }
         }
+
+        cache.categoryIndex = categoryIndex;
+        cache.categoryCounts = categoryCounts;
+        cache.tagIndex = tagIndex;
     }
     
     
@@ -2859,6 +2935,13 @@ export class ImageCacheManager {
         try {
             const cache = this.getCache(mode);
             cache.needsRescan = false;
+
+            // On final saves (scan complete), refresh the precomputed category /
+            // tag indexes so they reflect the finished cache. Skipped for the
+            // frequent incremental mid-scan saves.
+            if (!isIncremental) {
+                this._buildIndexes(mode);
+            }
             const cacheSettingKey = this.getCacheSettingKey(mode);
             const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
             // Get all configured image paths for this mode
@@ -3347,9 +3430,14 @@ export class ImageCacheManager {
             // Update the cache status setting for display
             this._updateCacheStatusSetting(mode);
             
+            // Precompute per-file category + aggregate indexes now (files and
+            // folders are both populated) so the window doesn't recompute them
+            // at render time.
+            this._buildIndexes(mode);
+
             // Log final cache status after loading from storage
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Cache loading completed. Files: ${cache.files.size}, Folders: ${cache.folders.size}, Creature Types: ${cache.creatureTypes.size}`, "", false, false);
-            
+
             return true;
             
         } catch (error) {

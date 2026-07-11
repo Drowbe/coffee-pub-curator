@@ -76,6 +76,14 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         // 12k-file scoring/scan entirely. Bounded LRU-ish; small memory cost.
         this._matchResultsCache = new Map();
         this._matchResultsCacheMax = 6;
+
+        // Cache of per-category file counts (for the category buttons). Without
+        // this, _getCategories() rescans all 12k files once PER category on every
+        // render — the dominant cost of simply opening the window, regardless of
+        // the active tab. Recomputed only when the cache content or the selected
+        // library changes.
+        this._categoryCountsCache = null;
+        this._categoryCountsCacheKey = null;
     }
 
     /**
@@ -3389,9 +3397,10 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
     _getCategories() {
         const discoveredCategories = ImageCacheManager.getDiscoveredCategories(this.mode);
+        const counts = this._getCategoryCounts(this.selectedLibrary);
         const categories = [];
         for (const categoryName of discoveredCategories) {
-            const fileCount = this._countFilesInCategory(categoryName, this.selectedLibrary);
+            const fileCount = counts.get(categoryName) || 0;
             if (fileCount === 0 && this.selectedLibrary) continue;
             const cleanName = ImageCacheManager._cleanCategoryName(categoryName);
             categories.push({
@@ -3402,6 +3411,99 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             });
         }
         return categories;
+    }
+
+    /**
+     * Derive the raw (original-case) category folder for a file, memoized on the
+     * file object. Mirrors the logic in _countFilesInCategory exactly so counts
+     * stay identical. Immutable per file (derived from its path), so caching is safe.
+     * @param {Object} fileInfo
+     * @returns {string|null}
+     */
+    _deriveFileCategoryRaw(fileInfo) {
+        if (fileInfo._tirCategoryRaw !== undefined) return fileInfo._tirCategoryRaw;
+
+        let relativePath = fileInfo.path || '';
+        if (!relativePath && fileInfo.fullPath) {
+            const imagePaths = this.mode === ImageCacheManager.MODES.PORTRAIT ? getPortraitImagePaths() : getTokenImagePaths();
+            const basePath = fileInfo.metadata?.sourcePath || (imagePaths[0] || '');
+            if (basePath) {
+                relativePath = fileInfo.fullPath.replace(`${basePath}/`, '');
+            }
+        }
+
+        const pathParts = relativePath.split('/').filter(p => p);
+        let fileCategory = null;
+        if (pathParts.length > 0) {
+            if (pathParts.length === 1 && !relativePath.includes('/')) {
+                // Root file: find the root folder that contains it
+                const cache = ImageCacheManager.getCache(this.mode);
+                for (const [folderPath, files] of cache.folders.entries()) {
+                    const folderFiles = Array.isArray(files) ? files : (files?.files || []);
+                    if (!folderPath.includes('/') && folderFiles.includes(pathParts[0])) {
+                        fileCategory = folderPath;
+                        break;
+                    }
+                }
+                if (!fileCategory) {
+                    const sourcePath = fileInfo.metadata?.sourcePath;
+                    if (sourcePath) {
+                        const sourceParts = sourcePath.split('/').filter(p => p);
+                        if (sourceParts.length > 0) {
+                            fileCategory = sourceParts[sourceParts.length - 1];
+                        }
+                    }
+                }
+            } else {
+                fileCategory = pathParts[0];
+            }
+        }
+
+        // Non-enumerable so it never leaks into serialization/spread copies.
+        Object.defineProperty(fileInfo, '_tirCategoryRaw', { value: fileCategory, writable: true, configurable: true, enumerable: false });
+        return fileCategory;
+    }
+
+    /**
+     * Build a category -> file-count map in a SINGLE pass over the cache,
+     * memoized by cache content + selected library. Replaces the previous
+     * O(categories x files) approach (one full 12k scan per category button on
+     * every render), which was the main reason opening the window was slow even
+     * on the SELECTED tab.
+     * @param {string|null} libraryFilter
+     * @returns {Map<string, number>}
+     */
+    _getCategoryCounts(libraryFilter = null) {
+        const cache = ImageCacheManager.getCache(this.mode);
+
+        // Fast path: no library filter -> use the counts precomputed at cache
+        // build/load time (ImageCacheManager._buildIndexes). O(1), no scan.
+        if (!libraryFilter && cache?.categoryCounts instanceof Map) {
+            return cache.categoryCounts;
+        }
+
+        // Library-filtered path: counts depend on the selected library, which is
+        // a runtime choice, so compute (memoized). This reads the precomputed
+        // per-file _tirCategoryRaw, so it's a cheap single pass with no path parsing.
+        const key = [this.mode, libraryFilter || '', cache?.lastScan || 0, cache?.files?.size || 0].join('::');
+        if (this._categoryCountsCacheKey === key && this._categoryCountsCache) {
+            return this._categoryCountsCache;
+        }
+
+        const counts = new Map();
+        if (cache?.files) {
+            for (const fileInfo of cache.files.values()) {
+                if (libraryFilter && fileInfo?.metadata?.sourcePath !== libraryFilter) continue;
+                const fileCategory = this._deriveFileCategoryRaw(fileInfo);
+                if (fileCategory) {
+                    counts.set(fileCategory, (counts.get(fileCategory) || 0) + 1);
+                }
+            }
+        }
+
+        this._categoryCountsCacheKey = key;
+        this._categoryCountsCache = counts;
+        return counts;
     }
 
     /**
