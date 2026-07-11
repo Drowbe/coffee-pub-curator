@@ -69,6 +69,26 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         // IntersectionObserver used to unload off-screen thumbnail images so
         // memory stays flat regardless of how far the user scrolls.
         this._thumbnailObserver = null;
+
+        // Cache of the expensive matching pass (_applyUnifiedMatching) keyed by
+        // the full filter/token/cache signature. Lets tab switches that revisit
+        // a previously-computed state (e.g. category -> ALL -> back) skip the
+        // 12k-file scoring/scan entirely. Bounded LRU-ish; small memory cost.
+        this._matchResultsCache = new Map();
+        this._matchResultsCacheMax = 6;
+    }
+
+    /**
+     * Store a matching-pass result under the given signature, evicting the
+     * oldest entry when the cache is full (insertion-order Map = simple LRU).
+     */
+    _setMatchResultsCache(key, value) {
+        if (this._matchResultsCache.has(key)) this._matchResultsCache.delete(key);
+        this._matchResultsCache.set(key, value);
+        while (this._matchResultsCache.size > this._matchResultsCacheMax) {
+            const oldest = this._matchResultsCache.keys().next().value;
+            this._matchResultsCache.delete(oldest);
+        }
     }
 
     /**
@@ -195,6 +215,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         this.selectedTags.clear();
         this._lastProcessedTokenId = null;
         this._searchResultCache.clear();
+        this._matchResultsCache.clear();
     }
 
     /**
@@ -283,45 +304,55 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                     const fileText = `${path} ${fileName}`.toLowerCase();
                     return processedTerms.some(term => fileText.includes(term));
                 default:
-                    // For category filters, check if file is in that category folder
-                    // Cache stores RELATIVE paths, so first part is the category
-                    const pathParts = path.split('/').filter(p => p);
-                    
-                    // Category is first part of relative path
-                    let categoryFolder = null;
-                    if (pathParts.length > 0) {
-                        // Check if this is a root file (just filename, no folder path)
-                        // If path has only one part and no slashes, it might be a root file
-                        if (pathParts.length === 1 && !path.includes('/')) {
-                            // Check cache.folders to see which folder contains this filename
-                            // Root files are stored with root folder name as the folderPath key
-                            const cache = ImageCacheManager.getCache(this.mode);
-                            for (const [folderPath, files] of cache.folders.entries()) {
-                                // If folderPath has no slashes, it's a root folder category
-                                const folderFiles = Array.isArray(files) ? files : (files?.files || []);
-                                if (!folderPath.includes('/') && folderFiles.includes(pathParts[0])) {
-                                    categoryFolder = folderPath;
-                                    break;
-                                }
-                            }
-                            // Fallback: get category from sourcePath if not found in cache
-                            if (!categoryFolder) {
-                                const sourcePath = file.metadata?.sourcePath;
-                                if (sourcePath) {
-                                    // Extract root folder name from sourcePath (last part)
-                                    const sourceParts = sourcePath.split('/').filter(p => p);
-                                    if (sourceParts.length > 0) {
-                                        categoryFolder = sourceParts[sourceParts.length - 1];
+                    // For category filters, check if file is in that category folder.
+                    // The category is derived purely from the file's (immutable) path,
+                    // so memoize it on the file object: repeat category-tab switches
+                    // then become a property compare instead of re-parsing 12k paths.
+                    let categoryFolderLower = file._tirCategory;
+                    if (categoryFolderLower === undefined) {
+                        // Cache stores RELATIVE paths, so first part is the category
+                        const pathParts = path.split('/').filter(p => p);
+
+                        // Category is first part of relative path
+                        let categoryFolder = null;
+                        if (pathParts.length > 0) {
+                            // Check if this is a root file (just filename, no folder path)
+                            // If path has only one part and no slashes, it might be a root file
+                            if (pathParts.length === 1 && !path.includes('/')) {
+                                // Check cache.folders to see which folder contains this filename
+                                // Root files are stored with root folder name as the folderPath key
+                                const cache = ImageCacheManager.getCache(this.mode);
+                                for (const [folderPath, files] of cache.folders.entries()) {
+                                    // If folderPath has no slashes, it's a root folder category
+                                    const folderFiles = Array.isArray(files) ? files : (files?.files || []);
+                                    if (!folderPath.includes('/') && folderFiles.includes(pathParts[0])) {
+                                        categoryFolder = folderPath;
+                                        break;
                                     }
                                 }
+                                // Fallback: get category from sourcePath if not found in cache
+                                if (!categoryFolder) {
+                                    const sourcePath = file.metadata?.sourcePath;
+                                    if (sourcePath) {
+                                        // Extract root folder name from sourcePath (last part)
+                                        const sourceParts = sourcePath.split('/').filter(p => p);
+                                        if (sourceParts.length > 0) {
+                                            categoryFolder = sourceParts[sourceParts.length - 1];
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Normal subfolder file - first part is the category
+                                categoryFolder = pathParts[0];
                             }
-                        } else {
-                            // Normal subfolder file - first part is the category
-                            categoryFolder = pathParts[0];
                         }
+
+                        categoryFolderLower = categoryFolder ? categoryFolder.toLowerCase() : '';
+                        // Non-enumerable so it never leaks into serialization/spread copies.
+                        Object.defineProperty(file, '_tirCategory', { value: categoryFolderLower, writable: true, configurable: true, enumerable: false });
                     }
-                    
-                    return categoryFolder ? categoryFolder.toLowerCase() === this.currentFilter : false;
+
+                    return categoryFolderLower ? categoryFolderLower === this.currentFilter : false;
             }
         });
         
@@ -731,7 +762,34 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 // Apply unified matching
                 // Apply threshold only on SELECTED tab (but still calculate scores for all tabs when token/actor is selected)
                 const applyThreshold = this.currentFilter === 'selected';
-                const matchedResults = await ImageMatching._applyUnifiedMatching(tagFilteredFiles, searchTerms, tokenDocument, searchMode, ImageCacheManager.getCache(this.mode), ImageCacheManager._extractTokenData, applyThreshold, tokenFilenameTerms);
+
+                // Reuse a previously-computed matching pass when nothing that
+                // affects it has changed. Sort order is intentionally NOT part
+                // of the key (sorting is applied cheaply afterwards), so toggling
+                // sort reuses the cached candidates. Note: weight settings are
+                // not in the key; they are edited via the settings dialog and the
+                // window is re-instantiated (fresh cache) on reopen.
+                const cache = ImageCacheManager.getCache(this.mode);
+                const matchCacheKey = [
+                    this.mode,
+                    this.currentFilter,
+                    this.selectedLibrary || '',
+                    this.selectedToken?.id || this.selectedToken?.document?.id || '',
+                    searchMode,
+                    (typeof searchTerms === 'string' ? searchTerms : ''),
+                    Array.from(this.selectedTags).sort().join('|'),
+                    applyThreshold ? 'T' : 'F',
+                    (tokenFilenameTerms || []).join(','),
+                    BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementThreshold', 0.3),
+                    cache?.lastScan || 0,
+                    cache?.files?.size || 0
+                ].join('::');
+
+                let matchedResults = this._matchResultsCache.get(matchCacheKey);
+                if (!matchedResults) {
+                    matchedResults = await ImageMatching._applyUnifiedMatching(tagFilteredFiles, searchTerms, tokenDocument, searchMode, cache, ImageCacheManager._extractTokenData, applyThreshold, tokenFilenameTerms);
+                    this._setMatchResultsCache(matchCacheKey, matchedResults);
+                }
                 
                 // Filter out any results that are the current image to avoid duplicates
                 const filteredResults = matchedResults.filter(result => !result.isCurrent);
@@ -868,8 +926,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                     await ImageCacheManager._saveMetadataToStorage(this.mode);
                     ui.notifications.info(`Added ${imageName} to favorites`);
                 }
-                // Tag data changed without a rescan; drop the memoized aggregation.
+                // Tag data changed without a rescan; drop the memoized
+                // aggregation and any cached matching passes (the favorites set
+                // and per-file tag scoring may now differ).
                 this._invalidateAggregatedTagsCache();
+                this._matchResultsCache.clear();
                 if (this.currentFilter === 'favorites') {
                     this._showSearchSpinner();
                     await this._findMatches();

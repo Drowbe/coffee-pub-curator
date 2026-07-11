@@ -277,9 +277,11 @@ export class ImageMatching {
      * @param {Function} extractTokenDataFunction - Function to extract token data
      * @param {Object} weights - Cached weight settings (Performance optimization)
      * @param {Array<string>} [tokenFilenameTerms] - Extra terms from token image filename (portrait mode); merged into tag matching
+     * @param {Object} [precomputedTokenData] - Token data extracted once by the caller. When provided, avoids re-extracting it per file (major win when scoring the whole cache). Falls back to extracting internally when null.
+     * @param {string} [deprioritizedWords] - Deprioritized-words setting value, read once by the caller. When null, read from settings here (per-call fallback).
      * @returns {number} Relevance score (0.0 to 1.0)
      */
-    static async _calculateRelevanceScore(fileInfo, searchTerms, tokenDocument = null, searchMode = 'search', cache = null, extractTokenDataFunction = null, weights = null, tokenFilenameTerms = null) {
+    static async _calculateRelevanceScore(fileInfo, searchTerms, tokenDocument = null, searchMode = 'search', cache = null, extractTokenDataFunction = null, weights = null, tokenFilenameTerms = null, precomputedTokenData = null, deprioritizedWords = null) {
         const fileName = fileInfo.name || fileInfo.fullPath?.split('/').pop() || '';
         const fileNameLower = fileName.toLowerCase();
         const filePath = fileInfo.path || fileInfo.fullPath || '';
@@ -312,9 +314,13 @@ export class ImageMatching {
         
         if (searchMode !== 'token' && searchWords.length === 0) return 0;
         
-        // Extract token data for weighted scoring
+        // Extract token data for weighted scoring.
+        // Prefer caller-supplied data (extracted once per search) so we don't
+        // re-parse the same token for every one of the 12k+ cached files.
         let tokenData = {};
-        if (tokenDocument && searchMode === 'token' && extractTokenDataFunction) {
+        if (precomputedTokenData) {
+            tokenData = precomputedTokenData;
+        } else if (tokenDocument && searchMode === 'token' && extractTokenDataFunction) {
             tokenData = extractTokenDataFunction(tokenDocument);
         }
         
@@ -534,8 +540,11 @@ export class ImageMatching {
             return 0; // Return 0 score for files with empty names
         }
         
-        // Apply deprioritized words penalty
-        const deprioritizedWords = game.settings.get(MODULE.ID, 'tokenImageReplacementDeprioritizedWords') || '';
+        // Apply deprioritized words penalty. Use the caller-supplied value when
+        // provided (read once per search) instead of hitting settings per file.
+        if (deprioritizedWords == null) {
+            deprioritizedWords = game.settings.get(MODULE.ID, 'tokenImageReplacementDeprioritizedWords') || '';
+        }
         if (deprioritizedWords && deprioritizedWords.trim().length > 0) {
             const words = deprioritizedWords.toLowerCase().split(',').map(word => word.trim()).filter(word => word.length > 0);
             const fileNameAndPath = `${fileName} ${filePath}`.toLowerCase();
@@ -591,10 +600,19 @@ export class ImageMatching {
             size: game.settings.get(MODULE.ID, 'tokenImageReplacementWeightSize') / 100,
             tagMatch: game.settings.get(MODULE.ID, 'tokenImageReplacementWeightTags') / 100
         };
-                
+
+        // Hoist per-search work out of the per-file loop. These are identical for
+        // every file, so extracting the token data (which iterates the actor's
+        // items) and reading the deprioritized-words setting once — instead of
+        // 12k+ times — is the bulk of the ALL-tab scoring cost.
+        const precomputedTokenData = (tokenDocument && searchMode === 'token' && extractTokenDataFunction)
+            ? extractTokenDataFunction(tokenDocument)
+            : null;
+        const deprioritizedWords = game.settings.get(MODULE.ID, 'tokenImageReplacementDeprioritizedWords') || '';
+
         for (let i = 0; i < filesToSearch.length; i++) {
-            const fileInfo = filesToSearch[i]; 
-            const relevanceScore = await this._calculateRelevanceScore(fileInfo, searchTerms, tokenDocument, searchMode, cache, extractTokenDataFunction, weights, tokenFilenameTerms);
+            const fileInfo = filesToSearch[i];
+            const relevanceScore = await this._calculateRelevanceScore(fileInfo, searchTerms, tokenDocument, searchMode, cache, extractTokenDataFunction, weights, tokenFilenameTerms, precomputedTokenData, deprioritizedWords);
                         
             // Only include results above threshold
             if (relevanceScore >= threshold) {
