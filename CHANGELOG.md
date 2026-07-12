@@ -6,8 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [13.2.0] 
+## [13.2.0] - 2026-07-12
 
+Performance and reliability overhaul of the image cache scanning and the Token/Portrait/Tile browser windows. Large libraries (10k+ images) now open quickly, stay responsive, and scan without freezing or crashing the client.
+
+### Performance
+- **Image Replacement window opens fast**: Opening the Token/Portrait window with a selected token dropped from ~8–10s to near-instant on large libraries. Root cause was `_getCategories()`, called on every render, which rescanned all cached files **once per category button** (O(categories × files), worse for root files) — work that was identical regardless of the active tab, which is why even the small SELECTED tab was slow. Category counts are now precomputed in a single pass at cache build/load time (`ImageCacheManager._buildIndexes`) and stored on the cache, then read directly by the window.
+- **Faster token/search matching in the window**: The relevance scoring loop re-extracted the token's data (iterating all the actor's items) and re-read the deprioritized-words setting for **every** cached file. Both are now computed once per search and passed into the scorer, cutting the bulk of the ALL-tab scoring cost when a token is selected.
+- **Bounded memory while scrolling results**: Thumbnails now use `content-visibility` + `decoding="async"`, and an `IntersectionObserver` unloads off-screen images (restoring them on approach). Memory stays roughly flat regardless of how far you scroll instead of growing until the tab struggles.
+- **Memoized per-render work**: `_getAggregatedTags()`, category counts, and per-file category derivation are memoized (keyed by the filter/library/cache state) across the Token, Portrait, and Tile windows, so repeated renders and tab switches no longer re-sweep the whole cache. The Tile window (`TileImageWindow`) received the same treatment as its own class.
+- **Parallel, capped directory scanning**: Folder browsing now walks sibling directories concurrently (previously strictly one-at-a-time) via a batched producer/consumer, with a global semaphore capping concurrent `FilePicker.browse()` calls (`SCAN_CONCURRENCY`, default 6) so deep/wide trees never flood the backend. Scan time is dominated by the number of folder round-trips, so this is a several-fold speedup on large or deeply nested libraries.
+- **Single round-trip per folder**: The working "source" (`data` / `public` / `core`) for a library is now resolved once from its root and reused for every subfolder, instead of re-probing sources per folder. Libraries whose paths don't match the built-in prefix heuristic no longer pay 2–3× browse round-trips, and confirmed-empty folders stop probing every source.
+
+### Fixed
+- **Client crash / 30-minute scans on large libraries**: The image cache is stored in a world-scoped setting, and the scan re-serialized the entire (growing) cache, wrote it to the world database, and broadcast the multi-MB payload over the socket **every 5 subdirectories and every 500 files** — 100+ times per large scan, each larger than the last. This O(n²) write amplification plus socket flooding caused the extreme scan times and browser crashes. Incremental crash-resilience saves are now time-throttled (at most once per 30s); the authoritative save still happens once at scan completion.
+- **Stall while saving the cache at end of scan**: `_generateFolderFingerprint` recursively re-walked the entire folder tree from scratch at final-save time — a redundant second full scan (hence its 30s timeout). The fingerprint is now computed from the already-scanned cache with no filesystem I/O, so the final save is effectively instant.
+- **`setInterval` handler violations during tile scan**: The Tile "Place Image" window's 400ms scan-progress poller did a full re-render, and its `getData()` swept the whole growing cache to build categories and tags on every poll — blocking the main thread (hundreds of `[Violation] 'setInterval' handler took Nms`). That work is now skipped while scanning (it's hidden behind the progress overlay).
+- **Peak memory during scan**: Directory results are now committed to the cache in bounded batches rather than collecting the entire library in memory before committing.
+
+### Changed
+- Removed the per-folder `console.log` browse tracing that flooded the console during scans (hundreds of lines per scan). Structured debug logging is unchanged.
 
 ## [13.1.4] - 2026-05-20
 
