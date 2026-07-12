@@ -100,7 +100,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     getData() {
         const cache = ImageCacheManager.getCache(TILE_MODE);
-        const aggregatedTags = this._getAggregatedTags();
+        // While scanning, the progress overlay covers the results/category UI,
+        // and the scan re-renders this window every 400ms. Building the category
+        // list and aggregated tags sweeps the whole (growing) cache, so doing it
+        // on every poll blocks the main thread (the 'setInterval handler took
+        // Nms' violations). Skip that work while scanning — it's not shown.
+        const isScanning = cache.isScanning;
+        const aggregatedTags = isScanning ? { primary: [], secondary: [] } : this._getAggregatedTags();
         return {
             appId: this.id,
             isScanning: cache.isScanning,
@@ -122,7 +128,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             sortOrder: this.sortOrder,
             currentFilter: this.currentFilter,
             categoryStyle: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileImageCategoryStyle', 'buttons'),
-            categories: this._getCategories(),
+            categories: isScanning ? [] : this._getCategories(),
             libraries: this._buildLibraryList(),
             selectedLibrary: this.selectedLibrary,
             showLibrarySelector: getTileLibraries().length > 1,

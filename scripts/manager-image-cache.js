@@ -16,7 +16,28 @@ import { getTokenImagePaths, getPortraitImagePaths, getTileImagePaths } from './
  */
 export class ImageCacheManager {
     static ID = 'token-image-replacement';
-    
+
+    // Max concurrent FilePicker.browse() calls during a scan. Directory browsing
+    // is I/O-latency-bound, so walking sibling folders concurrently (instead of
+    // one-at-a-time) cuts scan wall-clock time several-fold on large/deep
+    // libraries. Kept modest to avoid overwhelming the FilePicker/backend.
+    static SCAN_CONCURRENCY = 6;
+
+    // Global gate for concurrent directory browses. Because the recursive scan
+    // fans out (parallel maps nested inside parallel maps), a per-level cap is
+    // not enough — this GLOBAL semaphore guarantees no more than SCAN_CONCURRENCY
+    // FilePicker.browse() calls are ever in flight at once, no matter the depth.
+    static _browseSemaphore = { active: 0, queue: [] };
+
+    // Minimum time between incremental (crash-resilience) saves during a scan.
+    // The cache setting is world-scoped, so each save re-serializes the whole
+    // (growing) cache, writes it to the world DB, AND broadcasts it over the
+    // socket to every client. Firing per-folder/per-500-files makes that O(n^2)
+    // and floods the socket with ever-larger payloads — the main cause of slow
+    // scans and browser crashes on large libraries. Throttling to a wall-clock
+    // interval bounds the number of saves regardless of library size/shape.
+    static INCREMENTAL_SAVE_INTERVAL_MS = 30000;
+
     // v13: FilePicker is now namespaced under foundry.applications.apps.FilePicker.implementation
     static get FilePicker() {
         return foundry.applications.apps.FilePicker.implementation;
@@ -2075,8 +2096,11 @@ export class ImageCacheManager {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scanning directory: ${basePath}`, "", true, false);
             
             // Use Foundry's FilePicker to browse the directory (v13: use namespaced FilePicker)
+            // The root browse learns which source this library lives on; every
+            // subfolder browse below reuses it so they resolve in one round-trip.
             const response = await ImageCacheManager._browseDirectory(basePath);
-            
+            const librarySource = response.source;
+
             // Log what we found for debugging
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Directory scan results - Files: ${response.files?.length || 0}, Subdirectories: ${response.dirs?.length || 0}`, "", true, false);
             
@@ -2145,78 +2169,70 @@ export class ImageCacheManager {
                 cache.totalSteps = nonIgnoredDirs.length;
                 cache.overallProgress = 0;
                 cache.totalFoldersScanned = nonIgnoredDirs.length; // Track actual folder count
-                
-                // Declare processedCount inside the if block where nonIgnoredDirs is available
+
+                // Browse subtrees concurrently, but in BATCHES of SCAN_CONCURRENCY,
+                // committing each batch to the cache before browsing the next.
+                // This keeps parallel I/O while bounding peak memory to one batch
+                // of subtrees (collecting the whole library up-front is what can
+                // exhaust the tab on large collections). Order within a batch is
+                // preserved, so "first path wins" dedup is stable.
                 let processedCount = 0;
-                
-                for (let i = 0; i < response.dirs.length; i++) {
-                    // Check if we should pause
+                for (let start = 0; start < nonIgnoredDirs.length; start += ImageCacheManager.SCAN_CONCURRENCY) {
                     if (cache.isPaused) {
                         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan paused by user.`, "", true, false);
                         return;
                     }
-                    
-                    const subDir = response.dirs[i];
-                    const subDirName = subDir.split('/').pop();
-                    
-                    // Check if this folder should be ignored
-                    if (ImageCacheManager._isFolderIgnored(subDirName, mode)) {
-                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring folder: ${subDirName}`, "", true, false);
-                        continue;
-                    }
-                    
-                    // Update overall progress (only count non-ignored directories)
-                    processedCount++;
-                    cache.overallProgress = processedCount;
-                    cache.currentStepName = subDirName;
-                    
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Processing folder ${processedCount}/${nonIgnoredDirs.length}: ${subDirName}`, "", true, false);
-                    
-                    // Update window progress if it exists
-                    if (this.window && this.window.updateScanProgress) {
-                        const statusText = this._truncateStatusText(`Scanning ${subDirName}: ${files.length} files found`);
-                        this.window.updateScanProgress(processedCount, nonIgnoredDirs.length, statusText);
-                        // Small delay to make progress visible (skip for incremental updates)
-                        if (!skipDelays) {
-                            await new Promise(resolve => setTimeout(resolve, 50));
+
+                    const batch = nonIgnoredDirs.slice(start, start + ImageCacheManager.SCAN_CONCURRENCY);
+
+                    // ---- COLLECT (parallel browse of this batch) ----
+                    const results = await this._mapWithConcurrency(batch, ImageCacheManager.SCAN_CONCURRENCY, async (subDir) => {
+                        if (cache.isPaused) return null;
+                        const subDirName = subDir.split('/').pop();
+                        const subDirFiles = await this._scanSubdirectory(subDir, basePath, sourceIndex, mode, totalFolders, skipDelays, librarySource);
+                        return { subDirName, subDirFiles };
+                    });
+
+                    // ---- COMMIT (serial cache mutation, in order) ----
+                    for (const entry of results) {
+                        if (!entry) continue;
+
+                        const { subDirName, subDirFiles } = entry;
+                        processedCount++;
+                        cache.overallProgress = processedCount;
+                        cache.currentStepName = subDirName;
+
+                        if (subDirFiles.length > 0) {
+                            files.push(...subDirFiles);
+                            await this._processFiles(subDirFiles, basePath, false, sourceIndex, mode); // Don't clear cache, just add files
                         }
-                    }
-                    
-                    // Progress logging is now handled above
-                    const subDirFiles = await this._scanSubdirectory(subDir, basePath, sourceIndex, mode, totalFolders, skipDelays);
-                    files.push(...subDirFiles);
-                    
-                    // Process files into cache immediately so they're available for incremental saves
-                    if (subDirFiles.length > 0) {
-                        await this._processFiles(subDirFiles, basePath, false, sourceIndex, mode); // Don't clear cache, just add files
-                        
-                        // Save more frequently for large subdirectories (every 500 files)
-                        if (cache.files.size % 500 === 0 && cache.files.size > 0) {
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Frequent save checkpoint - ${cache.files.size} files processed`, "", false, false);
+
+                        // Time-throttled crash-resilience save. A world-scoped
+                        // setting write re-serializes and broadcasts the whole
+                        // cache, so we cap it to at most once per interval rather
+                        // than per-folder/per-500-files.
+                        const now = Date.now();
+                        if (cache.files.size > 0 && (now - (cache._lastIncrementalSave || 0)) >= ImageCacheManager.INCREMENTAL_SAVE_INTERVAL_MS) {
+                            cache._lastIncrementalSave = now;
                             try {
-                                await this._saveCacheToStorage(mode, true); // Incremental save
+                                await this._saveCacheToStorage(mode, true); // incremental save
                             } catch (saveError) {
                                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Checkpoint save failed: ${saveError.message}`, "", false, false);
-                                // Continue with scan
+                                // Continue with scan even if save fails
                             }
                         }
+
+                        const progressPercent = Math.round((processedCount / nonIgnoredDirs.length) * 100);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: [${progressPercent}%] Completed ${subDirName} - ${files.length} files total`, "", false, false);
                     }
-                    
-                    // Save cache incrementally every 5 subdirectories to prevent data loss without excessive writes
-                    if (subDirFiles.length > 0 && processedCount % 5 === 0) {
-                        try {
-                            await this._saveCacheToStorage(mode, true); // true = incremental save
-                        } catch (saveError) {
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: CRITICAL - Failed to save progress after ${subDirName}: ${saveError.message}`, "", false, false);
-                            // Continue with scan even if save fails
-                        }
+
+                    // Progress update after each committed batch
+                    if (this.window && this.window.updateScanProgress) {
+                        const statusText = this._truncateStatusText(`Scanning: ${processedCount}/${nonIgnoredDirs.length} folders, ${files.length} files`);
+                        this.window.updateScanProgress(processedCount, nonIgnoredDirs.length, statusText);
                     }
-                    
-                    // Log progress with percentage and file count
-                    const progressPercent = Math.round((processedCount / nonIgnoredDirs.length) * 100);
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: [${progressPercent}%] Completed ${subDirName} - ${files.length} files total`, "", false, false);
                 }
-                
+
                 // Validate that we've processed all expected directories
                 if (processedCount !== nonIgnoredDirs.length) {
                     BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Expected to process ${nonIgnoredDirs.length} directories but only processed ${processedCount}`, "", true, false);
@@ -2239,18 +2255,45 @@ export class ImageCacheManager {
     }
     
     /**
+     * Run an async mapper over items with a bounded number of concurrent
+     * executions. Results are returned in the SAME order as the input (so
+     * downstream ordering-dependent logic — e.g. "first path wins" dedup — is
+     * preserved even though execution is concurrent).
+     * @param {Array} items
+     * @param {number} limit - Max concurrent executions
+     * @param {(item:any, index:number) => Promise<any>} fn
+     * @returns {Promise<Array>}
+     */
+    static async _mapWithConcurrency(items, limit, fn) {
+        const results = new Array(items.length);
+        let cursor = 0;
+        const worker = async () => {
+            while (true) {
+                const i = cursor++;
+                if (i >= items.length) return;
+                results[i] = await fn(items[i], i);
+            }
+        };
+        const workerCount = Math.max(1, Math.min(limit, items.length));
+        const workers = [];
+        for (let w = 0; w < workerCount; w++) workers.push(worker());
+        await Promise.all(workers);
+        return results;
+    }
+
+    /**
      * Scan a subdirectory recursively
      * @param {string} subDir - Subdirectory path to scan
      * @param {string} basePath - Base path for this source folder
      * @param {number} sourceIndex - 1-based index of the source path (for priority tracking)
      * @param {string} mode - 'token' or 'portrait'
      */
-    static async _scanSubdirectory(subDir, basePath, sourceIndex = 1, mode = 'token', totalFolders = 1, skipDelays = false) {
+    static async _scanSubdirectory(subDir, basePath, sourceIndex = 1, mode = 'token', totalFolders = 1, skipDelays = false, source = null) {
         const files = [];
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
-        
+
         try {
-            const response = await ImageCacheManager._browseDirectory(subDir);
+            const response = await ImageCacheManager._browseDirectory(subDir, source);
             
             if (response.files && response.files.length > 0) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.files.length} files in ${subDir}`, "", true, false);
@@ -2310,37 +2353,32 @@ export class ImageCacheManager {
                 }
             }
             
-            // Recursively scan deeper subdirectories
+            // Recursively scan deeper subdirectories.
+            // This is browse-and-collect only (no file-cache mutation happens
+            // here — that's done by the caller via _processFiles), so sibling
+            // subtrees can be walked concurrently. Results are returned in input
+            // order, so nothing ordering-dependent changes.
             if (response.dirs && response.dirs.length > 0) {
                 const parentDirName = subDir.split('/').pop();
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Found ${response.dirs.length} deeper subdirectories in ${parentDirName}`, "", true, false);
-                
-                for (let i = 0; i < response.dirs.length; i++) {
-                    const deeperDir = response.dirs[i];
-                    const deeperDirName = deeperDir.split('/').pop();
-                    
-                    // Check if this folder should be ignored
-                    if (ImageCacheManager._isFolderIgnored(deeperDirName, mode)) {
-                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Ignoring subfolder: ${parentDirName}/${deeperDirName}`, "", true, false);
-                        continue;
-                    }
-                    
-                    // Update window progress with detailed subdirectory info
+
+                const deeperDirs = response.dirs.filter(d => !ImageCacheManager._isFolderIgnored(d.split('/').pop(), mode));
+
+                const deeperResults = await this._mapWithConcurrency(deeperDirs, ImageCacheManager.SCAN_CONCURRENCY, async (deeperDir) => {
+                    if (this.getCache(mode).isPaused) return [];
+
+                    // Update window progress (best-effort; order is nondeterministic under concurrency)
                     if (this.window && this.window.updateScanProgress) {
-                        const statusText = this._truncateStatusText(`Scanning ${parentDirName}/${deeperDirName}: ${files.length} files found`);
-                        this.window.updateScanProgress(i + 1, response.dirs.length, statusText);
+                        const deeperDirName = deeperDir.split('/').pop();
+                        const statusText = this._truncateStatusText(`Scanning ${parentDirName}/${deeperDirName}`);
+                        this.window.updateScanProgress(0, deeperDirs.length, statusText);
                     }
-                    
-                    const deeperFiles = await this._scanSubdirectory(deeperDir, basePath, sourceIndex, mode, totalFolders, skipDelays);
-                    files.push(...deeperFiles);
-                    
-                    // Categories will be generated from folder structure when window opens
-                    
-                    // Log progress more frequently - every 3 items or at the end
-                    if ((i + 1) % 3 === 0 || i === response.dirs.length - 1) {
-                        const progressPercent = Math.round(((i + 1) / response.dirs.length) * 100);
-                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: [${progressPercent}%] ${parentDirName}/${deeperDirName} - ${files.length} files`, "", true, false);
-                    }
+
+                    return this._scanSubdirectory(deeperDir, basePath, sourceIndex, mode, totalFolders, skipDelays, source);
+                });
+
+                for (const deeperFiles of deeperResults) {
+                    if (Array.isArray(deeperFiles)) files.push(...deeperFiles);
                 }
             }
             
@@ -2404,29 +2442,94 @@ export class ImageCacheManager {
     /**
      * Check if a file path contains invalid characters or patterns
      */
-    static async _browseDirectory(path) {
+    /**
+     * Acquire a global browse slot, blocking until one is free. Ensures the
+     * total number of concurrent FilePicker.browse() calls never exceeds
+     * SCAN_CONCURRENCY across the entire (recursive, fan-out) scan.
+     */
+    static async _acquireBrowseSlot() {
+        const sem = this._browseSemaphore;
+        if (sem.active < this.SCAN_CONCURRENCY) {
+            sem.active++;
+            return;
+        }
+        // Wait to be handed a slot by a releaser (slot count stays accounted).
+        await new Promise(resolve => sem.queue.push(resolve));
+    }
+
+    /** Release a global browse slot, handing it directly to the next waiter if any. */
+    static _releaseBrowseSlot() {
+        const sem = this._browseSemaphore;
+        const next = sem.queue.shift();
+        if (next) {
+            next(); // transfer the slot; active stays the same
+        } else {
+            sem.active--;
+        }
+    }
+
+    /**
+     * Browse a directory, returning { files, dirs, source }.
+     *
+     * Foundry serves files from different "sources" ('data' for user files,
+     * 'public'/'core' for bundled assets) and there's no reliable way to know a
+     * path's source from the string alone — a user can configure any path with
+     * any naming. So the FIRST browse of a library probes sources to find the
+     * one that works, and returns which `source` succeeded. Callers thread that
+     * source back in via `preferredSource` for every subfolder, which makes the
+     * rest of the scan a single round-trip per folder regardless of how the
+     * user's paths are prefixed. This matters because scan time is dominated by
+     * the number of browse round-trips, not by file count.
+     *
+     * @param {string} path
+     * @param {string|null} preferredSource - Known-good source for this library
+     * @returns {Promise<{files: string[], dirs: string[], source: string|null}>}
+     */
+    static async _browseDirectory(path, preferredSource = null) {
+        // Throttle concurrent browses globally so deep/wide fan-out never floods
+        // the FilePicker backend.
+        await this._acquireBrowseSlot();
+        try {
+            return await this._browseDirectoryRaw(path, preferredSource);
+        } finally {
+            this._releaseBrowseSlot();
+        }
+    }
+
+    static async _browseDirectoryRaw(path, preferredSource = null) {
         // User-data paths start with recognized prefixes; everything else is likely a
         // Foundry built-in (icons/, ui/, sounds/) served from the public static root.
+        // This is only a heuristic for the FIRST probe ordering — the real source
+        // is learned from whichever browse actually succeeds.
         const p = (path || '').replace(/\/$/, '').toLowerCase();
         const isUserData = ['modules/', 'worlds/', 'systems/', 'assets/', 'files/', 'backups/', 'packs/']
             .some(pfx => p.startsWith(pfx));
         // Try sources in priority order. Foundry v13 uses 'data' for user files and
         // 'public' for bundled assets (what the UI labels "Core Data"). 'core' is the
         // legacy name for the same thing in older builds.
-        const sources = isUserData ? ['data', 'public', 'core'] : ['public', 'core', 'data'];
+        let sources = isUserData ? ['data', 'public', 'core'] : ['public', 'core', 'data'];
+
+        // If the caller already knows this library's source, try it first. This
+        // collapses the common case to a single browse call per folder.
+        if (preferredSource) {
+            sources = [preferredSource, ...sources.filter(s => s !== preferredSource)];
+        }
+
         for (const source of sources) {
             try {
                 const result = await ImageCacheManager.FilePicker.browse(source, path);
-                if ((result.files?.length || 0) > 0 || (result.dirs?.length || 0) > 0) {
-                    console.log(`[Curator] _browseDirectory("${path}") succeeded with source="${source}" — ${result.files?.length ?? 0} files, ${result.dirs?.length ?? 0} dirs`);
-                    return result;
+                const hasContent = (result.files?.length || 0) > 0 || (result.dirs?.length || 0) > 0;
+                // Accept a non-empty result from any source, OR an empty result
+                // from the already-confirmed source (a genuinely empty folder —
+                // no need to keep probing other sources for it).
+                if (hasContent || source === preferredSource) {
+                    return { files: result.files || [], dirs: result.dirs || [], source };
                 }
             } catch (e) {
-                console.log(`[Curator] _browseDirectory("${path}") source="${source}" threw: ${e.message}`);
+                // Source not valid for this path; try the next one.
             }
         }
-        console.warn(`[Curator] _browseDirectory("${path}") — all sources returned empty. Tried: ${sources.join(', ')}`);
-        return { files: [], dirs: [] };
+        return { files: [], dirs: [], source: preferredSource || null };
     }
 
     static _isInvalidFilePath(filePath) {
@@ -2949,20 +3052,14 @@ export class ImageCacheManager {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: DEBUG (_saveCacheToStorage) - Retrieved ${basePaths.length} path(s)`, "", true, false);
             
             // Only generate fingerprint for final saves, not incremental ones (performance)
-            // For multiple paths, we'll generate a combined fingerprint
             let folderFingerprint = null;
             if (!isIncremental && basePaths.length > 0) {
                 try {
-                    // Generate fingerprint for first path (or combine all if needed)
-                    // For now, use first path for fingerprint (can be enhanced later)
-                    const fingerprintPromise = this._generateFolderFingerprint(basePaths[0]);
-                    const timeoutPromise = new Promise((_, reject) => 
-                        setTimeout(() => reject(new Error('Fingerprint generation timeout after 30 seconds')), 30000)
-                    );
-                    
-                    folderFingerprint = await Promise.race([fingerprintPromise, timeoutPromise]);
+                    // Computed from the already-scanned cache (no filesystem
+                    // re-walk), so it's instant instead of re-crawling the whole
+                    // tree — that re-crawl was the "stall" at end of scan.
+                    folderFingerprint = this._generateFolderFingerprint(basePaths[0], mode);
 
-                    // CRITICAL FIX: Validate fingerprint for final saves
                     if (!folderFingerprint || folderFingerprint === 'error' || folderFingerprint === 'no-path') {
                         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: WARNING - Invalid fingerprint generated: ${folderFingerprint}. This may cause issues on next load.`, "", false, false);
                     } else {
@@ -3479,50 +3576,42 @@ export class ImageCacheManager {
     /**
      * Generate a fingerprint of the folder structure to detect changes
      */
-    static async _generateFolderFingerprint(basePath) {
+    /**
+     * Generate a stable fingerprint of the image files under `basePath`, used to
+     * detect whether the folder contents changed since the last scan.
+     *
+     * Computed from the ALREADY-SCANNED cache — NOT by re-walking the
+     * filesystem. The previous implementation recursively re-browsed the entire
+     * tree at final-save time, duplicating the whole scan and stalling the save
+     * (hence its 30s timeout). We just recorded every file during the scan, so
+     * we hash those paths directly: same result, no I/O, effectively instant.
+     * @param {string} basePath
+     * @param {string} mode
+     * @returns {string}
+     */
+    static _generateFolderFingerprint(basePath, mode = 'token') {
         try {
             if (!basePath) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Cannot generate fingerprint - no basePath provided", "", false, false);
                 return 'no-path';
             }
-            
-            // Get a list of all files and folders recursively
+
+            const cache = this.getCache(mode);
+            const normBase = basePath.replace(/\/$/, '');
+
+            // Collect the full paths of files belonging to this base path.
             const allPaths = [];
-            let errorCount = 0;
-            async function collectPaths(dir) {
-                try {
-                    const result = await ImageCacheManager._browseDirectory(dir);
-                    // Add directories (for traversal only, not for fingerprint)
-                    for (const subdir of result.dirs) {
-                        await collectPaths(subdir);
-                    }
-                    // Add files (only image files) - these are what matter for fingerprint
-                    for (const file of result.files) {
-                        if (ImageCacheManager.SUPPORTED_FORMATS.some(format => file.toLowerCase().endsWith(format))) {
-                            allPaths.push(file); // Just the file path, no prefix
-                        }
-                    }
-                } catch (error) {
-                    // Skip inaccessible directories but count errors
-                    errorCount++;
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Warning - cannot access directory ${dir}: ${error.message}`, "", false, false);
-                }
+            for (const fileInfo of cache.files.values()) {
+                const full = fileInfo?.fullPath;
+                if (!full) continue;
+                const sp = fileInfo.metadata?.sourcePath;
+                const belongs = sp ? sp.replace(/\/$/, '') === normBase : full.startsWith(`${normBase}/`);
+                if (belongs) allPaths.push(full);
             }
-            
-            await collectPaths.call(this, basePath);
-            
-            if (allPaths.length === 0) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: WARNING - No paths found for fingerprint at ${basePath}`, "", false, false);
-            }
-            
-            if (errorCount > 0) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Fingerprint generated with ${errorCount} directory access errors`, "", false, false);
-            }
-            
-            // Sort paths for consistent fingerprint
+
+            // Sort for a stable, order-independent fingerprint.
             allPaths.sort();
-            
-            // Create a simple hash of the paths
+
             const pathsString = allPaths.join('|');
             let hash = 0;
             for (let i = 0; i < pathsString.length; i++) {
@@ -3530,14 +3619,10 @@ export class ImageCacheManager {
                 hash = ((hash << 5) - hash) + char;
                 hash = hash & hash; // Convert to 32-bit integer
             }
-            
-            const fingerprint = hash.toString();
-            
-            return fingerprint;
-            
+            return hash.toString();
+
         } catch (error) {
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: CRITICAL ERROR generating folder fingerprint: ${error.message}`, "", false, false);
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: Stack trace: ${error.stack}`, "", false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Replacement: ERROR generating folder fingerprint: ${error.message}`, "", false, false);
             return 'error';
         }
     }
