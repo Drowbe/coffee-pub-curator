@@ -34,6 +34,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._teardownExecuted = false;
         this._activeImageElements = new Set();
 
+        // Memoization for the per-render category/tag sweeps (both iterate the
+        // whole ~15k-file cache). Recomputed only when the inputs actually change.
+        this._categoriesCache = null;
+        this._categoriesCacheKey = null;
+        this._aggregatedTagsCache = null;
+        this._aggregatedTagsCacheKey = null;
+
         this.tileTint       = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultTint', '#ffffff');
         this.tileForeground = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultForeground', false);
         this.dropShadow     = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDropShadow', true);
@@ -731,46 +738,88 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     }
 
     _getTopLevelFolder(fileInfo) {
+        // Derived purely from the file's (immutable) fullPath, so memoize it on
+        // the file object — the category sweep below then reads a property
+        // instead of re-parsing every path on every render.
+        if (fileInfo && fileInfo._tirTileCategory !== undefined) return fileInfo._tirTileCategory;
+
+        let result = null;
+        let matchedBase = false;
         const fullPath = fileInfo?.fullPath ?? '';
-        if (!fullPath) return null;
-        const bases = getTileImagePaths().filter(Boolean);
-        for (const base of bases) {
-            const prefix = base.endsWith('/') ? base : base + '/';
-            if (fullPath.startsWith(prefix)) {
-                const relative = fullPath.slice(prefix.length);
-                const slash = relative.indexOf('/');
-                return slash !== -1 ? relative.slice(0, slash) : null;
+        if (fullPath) {
+            const bases = getTileImagePaths().filter(Boolean);
+            for (const base of bases) {
+                const prefix = base.endsWith('/') ? base : base + '/';
+                if (fullPath.startsWith(prefix)) {
+                    const relative = fullPath.slice(prefix.length);
+                    const slash = relative.indexOf('/');
+                    result = slash !== -1 ? relative.slice(0, slash) : null;
+                    matchedBase = true;
+                    break;
+                }
+            }
+            // Fallback: use sourcePath stored in metadata (only if no base matched)
+            if (!matchedBase) {
+                const sourcePath = fileInfo?.metadata?.sourcePath ?? '';
+                if (sourcePath) {
+                    const prefix = sourcePath.endsWith('/') ? sourcePath : sourcePath + '/';
+                    if (fullPath.startsWith(prefix)) {
+                        const relative = fullPath.slice(prefix.length);
+                        const slash = relative.indexOf('/');
+                        result = slash !== -1 ? relative.slice(0, slash) : null;
+                    }
+                }
             }
         }
-        // Fallback: use sourcePath stored in metadata
-        const sourcePath = fileInfo?.metadata?.sourcePath ?? '';
-        if (sourcePath) {
-            const prefix = sourcePath.endsWith('/') ? sourcePath : sourcePath + '/';
-            if (fullPath.startsWith(prefix)) {
-                const relative = fullPath.slice(prefix.length);
-                const slash = relative.indexOf('/');
-                return slash !== -1 ? relative.slice(0, slash) : null;
-            }
+
+        if (fileInfo) {
+            Object.defineProperty(fileInfo, '_tirTileCategory', { value: result, writable: true, configurable: true, enumerable: false });
         }
-        return null;
+        return result;
     }
 
     _getCategories() {
         const cache = ImageCacheManager.getCache(TILE_MODE);
         if (!cache.files || cache.files.size === 0) return [];
+
+        // Memoize: the count sweep only changes when the cache content or the
+        // library filter changes; isActive depends on currentFilter.
+        const key = [this.selectedLibrary || '', this.currentFilter, cache.lastScan || 0, cache.files.size].join('::');
+        if (this._categoriesCacheKey === key && this._categoriesCache) return this._categoriesCache;
+
         const folderCount = new Map();
         for (const [, f] of cache.files) {
             if (this.selectedLibrary && f?.metadata?.sourcePath !== this.selectedLibrary) continue;
             const folder = this._getTopLevelFolder(f);
             if (folder) folderCount.set(folder, (folderCount.get(folder) ?? 0) + 1);
         }
-        return Array.from(folderCount.entries())
+        const result = Array.from(folderCount.entries())
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([folder, count]) => ({ key: folder, name: folder, count, isActive: this.currentFilter === folder }));
+
+        this._categoriesCacheKey = key;
+        this._categoriesCache = result;
+        return result;
     }
 
     _getAggregatedTags() {
         const cache = ImageCacheManager.getCache(TILE_MODE);
+
+        // Memoize keyed by everything that determines the aggregated set. The
+        // filtered result set (allMatches) is deterministic from these inputs,
+        // so its length is a sufficient identity marker alongside them.
+        const key = [
+            this.currentFilter,
+            this.selectedLibrary || '',
+            this.searchTerm || '',
+            Array.from(this.selectedTags).sort().join('|'),
+            this.tagSortMode,
+            this.allMatches.length,
+            cache?.lastScan || 0,
+            cache?.files?.size || 0
+        ].join('::');
+        if (this._aggregatedTagsCacheKey === key && this._aggregatedTagsCache) return this._aggregatedTagsCache;
+
         const files = this.allMatches.length > 0 ? this.allMatches : Array.from(cache.files?.values() ?? []);
         const primaryCount = new Map();
         const secondaryCount = new Map();
@@ -784,7 +833,11 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             else arr.sort((a, b) => b[1] - a[1]);
             return arr.map(([t]) => t);
         };
-        return { primary: sort(primaryCount), secondary: sort(secondaryCount) };
+        const result = { primary: sort(primaryCount), secondary: sort(secondaryCount) };
+
+        this._aggregatedTagsCacheKey = key;
+        this._aggregatedTagsCache = result;
+        return result;
     }
 
     // ------------------------------------------------------------------
@@ -1130,6 +1183,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
             ui.notifications.info(`Added ${imageName} to favorites`);
         }
+        // FAVORITE is a primary tag, so the aggregated-tags sweep can change.
+        this._aggregatedTagsCache = null;
+        this._aggregatedTagsCacheKey = null;
         if (this.currentFilter === 'favorites') {
             await this._findMatches();
         } else {
