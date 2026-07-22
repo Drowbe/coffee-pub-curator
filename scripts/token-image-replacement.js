@@ -499,6 +499,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             categories: this._getCategories(),
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
+            showTagContainer: (aggregatedTags.primary.length + aggregatedTags.secondary.length > 0) && this.tagSortMode !== 'hidden',
             overallProgress: ImageCacheManager.getCache(this.mode).overallProgress,
             totalSteps: ImageCacheManager.getCache(this.mode).totalSteps,
             overallProgressPercentage: ImageCacheManager.getCache(this.mode).totalSteps > 0 ? Math.round((ImageCacheManager.getCache(this.mode).overallProgress / ImageCacheManager.getCache(this.mode).totalSteps) * 100) : 0,

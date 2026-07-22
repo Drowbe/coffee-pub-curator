@@ -141,6 +141,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             showLibrarySelector: getTileLibraries().length > 1,
             aggregatedTags,
             hasAggregatedTags: aggregatedTags.primary.length + aggregatedTags.secondary.length > 0,
+            showTagContainer: (aggregatedTags.primary.length + aggregatedTags.secondary.length > 0) && this.tagSortMode !== 'hidden',
             tagSortMode: this.tagSortMode,
             tileAssetGridSize: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tileDefaultAssetGridSize', 100),
             tileComputedSize: this._getComputedSizeLabel(),
@@ -929,6 +930,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
         const countEl = root.querySelector('#tir-results-details-count');
         if (countEl) countEl.innerHTML = `<i class="fas fa-images"></i>${this.matches.length} of ${this.allMatches.length} Showing`;
+
+        this._updateTagContainer();
     }
 
     _renderThumbnail(fileInfo) {
@@ -1502,6 +1505,8 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                         <div class="tir-search-tools-tag-row">${tags}</div>
                     </div>`;
         }).join('');
+        const hasTags = agg.primary.length + agg.secondary.length > 0;
+        container.style.display = (hasTags && this.tagSortMode !== 'hidden') ? '' : 'none';
     }
 
     // ------------------------------------------------------------------

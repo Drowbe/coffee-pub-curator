@@ -254,9 +254,8 @@
             </div>
         </div>
 
-        {{!-- Row 3: Tags --}}
-        {{#if hasAggregatedTags}}
-        <div id="tir-search-tools-tag-container" class="tir-search-tools-tag-container">
+        {{!-- Row 3: Tags (container always rendered so tags can populate after cache loads) --}}
+        <div id="tir-search-tools-tag-container" class="tir-search-tools-tag-container"{{#unless showTagContainer}} style="display: none;"{{/unless}}>
             {{#if aggregatedTags.primary.length}}
             <div class="tir-search-tools-tag-group tir-search-tools-tag-group-primary">
                 <div class="tir-search-tools-tag-group-label">Primary Tags</div>
@@ -278,7 +277,6 @@
             </div>
             {{/if}}
         </div>
-        {{/if}}
     </div>
 
     {{!-- Results header --}}
