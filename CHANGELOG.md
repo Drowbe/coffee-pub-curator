@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [13.2.1]
+
+### Fixed
+- **Tag button intermittently dead**: Clicking the tag (filter) button next to the search box in the Token/Portrait and Tile windows sometimes did nothing. Root cause: the tag container div was only rendered by the template when tags existed at render time — if the window rendered while the image cache was still loading (or during a search / empty state), the container never entered the DOM, and no later code path could create it, so tags could never appear for the life of that window. The container is now always rendered (hidden when empty or when tag mode is Hidden) and is populated dynamically as results update. The Tile window also now refreshes its tag row on every results update, matching the Token window.
+
 ## [13.2.0] - 2026-07-12
 
 Performance and reliability overhaul of the image cache scanning and the Token/Portrait/Tile browser windows. Large libraries (10k+ images) now open quickly, stay responsive, and scan without freezing or crashing the client.
