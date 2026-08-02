@@ -12,13 +12,14 @@ import { registerSettings } from './settings.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
 // Menubar identity: one "Curator" button on the main bar that toggles a
-// secondary bar holding the image tools. Item ids are also the DOM hooks the
-// right-click context menus match on (the bar template writes data-item-id).
+// secondary bar holding the image tools.
 const MENUBAR_TOOL_ID = 'curator';
 const SECONDARY_BAR_ID = 'curator';
 const SECONDARY_BAR_ITEMS = {
     TOKEN: 'curator-replace-token',
+    CANVAS_TOKEN: 'curator-replace-canvas-tokens',
     PORTRAIT: 'curator-replace-portrait',
+    CANVAS_PORTRAIT: 'curator-replace-canvas-portraits',
     TILE: 'curator-place-image'
 };
 
@@ -155,15 +156,38 @@ async function registerMenubarIntegration(blacksmith) {
         onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'token' })
     });
 
+    // Batch action: no window, walks every token on the current canvas.
+    blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.CANVAS_TOKEN, {
+        icon: 'fa-solid fa-sync',
+        label: 'Replace Canvas Tokens',
+        tooltip: 'Replace token images for every token on the canvas',
+        group: 'replace',
+        order: 20,
+        moduleId: MODULE.ID,
+        visible: () => game.user.isGM,
+        onClick: () => TokenImageReplacementWindow.runUpdateCanvas(ImageCacheManager.MODES.TOKEN, 'Token')
+    });
+
     blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.PORTRAIT, {
         icon: 'fa-solid fa-portrait',
         label: 'Replace Portrait',
         tooltip: 'Replace Portrait Images',
         group: 'replace',
-        order: 20,
+        order: 30,
         moduleId: MODULE.ID,
         visible: () => game.user.isGM,
         onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'portrait' })
+    });
+
+    blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.CANVAS_PORTRAIT, {
+        icon: 'fa-solid fa-sync',
+        label: 'Replace Canvas Portraits',
+        tooltip: 'Replace portrait images for every token on the canvas',
+        group: 'replace',
+        order: 40,
+        moduleId: MODULE.ID,
+        visible: () => game.user.isGM,
+        onClick: () => TokenImageReplacementWindow.runUpdateCanvas(ImageCacheManager.MODES.PORTRAIT, 'Portrait')
     });
 
     blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.TILE, {
@@ -194,60 +218,6 @@ function initializeCurator(blacksmith) {
     registerMenubarIntegration(blacksmith).catch((error) => {
         console.error(`${MODULE.TITLE} | Menubar integration failed:`, error);
     });
-
-    // Right-click context menus for the secondary bar items (Blacksmith API)
-    const ContextMenu = blacksmith?.uiContextMenu;
-    if (ContextMenu && typeof ContextMenu.show === 'function') {
-        document.addEventListener('contextmenu', (event) => {
-            const tokenBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.TOKEN}"]`);
-            const portraitBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.PORTRAIT}"]`);
-            const tileBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.TILE}"]`);
-            const mode = tokenBtn ? 'token' : (portraitBtn ? 'portrait' : null);
-
-            if (tileBtn) {
-                event.preventDefault();
-                event.stopPropagation();
-                ContextMenu.show({
-                    id: `${MODULE.ID}-menubar-context-tile`,
-                    x: event.clientX,
-                    y: event.clientY,
-                    zones: [
-                        {
-                            name: 'Open Tile Image Browser',
-                            icon: 'fa-solid fa-map',
-                            callback: () => TileImageWindow.openWindow()
-                        }
-                    ],
-                    zoneClass: 'core'
-                });
-                return;
-            }
-
-            if (!mode) return;
-            event.preventDefault();
-            event.stopPropagation();
-
-            const label = mode === 'token' ? 'Token' : 'Portrait';
-            ContextMenu.show({
-                id: `${MODULE.ID}-menubar-context-${mode}`,
-                x: event.clientX,
-                y: event.clientY,
-                zones: [
-                    {
-                        name: `Open Replace ${label} Images`,
-                        icon: mode === 'token' ? 'fa-solid fa-images' : 'fa-solid fa-portrait',
-                        callback: () => TokenImageReplacementWindow.openWindow({ mode })
-                    },
-                    {
-                        name: `Replace Canvas ${label} Images`,
-                        icon: 'fa-solid fa-sync',
-                        callback: () => TokenImageReplacementWindow.runUpdateCanvas(mode, label)
-                    }
-                ],
-                zoneClass: 'core'
-            });
-        }, true);
-    }
 
     if (typeof blacksmith.registerToolbarTool === 'function') {
         blacksmith.registerToolbarTool('token-replacement', {
