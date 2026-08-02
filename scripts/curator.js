@@ -11,6 +11,17 @@ import { TileImageWindow } from './tile-image-window.js';
 import { registerSettings } from './settings.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
+// Menubar identity: one "Curator" button on the main bar that toggles a
+// secondary bar holding the image tools. Item ids are also the DOM hooks the
+// right-click context menus match on (the bar template writes data-item-id).
+const MENUBAR_TOOL_ID = 'curator';
+const SECONDARY_BAR_ID = 'curator';
+const SECONDARY_BAR_ITEMS = {
+    TOKEN: 'curator-replace-token',
+    PORTRAIT: 'curator-replace-portrait',
+    TILE: 'curator-place-image'
+};
+
 Hooks.once('ready', async function () {
     const blacksmith = game.modules.get('coffee-pub-blacksmith')?.api;
     if (!blacksmith) {
@@ -83,6 +94,90 @@ Hooks.once('ready', async function () {
     initializeCurator(blacksmith);
 });
 
+/**
+ * Register the "Curator" menubar button and the secondary bar its tools live on.
+ * The bar type must exist before it can be opened; items themselves are
+ * timing-safe and queue until the type registers.
+ */
+async function registerMenubarIntegration(blacksmith) {
+    // No size: a row of labelled buttons needs no extra room, so it takes the
+    // house default (30px, matching the primary menubar).
+    const barRegistered = await blacksmith.registerSecondaryBarType(SECONDARY_BAR_ID, {
+        name: MODULE.TITLE,
+        title: 'Curator Image Tools',
+        icon: 'fa-solid fa-images',
+        persistence: 'manual', // Stay open until the user closes it
+        moduleId: MODULE.ID,
+        groups: {
+            'replace': { mode: 'default', order: 10 },
+            'place': { mode: 'default', order: 20 }
+        }
+    });
+
+    if (!barRegistered) {
+        console.warn(`${MODULE.TITLE} | Failed to register secondary bar type; image tools will not appear.`);
+        return;
+    }
+
+    blacksmith.registerMenubarTool(MENUBAR_TOOL_ID, {
+        icon: 'fa-solid fa-images',
+        name: MENUBAR_TOOL_ID,
+        title: 'Curator',
+        tooltip: 'Curator Image Tools',
+        onClick: () => blacksmith.toggleSecondaryBar(SECONDARY_BAR_ID),
+        zone: 'middle',
+        group: 'utility',
+        // No groupOrder: Blacksmith derives it from the group name (utility = 2).
+        order: 2,
+        moduleId: MODULE.ID,
+        gmOnly: true,
+        leaderOnly: false,
+        visible: true,
+        toggleable: true, // Required for the bar-open state to sync onto the button
+        active: false,
+        iconColor: null,
+        buttonNormalTint: null,
+        buttonSelectedTint: null
+    });
+
+    // Sync the button's active state whenever the bar opens, closes, or is
+    // displaced by another module's bar.
+    blacksmith.registerSecondaryBarTool(SECONDARY_BAR_ID, MENUBAR_TOOL_ID);
+
+    blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.TOKEN, {
+        icon: 'fa-solid fa-image',
+        label: 'Replace Token',
+        tooltip: 'Replace Token Images',
+        group: 'replace',
+        order: 10,
+        moduleId: MODULE.ID,
+        visible: () => game.user.isGM,
+        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'token' })
+    });
+
+    blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.PORTRAIT, {
+        icon: 'fa-solid fa-portrait',
+        label: 'Replace Portrait',
+        tooltip: 'Replace Portrait Images',
+        group: 'replace',
+        order: 20,
+        moduleId: MODULE.ID,
+        visible: () => game.user.isGM,
+        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'portrait' })
+    });
+
+    blacksmith.registerSecondaryBarItem(SECONDARY_BAR_ID, SECONDARY_BAR_ITEMS.TILE, {
+        icon: 'fa-solid fa-map',
+        label: 'Place Image',
+        tooltip: 'Place Images as Tiles or Pins',
+        group: 'place',
+        order: 10,
+        moduleId: MODULE.ID,
+        visible: () => game.user.isGM,
+        onClick: () => TileImageWindow.openWindow()
+    });
+}
+
 function initializeCurator(blacksmith) {
     HookManager.initialize();
     ImageCacheManager.initialize();
@@ -96,76 +191,17 @@ function initializeCurator(blacksmith) {
         }
     }
 
-    blacksmith.registerMenubarTool('replacetoken', {
-        icon: 'fa-solid fa-images',
-        name: 'replacetoken',
-        title: 'Replace Token',
-        tooltip: null,
-        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'token' }),
-        zone: 'middle',
-        group: 'utility',
-        groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
-        order: 2,
-        moduleId: MODULE.ID,
-        gmOnly: true,
-        leaderOnly: false,
-        visible: true,
-        toggleable: false,
-        active: false,
-        iconColor: null,
-        buttonNormalTint: null,
-        buttonSelectedTint: null
+    registerMenubarIntegration(blacksmith).catch((error) => {
+        console.error(`${MODULE.TITLE} | Menubar integration failed:`, error);
     });
 
-    blacksmith.registerMenubarTool('replaceportrait', {
-        icon: 'fa-solid fa-portrait',
-        name: 'replaceportrait',
-        title: 'Replace Portrait',
-        tooltip: null,
-        onClick: () => TokenImageReplacementWindow.openWindow({ mode: 'portrait' }),
-        zone: 'middle',
-        group: 'utility',
-        groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
-        order: 3,
-        moduleId: MODULE.ID,
-        gmOnly: true,
-        leaderOnly: false,
-        visible: true,
-        toggleable: false,
-        active: false,
-        iconColor: null,
-        buttonNormalTint: null,
-        buttonSelectedTint: null
-    });
-
-    blacksmith.registerMenubarTool('placetile', {
-        icon: 'fa-solid fa-map',
-        name: 'placetile',
-        title: 'Place Image',
-        tooltip: null,
-        onClick: () => TileImageWindow.openWindow(),
-        zone: 'middle',
-        group: 'utility',
-        groupOrder: blacksmith.GROUP_ORDER?.UTILITY ?? 50,
-        order: 4,
-        moduleId: MODULE.ID,
-        gmOnly: true,
-        leaderOnly: false,
-        visible: true,
-        toggleable: false,
-        active: false,
-        iconColor: null,
-        buttonNormalTint: null,
-        buttonSelectedTint: null
-    });
-
-    // Right-click context menus for menubar tools (Blacksmith API)
+    // Right-click context menus for the secondary bar items (Blacksmith API)
     const ContextMenu = blacksmith?.uiContextMenu;
     if (ContextMenu && typeof ContextMenu.show === 'function') {
         document.addEventListener('contextmenu', (event) => {
-            const tokenBtn = event.target?.closest?.('[title="Replace Token"]');
-            const portraitBtn = event.target?.closest?.('[title="Replace Portrait"]');
-            const tileBtn = event.target?.closest?.('[title="Place Image"]');
+            const tokenBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.TOKEN}"]`);
+            const portraitBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.PORTRAIT}"]`);
+            const tileBtn = event.target?.closest?.(`[data-item-id="${SECONDARY_BAR_ITEMS.TILE}"]`);
             const mode = tokenBtn ? 'token' : (portraitBtn ? 'portrait' : null);
 
             if (tileBtn) {
