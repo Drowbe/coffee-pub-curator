@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Changed
+- **Combat bar context menu now offers Replace Token and Replace Portrait separately** (`scripts/curator.js`): `getCombatContextMenuItems` returned a single "Replace Image" row that opened the replacement window in whatever mode it was last left in (`tokenImageReplacementLastMode`), so which library you got depended on history rather than on what you clicked. It now returns two rows that open the window explicitly in `ImageCacheManager.MODES.TOKEN` and `MODES.PORTRAIT`. Both still select the combatant's token first, since the window resolves its target from the current selection. Blacksmith places these rows wherever it likes — as of its next release, inside a "Character" submenu on the combat bar portrait menu — and does not depend on the count or the labels. Verify live: right-click a combat bar portrait as GM and confirm both rows appear, that each opens the replacement window in its own mode regardless of which was used last, and that both target the right-clicked combatant.
+
 ## [13.2.1]
 
 ### Fixed

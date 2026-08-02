@@ -235,24 +235,34 @@ function initializeCurator(blacksmith) {
         module.api = {
             getCombatContextMenuItems(context) {
                 const { combat, combatantId, canvasToken, x, y } = context || {};
-                const items = [];
-                items.push({
-                    name: 'Replace Image',
-                    icon: 'fa-solid fa-image',
-                    disabled: !canvasToken,
-                    callback: async () => {
-                        if (!canvasToken) return;
-                        try {
-                            if (blacksmith.panToCombatant && combat && combatantId) {
-                                await blacksmith.panToCombatant(combatantId, { selectToken: true });
-                                const token = canvas.tokens?.placeables.find(t => t.id === canvasToken.id);
-                                if (token) token.control({ releaseOthers: true });
-                            }
-                        } catch (_e) {}
-                        await TokenImageReplacementWindow.openWindow();
+                // The window opens against whatever token is selected, so both
+                // rows select the combatant's token first and differ only in
+                // which library the window opens in.
+                const openFor = async (mode) => {
+                    if (!canvasToken) return;
+                    try {
+                        if (blacksmith.panToCombatant && combat && combatantId) {
+                            await blacksmith.panToCombatant(combatantId, { selectToken: true });
+                            const token = canvas.tokens?.placeables.find(t => t.id === canvasToken.id);
+                            if (token) token.control({ releaseOthers: true });
+                        }
+                    } catch (_e) {}
+                    await TokenImageReplacementWindow.openWindow({ mode });
+                };
+                return [
+                    {
+                        name: 'Replace Token',
+                        icon: 'fa-solid fa-image',
+                        disabled: !canvasToken,
+                        callback: () => openFor(ImageCacheManager.MODES.TOKEN)
+                    },
+                    {
+                        name: 'Replace Portrait',
+                        icon: 'fa-solid fa-image-portrait',
+                        disabled: !canvasToken,
+                        callback: () => openFor(ImageCacheManager.MODES.PORTRAIT)
                     }
-                });
-                return items;
+                ];
             },
             registerImageTileContextMenuItem: ImageCacheManager.registerImageTileContextMenuItem.bind(ImageCacheManager),
             unregisterImageTileContextMenuItem: ImageCacheManager.unregisterImageTileContextMenuItem.bind(ImageCacheManager),
