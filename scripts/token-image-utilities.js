@@ -3,6 +3,7 @@
 // ================================================================== 
 
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { notify } from './notifications.js';
 import { MODULE } from './const.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { LootUtilities } from './loot-utilities.js';
@@ -268,7 +269,9 @@ export class TokenImageUtilities {
             
             // Check if Item Piles module is installed and active
             if (!game.modules.get("item-piles")?.active) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Convert to Loot is enabled in Curator settings, but the Item Piles module is not active. Token cannot be converted to a loot pile. Please install and enable Item Piles, or disable Convert to Loot.", "", false, true);
+                notify.warn("Convert to Loot is enabled, but Item Piles is not active. This token cannot be converted to a loot pile.", {
+                    stackKey: `${MODULE.ID}-item-piles-missing`
+                });
                 return;
             }
             

@@ -4,6 +4,7 @@
 
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { notify } from './notifications.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { UIContextMenu } from './ui-context-menu.js';
@@ -452,7 +453,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     static async openWindow(opts = {}) {
         if (!game.user.isGM) {
-            ui.notifications.warn('Only GMs can use the Tile Image Placement window.');
+            notify.warn('Only GMs can use the Tile Image Placement window.');
             return;
         }
         const existing = Object.values(ui.windows).find(w => w instanceof TileImageWindow);
@@ -497,7 +498,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     _enterPlacementMode(imagePath, imageName, naturalWidth = 0, naturalHeight = 0) {
         if (!canvas?.scene) {
-            ui.notifications.warn('Tile Image: No active scene to place a tile on.');
+            notify.warn('Tile Image: No active scene to place a tile on.');
             return;
         }
 
@@ -655,14 +656,14 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
                 `Tile Image: Placed "${imageName}" (${width}×${height})`, '', true, false);
         } catch (err) {
-            ui.notifications.error(`Tile Image: Failed to place tile — ${err.message}`);
+            notify.error(`Tile Image: Failed to place tile — ${err.message}`);
         }
     }
 
     async _completePinPlacement(canvasX, canvasY, pending) {
         const pinsAPI = game.modules.get('coffee-pub-blacksmith')?.api?.pins;
         if (!pinsAPI?.isAvailable()) {
-            ui.notifications.warn('Pin placement requires the Blacksmith module with the Pins API active.');
+            notify.warn('Pin placement requires the Blacksmith module with the Pins API active.');
             return;
         }
         await pinsAPI.whenReady();
@@ -708,7 +709,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,
                 `Tile Image: Pinned "${imageName}" (${size}×${size})`, '', true, false);
         } catch (err) {
-            ui.notifications.error(`Pin placement failed — ${err.message}`);
+            notify.error(`Pin placement failed — ${err.message}`);
         }
     }
 
@@ -1180,11 +1181,11 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         if (isFavorited) {
             ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
             await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
-            ui.notifications.info(`Removed ${imageName} from favorites`);
+            notify.info(`Removed ${imageName} from favorites`);
         } else {
             ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
             await ImageCacheManager._saveMetadataToStorage(TILE_MODE);
-            ui.notifications.info(`Added ${imageName} to favorites`);
+            notify.info(`Added ${imageName} to favorites`);
         }
         // FAVORITE is a primary tag, so the aggregated-tags sweep can change.
         this._aggregatedTagsCache = null;
@@ -1198,9 +1199,9 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
 
     _copyToClipboard(text, successMessage = 'Copied to clipboard') {
         navigator.clipboard.writeText(text).then(() => {
-            ui.notifications.info(successMessage);
+            notify.info(successMessage);
         }).catch(() => {
-            ui.notifications.error('Failed to copy to clipboard');
+            notify.error('Failed to copy to clipboard');
         });
     }
 
@@ -1264,7 +1265,7 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         });
 
         if (!result || typeof result !== 'object') return;
-        if (!result.newName) { ui.notifications.warn('Please enter a filename.'); return; }
+        if (!result.newName) { notify.warn('Please enter a filename.'); return; }
         await this._copyFileTo(imagePath, result.folder, result.newName);
     }
 
@@ -1276,10 +1277,10 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
             const file = new File([blob], newName, { type: blob.type });
             const FP = foundry.applications.apps.FilePicker.implementation;
             await FP.upload('data', destFolder, file, {});
-            ui.notifications.info(`Copied to ${destFolder}/${newName}`);
+            notify.info(`Copied to ${destFolder}/${newName}`);
         } catch (err) {
             console.error('[Curator] Copy To failed:', err);
-            ui.notifications.error(`Failed to copy image: ${err.message}`);
+            notify.error(`Failed to copy image: ${err.message}`);
         }
     }
 

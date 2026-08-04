@@ -47,6 +47,7 @@
   ],
   "esmodules": [
     "scripts/const.js",
+    "scripts/notifications.js",
     "scripts/settings.js",
     "scripts/manager-hooks.js",
     "scripts/loot-utilities.js",

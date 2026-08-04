@@ -4,6 +4,7 @@
 
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { notify } from './notifications.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
@@ -929,11 +930,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 if (isFavorited) {
                     ImageCacheManager._removeTag(fileInfo.metadata, 'FAVORITE');
                     await ImageCacheManager._saveMetadataToStorage(this.mode);
-                    ui.notifications.info(`Removed ${imageName} from favorites`);
+                    notify.info(`Removed ${imageName} from favorites`);
                 } else {
                     ImageCacheManager._markTag(fileInfo.metadata, 'FAVORITE', 'primary');
                     await ImageCacheManager._saveMetadataToStorage(this.mode);
-                    ui.notifications.info(`Added ${imageName} to favorites`);
+                    notify.info(`Added ${imageName} to favorites`);
                 }
                 // Tag data changed without a rescan; drop the memoized
                 // aggregation and any cached matching passes (the favorites set
@@ -1103,7 +1104,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         });
 
         if (!result || typeof result !== 'object') return;
-        if (!result.newName) { ui.notifications.warn('Please enter a filename.'); return; }
+        if (!result.newName) { notify.warn('Please enter a filename.'); return; }
         await this._copyFileTo(imagePath, result.folder, result.newName);
     }
 
@@ -1115,10 +1116,10 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             const file = new File([blob], newName, { type: blob.type });
             const FP = foundry.applications.apps.FilePicker.implementation;
             await FP.upload('data', destFolder, file, {});
-            ui.notifications.info(`Copied to ${destFolder}/${newName}`);
+            notify.info(`Copied to ${destFolder}/${newName}`);
         } catch (err) {
             console.error('[Curator] Copy To failed:', err);
-            ui.notifications.error(`Failed to copy image: ${err.message}`);
+            notify.error(`Failed to copy image: ${err.message}`);
         }
     }
 
@@ -1133,7 +1134,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         try {
             const worldActor = game.actors.get(actor?.id);
             if (!worldActor) {
-                ui.notifications.error('Actor not found in world.');
+                notify.error('Actor not found in world.');
                 return;
             }
 
@@ -1141,10 +1142,10 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
             if (isPortraitMode) {
                 await worldActor.update({ img: imagePath });
-                ui.notifications.info(`Prototype portrait updated to: ${imageName}`);
+                notify.info(`Prototype portrait updated to: ${imageName}`);
             } else {
                 await worldActor.update({ 'prototypeToken.texture.src': imagePath });
-                ui.notifications.info(`Prototype token updated to: ${imageName}`);
+                notify.info(`Prototype token updated to: ${imageName}`);
             }
 
             if (this.mode === ImageCacheManager.MODES.PORTRAIT) {
@@ -1155,7 +1156,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             worldActor.sheet?.render(true);
         } catch (error) {
             const label = this.mode === ImageCacheManager.MODES.PORTRAIT ? 'portrait' : 'token';
-            ui.notifications.error(`Failed to update prototype ${label}: ${error.message}`);
+            notify.error(`Failed to update prototype ${label}: ${error.message}`);
         }
     }
 
@@ -1164,9 +1165,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
      */
     _copyToClipboard(text, successMessage = 'Copied to clipboard') {
         navigator.clipboard.writeText(text).then(() => {
-            ui.notifications.info(successMessage);
+            notify.info(successMessage);
         }).catch(() => {
-            ui.notifications.error('Failed to copy to clipboard');
+            notify.error('Failed to copy to clipboard');
         });
     }
 
@@ -1251,7 +1252,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 }
                 
                 if (!selectedActor || typeof selectedActor.update !== 'function') {
-                    ui.notifications.error('No actor selected for portrait replacement. Please select an actor from the directory or a token on the canvas.');
+                    notify.error('No actor selected for portrait replacement. Please select an actor from the directory or a token on the canvas.');
                     return;
                 }
                 
@@ -1272,11 +1273,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 });
                 
                 // Show success notification
-                ui.notifications.info(`Applied portrait: ${imageName}`);
+                notify.info(`Applied portrait: ${imageName}`);
             } else {
                 // Token mode: update token's texture
                 if (!this.selectedToken || !this.selectedToken.document) {
-                    ui.notifications.error('No token selected for replacement');
+                    notify.error('No token selected for replacement');
                     return;
                 }
                 
@@ -1296,11 +1297,11 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 TokenImageReplacementWindow._applyDropShadowToPlaceables([placeable]);
 
                 // Show success notification
-                ui.notifications.info(`Applied image: ${imageName}`);
+                notify.info(`Applied image: ${imageName}`);
             }
             
         } catch (error) {
-            ui.notifications.error(`Failed to apply image: ${error.message}`);
+            notify.error(`Failed to apply image: ${error.message}`);
         }
     }
 
@@ -1344,12 +1345,12 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 const data = cache.completionData;
                 let message = `${modeLabel} Image Replacement: Scan completed! Found ${data.totalFiles} files across ${data.totalFolders} folders in ${data.timeString}`;
                 if (data.ignoredFiles > 0) message += ` (${data.ignoredFiles} files ignored by filter)`;
-                ui.notifications.info(message);
+                notify.info(message);
             } else {
-                ui.notifications.info(`${modeLabel} image scan completed`);
+                notify.info(`${modeLabel} image scan completed`);
             }
         } catch (error) {
-            ui.notifications.error(`${modeLabel} image scan failed: ${error.message}`);
+            notify.error(`${modeLabel} image scan failed: ${error.message}`);
         } finally {
             clearInterval(progressTimer);
         }
@@ -1361,9 +1362,9 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         
         if (paused) {
             this.render();
-            ui.notifications.info(`${modeLabel} cache scanning paused`);
+            notify.info(`${modeLabel} cache scanning paused`);
         } else {
-            ui.notifications.warn(`No active ${modeLabel.toLowerCase()} scan to pause`);
+            notify.warn(`No active ${modeLabel.toLowerCase()} scan to pause`);
         }
     }
 
@@ -1397,10 +1398,10 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         if (confirmed) {
             try {
                 await ImageCacheManager.deleteCache(this.mode);
-                ui.notifications.info(`${modeLabel} cache deleted successfully`);
+                notify.info(`${modeLabel} cache deleted successfully`);
                 this.render();
             } catch (error) {
-                ui.notifications.error(`Failed to delete ${modeLabel.toLowerCase()} cache: ${error.message}`);
+                notify.error(`Failed to delete ${modeLabel.toLowerCase()} cache: ${error.message}`);
             }
         }
     }
@@ -1411,18 +1412,18 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         }
 
         if (!game.user.isGM) {
-            ui.notifications.warn('Token Image Replacement: Only GMs can update the canvas.');
+            notify.warn('Token Image Replacement: Only GMs can update the canvas.');
             return;
         }
 
         const canvasTokens = canvas?.tokens?.placeables ?? [];
         if (canvasTokens.length === 0) {
-            ui.notifications.info('Token Image Replacement: No tokens on the canvas to update.');
+            notify.info('Token Image Replacement: No tokens on the canvas to update.');
             return;
         }
 
         if (TokenImageReplacementWindow._staticCanvasUpdateInProgress) {
-            ui.notifications.warn('Token Image Replacement: Canvas update already in progress.');
+            notify.warn('Token Image Replacement: Canvas update already in progress.');
             return;
         }
 
@@ -1445,18 +1446,18 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         const label = modeLabel ?? (mode === ImageCacheManager.MODES.PORTRAIT ? 'Portrait' : 'Token');
 
         if (!game.user.isGM) {
-            ui.notifications.warn('Token Image Replacement: Only GMs can update the canvas.');
+            notify.warn('Token Image Replacement: Only GMs can update the canvas.');
             return;
         }
 
         const canvasTokens = canvas?.tokens?.placeables ?? [];
         if (canvasTokens.length === 0) {
-            ui.notifications.info('Token Image Replacement: No tokens on the canvas to update.');
+            notify.info('Token Image Replacement: No tokens on the canvas to update.');
             return;
         }
 
         if (TokenImageReplacementWindow._staticCanvasUpdateInProgress) {
-            ui.notifications.warn('Token Image Replacement: Canvas update already in progress.');
+            notify.warn('Token Image Replacement: Canvas update already in progress.');
             return;
         }
 
@@ -1465,14 +1466,14 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         const processedPlaceables = [];
 
         try {
-            ui.notifications.info(`${label} Image Replacement: Updating canvas...`);
+            notify.info(`${label} Image Replacement: Updating canvas...`);
 
             let processed = 0;
             if (mode === ImageCacheManager.MODES.TOKEN) {
                 const tokenEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementEnabled', false);
                 const updateDroppedTokens = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementUpdateDropped', true);
                 if (!tokenEnabled || !updateDroppedTokens) {
-                    ui.notifications.info(`${label} Image Replacement: Token updates are disabled in settings.`);
+                    notify.info(`${label} Image Replacement: Token updates are disabled in settings.`);
                     return;
                 }
 
@@ -1486,7 +1487,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
                 const portraitEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementEnabled', false);
                 const updateDroppedPortraits = BlacksmithUtils.getSettingSafely(MODULE.ID, 'portraitImageReplacementUpdateDropped', true);
                 if (!portraitEnabled || !updateDroppedPortraits) {
-                    ui.notifications.info(`${label} Image Replacement: Portrait updates are disabled in settings.`);
+                    notify.info(`${label} Image Replacement: Portrait updates are disabled in settings.`);
                     return;
                 }
 
@@ -1503,12 +1504,12 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             }
 
             if (processed === 0) {
-                ui.notifications.info(`${label} Image Replacement: No ${label.toLowerCase()}s on the canvas needed updating.`);
+                notify.info(`${label} Image Replacement: No ${label.toLowerCase()}s on the canvas needed updating.`);
             } else {
-                ui.notifications.info(`${label} Image Replacement: Updated ${processed} ${label.toLowerCase()}${processed === 1 ? '' : 's'} on the canvas.`);
+                notify.info(`${label} Image Replacement: Updated ${processed} ${label.toLowerCase()}${processed === 1 ? '' : 's'} on the canvas.`);
             }
         } catch (error) {
-            ui.notifications.error(`${label} Image Replacement: Canvas update failed: ${error.message}`);
+            notify.error(`${label} Image Replacement: Canvas update failed: ${error.message}`);
         } finally {
             TokenImageReplacementWindow._staticCanvasUpdateInProgress = false;
         }
@@ -3873,7 +3874,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
      */
     static async openWindow(opts = {}) {
         if (!game.user.isGM) {
-            ui.notifications.warn("Only GMs can use the Token Image Replacement window");
+            notify.warn("Only GMs can use the Token Image Replacement window");
             return;
         }
         

@@ -9,6 +9,7 @@ import { TokenImageUtilities } from './token-image-utilities.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { TileImageWindow } from './tile-image-window.js';
 import { registerSettings } from './settings.js';
+import { notify } from './notifications.js';
 import { BlacksmithAPI } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 
 // Menubar identity: one "Curator" button on the main bar that toggles a
@@ -48,7 +49,7 @@ Hooks.once('ready', async function () {
         console.error(`❌ Failed to register ${MODULE.TITLE} with Blacksmith:`, error);
     }
 
-    registerSettings(blacksmith);
+    await registerSettings(blacksmith);
 
     // Socket handler — must register for ALL users, not just GM
     game.socket.on(`module.${MODULE.ID}`, (data) => {
@@ -211,7 +212,9 @@ function initializeCurator(blacksmith) {
     if (game.user.isGM) {
         const lootEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false);
         if (lootEnabled && !game.modules.get('item-piles')?.active) {
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Curator: Convert to Loot is enabled in settings, but the Item Piles module is not active. Tokens will not be converted to loot piles. Please install and enable Item Piles, or disable Convert to Loot in Curator settings.", "", false, true);
+            notify.warn("Convert to Loot is enabled, but Item Piles is not active. Tokens will not be converted to loot piles.", {
+                stackKey: `${MODULE.ID}-item-piles-missing`
+            });
         }
     }
 

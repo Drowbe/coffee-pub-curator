@@ -4,6 +4,7 @@
 
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
+import { notify } from './notifications.js';
 import { HookManager } from './manager-hooks.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
@@ -1765,7 +1766,7 @@ export class ImageCacheManager {
         
         // No cache found - user must scan manually
         const modeLabel = mode === this.MODES.PORTRAIT ? 'Portrait' : mode === this.MODES.TILE ? 'Tile' : 'Token';
-        ui.notifications.info(`No ${modeLabel} Image Replacement images found. Use "Update Images" in the replacement window to scan.`);
+        notify.info(`No ${modeLabel} Image Replacement images found. Use "Update Images" in the replacement window to scan.`);
     }
     
     /**

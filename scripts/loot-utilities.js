@@ -8,22 +8,37 @@ import { MODULE } from './const.js';
 export class LootUtilities {
     /**
      * Roll a loot table and add results to an actor's inventory
-     * @param {string} tableName - Name of the RollTable
+     * @param {string} tableReference - UUID of a compendium RollTable
      * @param {number} timesToRoll - How many times to roll the table
      * @param {Actor} actor - The actor to add items to
      * @param {number} quantityMax - Max quantity per item
      */
-    static async _rollLootTable(tableName, timesToRoll, actor, quantityMax = 1) {
-        try {
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Looking for loot table: "${tableName}"`, "", true, false);
+    static async _resolveLootTable(tableReference) {
+        if (!tableReference || tableReference === 'none' || tableReference.startsWith('--')) return null;
 
-            const table = game.tables.find(t => t.name === tableName);
+        if (tableReference.startsWith('Compendium.')) {
+            try {
+                const document = await fromUuid(tableReference);
+                if (document?.documentName === 'RollTable') return document;
+            } catch (error) {
+                console.warn(`${MODULE.TITLE} | Could not load loot table UUID ${tableReference}`, error);
+            }
+        }
+
+        return null;
+    }
+
+    static async _rollLootTable(tableReference, timesToRoll, actor, quantityMax = 1) {
+        try {
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Looking for loot table: "${tableReference}"`, "", true, false);
+
+            const table = await LootUtilities._resolveLootTable(tableReference);
             if (!table) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Loot table "${tableName}" not found`, "", false, false);
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Loot table "${tableReference}" not found`, "", false, false);
                 return;
             }
 
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Found table "${tableName}", rolling ${timesToRoll} times`, "", true, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Found table "${table.name}", rolling ${timesToRoll} times`, "", true, false);
 
             for (let i = 0; i < timesToRoll; i++) {
                 const roll = await table.draw({ displayChat: false });
@@ -75,7 +90,7 @@ export class LootUtilities {
                 }
             }
         } catch (error) {
-            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error rolling loot table ${tableName}:`, error, false, false);
+            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error rolling loot table ${tableReference}:`, error, false, false);
         }
     }
 

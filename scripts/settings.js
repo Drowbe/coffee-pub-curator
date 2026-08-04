@@ -184,9 +184,38 @@ export function getTokenImageReplacementCacheStats() {
  * Register all Curator settings. Call from ready hook; pass Blacksmith API for sound choices.
  * @param {Object} [blacksmithApi] - Blacksmith module.api; used for arrSoundChoices on dead token sound settings.
  */
-export function registerSettings(blacksmithApi) {
+async function _getLootTableChoices(blacksmithApi) {
+    const none = { none: '-- Choose a Compendium Table --' };
+    const compendiums = blacksmithApi?.compendiums;
+    if (typeof compendiums?.getAllPacks !== 'function') return none;
+
+    try {
+        const choices = { ...none };
+        const packs = compendiums.getAllPacks('RollTable');
+        const indexes = await Promise.all(packs.map(async packInfo => {
+            const pack = game.packs.get(packInfo.id);
+            if (!pack) return [];
+            const index = await pack.getIndex({ fields: ['name'] });
+            return Array.from(index).map(entry => ({ packInfo, pack, entry }));
+        }));
+        const tables = indexes.flat().sort((a, b) => {
+            const sourceCompare = a.packInfo.displayLabel.localeCompare(b.packInfo.displayLabel);
+            return sourceCompare || a.entry.name.localeCompare(b.entry.name);
+        });
+        for (const { packInfo, pack, entry } of tables) {
+            const uuid = entry.uuid ?? `Compendium.${pack.id}.${pack.documentName}.${entry._id}`;
+            choices[uuid] = `${packInfo.displayLabel} — ${entry.name}`;
+        }
+        return choices;
+    } catch (error) {
+        console.warn(`${MODULE.TITLE} | Could not load compendium RollTable choices.`, error);
+        return none;
+    }
+}
+
+export async function registerSettings(blacksmithApi) {
     const soundChoices = window.BlacksmithConstants?.arrSoundChoices || blacksmithApi?.BLACKSMITH?.arrSoundChoices || { none: 'None' };
-    const tableChoices = window.BlacksmithConstants?.arrTableChoices || blacksmithApi?.BLACKSMITH?.arrTableChoices || { '-- Choose a General Loot Table --': '-- Choose a General Loot Table --' };
+    const tableChoices = await _getLootTableChoices(blacksmithApi);
 
     // Dynamic update for choices if they arrive later via blacksmithUpdated hook
     Hooks.on('blacksmithUpdated', (data) => {
@@ -200,14 +229,6 @@ export function registerSettings(blacksmithApi) {
                 for (const key of soundSettings) {
                     const setting = game.settings.settings.get(`${MODULE.ID}.${key}`);
                     if (setting) setting.choices = sChoices;
-                }
-            }
-            if (api.arrTableChoices) {
-                const tChoices = api.arrTableChoices;
-                const tableSettings = ['tokenLootTableGeneral', 'tokenLootTableGear', 'tokenLootTableTreasure', 'tokenLootTableEpic'];
-                for (const key of tableSettings) {
-                    const setting = game.settings.settings.get(`${MODULE.ID}.${key}`);
-                    if (setting) setting.choices = tChoices;
                 }
             }
         }
@@ -435,13 +456,15 @@ export function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    registerHeader('LootGeneral', 'headingH3LootGeneral-Label', 'headingH3LootGeneral-Hint', 'H3', GROUP, 'world');
+
     game.settings.register(MODULE.ID, 'tokenLootTableGeneral', {
         name: MODULE.ID + '.tokenLootTableGeneral-Label',
         hint: MODULE.ID + '.tokenLootTableGeneral-Hint',
         scope: 'world',
         config: true,
         requiresReload: false,
-        default: '-- Choose a General Loot Table --',
+        default: 'none',
         choices: tableChoices,
         group: GROUP
     });
@@ -470,13 +493,15 @@ export function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    registerHeader('LootGear', 'headingH3LootGear-Label', 'headingH3LootGear-Hint', 'H3', GROUP, 'world');
+
     game.settings.register(MODULE.ID, 'tokenLootTableGear', {
         name: MODULE.ID + '.tokenLootTableGear-Label',
         hint: MODULE.ID + '.tokenLootTableGear-Hint',
         scope: 'world',
         config: true,
         requiresReload: false,
-        default: '-- Choose a Gear Loot Table --',
+        default: 'none',
         choices: tableChoices,
         group: GROUP
     });
@@ -505,13 +530,15 @@ export function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    registerHeader('LootTablesTreasure', 'headingH3LootTablesTreasure-Label', 'headingH3LootTablesTreasure-Hint', 'H3', GROUP, 'world');
+
     game.settings.register(MODULE.ID, 'tokenLootTableTreasure', {
         name: MODULE.ID + '.tokenLootTableTreasure-Label',
         hint: MODULE.ID + '.tokenLootTableTreasure-Hint',
         scope: 'world',
         config: true,
         requiresReload: false,
-        default: '-- Choose a Treasure Table --',
+        default: 'none',
         choices: tableChoices,
         group: GROUP
     });
@@ -540,13 +567,15 @@ export function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    registerHeader('LootEpic', 'headingH3LootEpic-Label', 'headingH3LootEpic-Hint', 'H3', GROUP, 'world');
+
     game.settings.register(MODULE.ID, 'tokenLootTableEpic', {
         name: MODULE.ID + '.tokenLootTableEpic-Label',
         hint: MODULE.ID + '.tokenLootTableEpic-Hint',
         scope: 'world',
         config: true,
         requiresReload: false,
-        default: '-- Choose an Epic Loot Table --',
+        default: 'none',
         choices: tableChoices,
         group: GROUP
     });
