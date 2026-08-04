@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [13.2.3] - 2026-08-03
+
+### Added
+- **Blacksmith Toast notifications** (`scripts/notifications.js`): added a shared notification wrapper around `api.toast.show()` with consistent informational, warning, and error presentation. Curator's user-facing notifications now use Blacksmith Toasts instead of Foundry's `ui.notifications`; diagnostic messages remain console-only.
+
+### Changed
+- **Loot tables are now compendium-only and portable between worlds** (`scripts/settings.js`, `scripts/loot-utilities.js`): General Loot, Adventuring Supplies, Treasure, and Epic Loot selectors enumerate the RollTables in every installed RollTable compendium via `api.compendiums.getAllPacks('RollTable')`, including packs outside the GM's curated search mapping. Selections store stable compendium document UUIDs and load them with `fromUuid()`. Loose world RollTables are no longer offered or resolved.
+- **Loot settings reorganized for clarity** (`scripts/settings.js`, `lang/en.json`): the former **Treasure and Loot** block is now **Coins**, followed by separate **General Loot**, **Adventuring Supplies**, **Treasure**, and **Epic Loot** sections. Each selector is explicitly labelled as a **Compendium Table** so its source and portability are clear.
+
 ## [13.2.2]
 
 ### Changed
