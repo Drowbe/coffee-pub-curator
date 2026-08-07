@@ -320,7 +320,7 @@ export class TokenImageUtilities {
             // Play sound
             const sound = game.settings.get(MODULE.ID, 'tokenLootSound');
             if (sound && sound !== 'none' && sound !== 'sound-none') {
-                AudioHelper.play({src: sound, volume: 0.5, autoplay: true, loop: false}, true);
+                await BlacksmithUtils.playSound(sound, 0.5, false, true);
             }
             
             // Send chat message if enabled
