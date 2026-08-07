@@ -50,21 +50,18 @@ export class LootUtilities {
 
                 for (const result of roll.results) {
                     const resultName = result.name || result.description || 'N/A';
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Processing result - type: ${result.type}, name: ${resultName}, documentCollection: ${result.documentCollection}`, "", true, false);
+                    const documentUuid = result.documentUuid;
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Processing result - type: ${result.type}, name: ${resultName}, documentUuid: ${documentUuid || 'none'}`, "", true, false);
 
-                    if (result.type === CONST.TABLE_RESULT_TYPES.DOCUMENT || result.type === 'pack' || result.documentCollection) {
+                    if (result.type === CONST.TABLE_RESULT_TYPES.DOCUMENT || result.type === 'pack' || documentUuid) {
                         BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `This is a document/pack result`, "", true, false);
 
                         let item = null;
-                        if (result.documentCollection && result.documentId) {
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Getting item from pack: ${result.documentCollection}, ID: ${result.documentId}`, "", true, false);
-                            const pack = game.packs.get(result.documentCollection);
-                            if (pack) {
-                                item = await pack.getDocument(result.documentId);
-                                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Retrieved item:`, item, true, false);
-                            } else {
-                                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Pack not found: ${result.documentCollection}`, "", false, false);
-                            }
+                        if (documentUuid) {
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Getting item from UUID: ${documentUuid}`, "", true, false);
+                            const document = await fromUuid(documentUuid);
+                            if (document?.documentName === 'Item') item = document;
+                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Retrieved item:`, item, true, false);
                         }
 
                         if (item) {
