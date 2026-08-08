@@ -4,7 +4,12 @@
 .curator-loot-window .window-content { min-height: 0; overflow: hidden; }
 .curator-loot-window .blacksmith-window-tool-root { min-height: 0; max-height: 100%; }
 .curator-loot-window .blacksmith-window-tool-body { min-height: 0; overflow: auto; }
-.curator-loot-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 8px; color: var(--blacksmith-tool-text); }
+.curator-loot-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 0 8px 8px; color: var(--blacksmith-tool-text); }
+
+/* The corpse and the recipient stay put while the rows scroll under them. The
+   negative margin lets the wrapper own the top padding, so nothing shows in the
+   gap above it when the list is scrolled. */
+.curator-loot-pinned { position: sticky; top: 0; z-index: 3; display: flex; flex-direction: column; gap: 10px; margin: 0 -8px; padding: 8px 8px 10px; background: var(--blacksmith-tool-background); }
 .curator-loot-section { min-width: 0; padding: 8px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 6px; background: var(--blacksmith-tool-surface-raised); }
 .curator-loot-section > h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 7px; padding: 0 0 6px; border-bottom: 1px solid var(--blacksmith-tool-divider); color: var(--blacksmith-tool-accent); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
 .curator-loot-section > h3 i { width: 18px; text-align: center; }

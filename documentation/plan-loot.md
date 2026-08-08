@@ -426,6 +426,20 @@ into silence — a dead button with no error.
 across a flex footer. Fixed in the shared class; Curator's local override has been removed. Do not
 reintroduce a width reset — if a footer button looks wrong, it is a shared-class problem.
 
+### Sizing and pinning
+
+The window is resizable, opens at 520x560, and is bounded only by the viewport. It carries an **explicit**
+height rather than `auto`: a resizable window needs a height to be dragged from, and `auto` combined with a
+max-height cap would let the cap silently refuse the drag.
+
+The corpse card and the Looting-as row are pinned to the top of the scrolling body as one sticky wrapper,
+not as two stacked sticky sections — stacking them would require the first one's height hard-coded as the
+second one's `top` offset, which breaks the moment either changes. The wrapper owns the content's top
+padding so nothing shows above it once the list is scrolled.
+
+Position and size are not remembered between openings (`rememberPosition: false`), so the window always
+opens near where it is raised. Revisit if a resized window resetting each time proves annoying in play.
+
 ### Rendering failures
 
 Most codes describe a state that will not change, so they get one sentence and no retry. Three do not:
@@ -511,10 +525,11 @@ World setting candidates for an empty corpse:
 
 Choose one safe default during implementation. Deleting a token must occur only after authoritative confirmation that no transferable items or currency remain.
 
-**Deleting a token during combat destroys its XP award.** Foundry removes the Combatant with the Token, and
-Blacksmith reads the roster from `combat.combatants` at combat end, so a buried body contributes nothing.
-`lootBuryWhenEmpty` reaches this with no GM involvement at all. Unresolved; see `TODO.md`. Do not treat the
-current behavior as intended.
+Deleting a token during combat used to destroy its XP award, because Foundry removes the Combatant with the
+Token and Blacksmith read the roster from `combat.combatants` at combat end. **Blacksmith is fixing that at
+the source**, deriving the award from history. Curator adds no guard of its own: every mitigation considered
+was justified by the XP loss alone, and a Curator-side block would only cover Curator while masking the
+general case. See `TODO.md`.
 
 On revival:
 
@@ -693,6 +708,9 @@ replacing a surface.
 - Finish `architecture-loot.md` from the implemented code and link it from relevant contributor documentation.
 
 ## 16. Verification Matrix
+
+The working checklist lives in `testing-loot.md`, ordered for actually running through. This section stays
+the reference: what must hold and why, independent of the order anyone tests it in.
 
 ### Generation and state
 

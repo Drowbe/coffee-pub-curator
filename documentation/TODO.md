@@ -13,9 +13,9 @@
 - [ ] **Curator:** Normalize API inputs: accept canvas `Token`, `TokenDocument`, or `Actor`; derive as needed for processing and for "selected" context in windows.
 
 
-## Burying a body destroys its XP (cross-module, unresolved)
+## Burying a body destroys its XP (fix owned by Blacksmith)
 
-Confirmed 2026-08-08 against the code, not suspected.
+Confirmed 2026-08-08 against the code, not suspected. Blacksmith took the fix the same day.
 
 Foundry removes a Combatant when its Token is deleted (`TokenDocument#_onDelete` calls `deleteCombatants`).
 Blacksmith's `XpManager` computes the award on the `deleteCombat` hook from `combat.combatants`
@@ -28,22 +28,31 @@ Two paths reach it, and the automatic one is worse:
 - **`lootBuryWhenEmpty`** auto-buries a fully-looted body. No dialog, no GM involvement — a player empties a
   corpse mid-fight and the XP disappears. This is the sharper case and the one to fix first.
 
-**The right fix is Blacksmith's, and it is the one already proposed: derive XP from history rather than from
-current state.** Record defeated combatants as they are defeated, or snapshot the roster at combat start, so
-the award does not depend on the token still existing when the encounter ends. That also fixes every other
-cause of a mid-combat token deletion, of which Curator is only one.
+**Blacksmith is fixing this, and that closes it.** The fix is the one proposed: derive the award from
+history rather than from the roster at combat end. It covers every cause of a mid-combat token deletion, of
+which Curator is only one — a GM deleting a token by hand hits the same hole, and no Curator-side guard would
+have helped there.
 
-Curator-side mitigations, none implemented, in increasing order of restriction:
+XP was the outlier, not the pattern. `stats-combat.js` already accumulates as combat happens — hits, misses,
+and expired turns are pushed into `currentStats` at the moment they occur (`_boundedPush`, e.g. `:1613`), so
+it never depended on the roster surviving. `XpManager` reading `combat.combatants` at the end was the one
+place doing it the fragile way, and the history-based model it needs already exists in the same codebase.
 
-1. Warn in the bury approval dialog when the token is a combatant in the active combat. Cheap, keeps GM
-   agency, does nothing for the automatic path.
-2. Suppress `lootBuryWhenEmpty` while its token is in an active combat, and sweep at `deleteCombat`. Closes
-   the silent path and matches the deferral `tokenConvertAfterCombat` already uses.
-3. Refuse bury outright during combat. Safest, most restrictive, and arguably not Curator's call to make.
+**Curator should implement none of the three mitigations previously listed here** (warn in the bury dialog,
+suppress `lootBuryWhenEmpty` during combat, refuse bury during combat). Every one was justified by the XP
+loss and nothing else. Combat stats are unaffected. What remains is that a token can vanish from the canvas
+and the tracker mid-fight — surprising, but it is a GM opt-in setting that is off by default, and it is taste
+rather than correctness.
 
-Sequencing note if a deferred bury is ever added: it must run **after** Blacksmith's XP hook, which is
-`deleteCombat` at priority 3. Curator's existing `deleteCombat` handler converts held bodies and deletes
-nothing, so there is no ordering hazard today — a bury sweep would introduce one.
+There is also an active reason **not** to guard it right now: a Curator-side block on mid-combat deletion
+would prevent the exact scenario Blacksmith needs in order to test their fix.
+
+Worth confirming with Blacksmith: whether the fix covers the roster generally or only the XP award, and
+whether anything else of theirs still reads `combat.combatants` at combat end.
+
+Sequencing note retained in case a deferred bury is ever added for other reasons: it would need to run
+**after** Blacksmith's `deleteCombat` handlers. Curator's existing one converts held bodies and deletes
+nothing, so there is no ordering hazard today.
 
 ## Shop Tokens (idea, not scheduled)
 

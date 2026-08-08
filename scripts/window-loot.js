@@ -47,12 +47,13 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         foundry.utils.mergeObject({}, super.DEFAULT_OPTIONS ?? {}),
         {
             classes: ['curator-loot-window'],
-            position: { width: 520, height: 'auto' },
-            window: { title: 'Loot', resizable: false, minimizable: true },
-            // A well-stocked corpse can carry a dozen rows, and `calc(100vh - 16px)`
-            // let the window swallow the screen. Capped so the body scrolls instead,
-            // with the viewport term keeping it sane on a short display.
-            windowSizeConstraints: { minWidth: 420, maxWidth: 660, maxHeight: 'min(620px, calc(100vh - 100px))' },
+            // An explicit height rather than `auto`: a resizable window needs a height
+            // it can be dragged from, and `auto` plus a max-height would let the cap
+            // silently refuse the drag. The cap is now the viewport, so resizing is
+            // only bounded by the screen.
+            position: { width: 520, height: 560 },
+            window: { title: 'Loot', resizable: true, minimizable: true },
+            windowSizeConstraints: { minWidth: 420, minHeight: 320, maxWidth: 900, maxHeight: 'calc(100vh - 40px)' },
             toolTitlebar: 'full',
             rememberPosition: false,
             windowPositionKey: 'curator-loot'

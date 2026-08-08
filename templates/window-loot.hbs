@@ -2,6 +2,10 @@
     {{#if missing}}
         <div class="curator-loot-empty">This corpse is no longer available.</div>
     {{else}}
+        {{!-- Pinned together: one sticky wrapper rather than two stacked sticky
+              sections, because stacking them would need the first one's height
+              hard-coded as the second one's offset. --}}
+        <div class="curator-loot-pinned">
         <section class="curator-loot-section curator-loot-subject">
             <div class="curator-loot-subject-image">
                 <img src="{{portraitImg}}" alt="{{tokenName}}">
@@ -38,6 +42,7 @@
                 </div>
             {{/if}}
         </section>
+        </div>
 
         <section class="curator-loot-section">
             <h3><span><i class="fa-solid fa-box-open"></i> Items</span><span class="curator-loot-count">{{itemCount}}</span></h3>
