@@ -43,8 +43,7 @@
     { "lang": "en", "name": "English", "path": "lang/en.json", "flags": {} }
   ],
   "styles": [
-    "styles/default.css",
-    "styles/window-loot.css"
+    "styles/default.css"
   ],
   "esmodules": [
     "scripts/const.js",
