@@ -1,6 +1,8 @@
 # Curator Looting Plan
 
-**Status:** Phase 1 in progress
+**Status:** Phase 1 in progress. Item Piles integration is already fully removed (see section 14).
+Blacksmith has approved and is building `api.tokens.registerInteraction` (contract in section 6) ahead of
+`api.inventory`. Neither blocks Phase 1.
 **Target:** Focused corpse looting owned by Curator
 **Architecture record:** Create `architecture-loot.md` as verified behavior lands. Do not copy this plan into the architecture document unchanged.
 
@@ -28,7 +30,7 @@ The result should feel like a purpose-built loot window, not a smaller clone of 
 - Refresh all open loot windows when contents change.
 - Handle an empty corpse according to a world setting.
 - Remove lootability and restore Curator state when the token is revived.
-- Remove Item Piles checks, flags, conversion calls, reversion calls, and user-facing dependency warnings from Curator after the replacement is verified.
+- Remove Item Piles checks, flags, conversion calls, reversion calls, and user-facing dependency warnings from Curator. Completed in Phase 1; see section 14.
 
 ### Explicitly excluded
 
@@ -56,6 +58,8 @@ The result should feel like a purpose-built loot window, not a smaller clone of 
 
 ### Blacksmith owns or should own
 
+- Canvas token interaction claiming, including the permission relaxation that makes a corpse reachable by a
+  player with no Actor permission. Confirmed and in progress.
 - Window base classes and shared styling.
 - Entity selection and quantity-selection controls.
 - Socket infrastructure.
@@ -95,7 +99,15 @@ await blacksmith.inventory.transferCurrency({
 });
 ```
 
+Curator also needs the source-less pair, `grantItem` and `grantCurrency`, for loot *generation*. Rolling a
+loot table and adding random coins have no source Actor, so `transferItem` cannot express them.
+`loot-utilities.js` currently owns both, and its coin path is an absolute-total read-modify-write that races.
+Migrating generation onto the primitives is in scope, not a later cleanup.
+
 Socket routing, authorization, interaction rules, and notifications remain in Curator.
+
+Blacksmith's accepted design lives in `coffee-pub-blacksmith/documentation/plans/plan-inventory-api.md`.
+That document is the contract. Where this plan and that one disagree, that one wins and this one is wrong.
 
 ### Integration rule
 
@@ -127,6 +139,10 @@ Expected states:
 
 The `generationId` distinguishes the current death event from stale windows or delayed socket requests. Revival clears or invalidates it.
 
+Every transition into or out of `ready` must be followed by a guaranteed interaction re-evaluation, because
+Blacksmith evaluates a claim once per token draw rather than per gesture. See the redraw subsection of
+section 6; this is a correctness requirement of the state model, not a rendering detail.
+
 ## 6. Interaction Model
 
 1. The token reaches the configured death condition.
@@ -141,7 +157,111 @@ The `generationId` distinguishes the current death event from stale windows or d
 10. Curator broadcasts a content-changed event and every open window refreshes.
 11. When no transferable contents remain, Curator applies the configured empty-corpse behavior.
 
-The initial interaction should use the conventional token double-click unless live testing shows a conflict. A token context-menu entry can be added as an accessible alternative.
+### Gesture
+
+**Every canvas token gesture is permission-gated, so none of them is available to Curator without
+Blacksmith.** Verified against Foundry v13 `_createInteractionManager` (`foundry.mjs:82565`):
+
+| Gesture | Permission | Token requirement |
+|---|---|---|
+| `clickLeft` | `_canControl` | ownership (`foundry.mjs:143215`) |
+| `clickLeft2` | `_canView` | LIMITED on the Actor (`foundry.mjs:143253`) |
+| `clickRight` | `_canHUD` | GM or **OWNER** (`foundry.mjs:143226`) |
+| `clickRight2` | `_canConfigure` | update permission |
+
+A canvas token context menu is therefore *stricter* than double-click, not a workaround for it. An earlier
+revision of this section called the context menu a zero-dependency fallback; that was wrong and is
+corrected here.
+
+#### Phase 1 entry point: the corpse chat card
+
+Curator already posts a loot chat message on death (`tokenLootChatMessage`). Add the loot entry point there.
+Chat cards carry no canvas permission gate, every player can see and click one, and it needs nothing from
+Blacksmith. The card carries the Token UUID; the button calls `LootManager.open`, which re-resolves and
+re-validates. This is what unblocks Phases 2 through 4.
+
+Consequence for the setting: with the card as the interaction surface, `tokenLootChatMessage` can no longer
+simply suppress it. Split announcement from access, or make the card unconditional when looting is enabled.
+
+#### Canvas gestures: `blacksmith.tokens.registerInteraction` — approved and confirmed
+
+Requested, approved, and being built **before** `api.inventory`. The contract below is settled; code against
+it, not against the earlier request draft.
+
+Why an API and not a hook, kept because it is the reason the shape is what it is: `Token#_onClickLeft2`
+(`foundry.mjs:143318`) emits no hook, the permission predicate runs before the handler
+(`foundry.mjs:81334`), and `HookManager` discards non-`pre` return values (`manager-hooks.js:94`). No hook
+can participate in a decision that has already been made.
+
+```js
+const id = blacksmith.tokens.registerInteraction({
+    id: 'curator-loot',
+    module: 'coffee-pub-curator',
+    gesture: 'clickLeft2',
+    priority: 2,
+    matches: (tokenDocument, user) => LootManager.isLootable(tokenDocument),
+    bypassPermission: true,
+    handler: (token, event) => LootManager.open(token.document),
+    context: 'curator-loot'
+});
+```
+
+Registration belongs in `LootManager.initialize()`, which is currently an empty stub holding the place.
+Teardown uses `disposeByContext('curator-loot')`; `unregisterInteraction(id)` handles a single claim.
+
+**Confirmed contract, and what each point obliges Curator to do:**
+
+- **Foundry gesture keys, not friendly names.** `clickLeft2`, not `doubleClick`. v1 accepts `clickLeft2` and
+  `clickRight2` only; `clickLeft`, `clickRight`, `dragStart`, `dragLeftStart`, and `hoverIn` are rejected
+  with an error because claiming them would break selection, dragging, or the HUD. The data model is
+  gesture-keyed, so adding one later is small — but Curator must not plan around a gesture it has not
+  justified.
+- **`matches` must be synchronous and cheap.** It runs once per token draw. No `await`, no compendium
+  lookups, no UUID resolution. `LootManager.isLootable` already satisfies this: it is a single `getFlag`
+  read and must stay that way. Do not let recipient eligibility, distance, or actor-type checks migrate into
+  it — those belong in `LootManager.open` and in the GM handler.
+- **A thrown handler is a dead gesture, not a fallback.** Blacksmith deliberately does not fall through to
+  Foundry's handler on error, because permission is already relaxed at that point and falling through would
+  open the Actor sheet to a player who could not otherwise open it. Curator's handler must therefore never
+  throw and never return a rejected promise: wrap `LootManager.open` in `try/catch` **and** attach a
+  `.catch()`, since `open` is async and a rejection would not surface synchronously. A failure must produce
+  a Curator notification, not silence.
+
+**Implementation note that changes our risk profile, in our favor.** Blacksmith patches one token
+instance's one gesture key from a post-draw hook off its existing `Token.prototype.draw` wrapper, at the
+moment `activateListeners()` has assigned a fresh `mouseInteractionManager`. There is no class-level wrapper
+and no shared code path. Consequences: an unmatched token is untouched rather than merely permitted-as-before,
+and the `bypassPermission` scoping we asked for is structural rather than disciplined. Blacksmith also
+confirmed that `Token#_canView` has exactly one consumer in the entire v13 client — the `clickLeft2` entry in
+the permissions map — so even a naive relaxation could not have reached the Actor sheet by another route.
+Record that as a fact about v13, not a guarantee to build on; re-verify it in `migration-v14.md`.
+
+#### Consequence: every loot state transition needs a guaranteed redraw
+
+Because `matches` is evaluated per draw and not per gesture, a state change with no subsequent redraw leaves
+the token's claim stale for the rest of the session. This is Curator's problem to solve, not Blacksmith's.
+
+Current behavior is correct **by accident**. `_convertTokenToLoot` calls `markReady`, and the caller then
+calls `updateTokenImage(token.document, 'loot')`, whose texture change forces the redraw that evaluates
+`matches` against `ready`. Reverse those two lines and double-click silently stops working. Two live holes:
+
+- If the configured loot image resolves to the token's current texture, there is no texture change and
+  possibly no redraw, so a `ready` corpse is never claimed.
+- On revival, `LootManager.clear` unsets the flag and the restore path redraws — but only when `imageState`
+  is set. If restore is skipped, the claim persists on a token that no longer matches. The window still
+  refuses to open, because `LootManager.open` re-checks `isLootable`, so this degrades to a double-click
+  that does nothing rather than a leak. It is still wrong.
+
+Required rule: **`markReady` and `clear` must each be followed by a guaranteed re-evaluation**, not by a
+redraw that happens to be nearby. Ask Blacksmith for an explicit
+`blacksmith.tokens.refreshInteraction(tokenDocument)` rather than having Curator force `token.draw()`, which
+is expensive and reaches past the API. Until that exists, make the ordering dependency explicit in the code
+with a comment naming this section, and cover it in the verification matrix.
+
+Also confirm with Blacksmith whether a claimed token whose `matches` no longer holds swallows the gesture or
+falls through to Foundry. Curator's behavior differs between the two and the plan should not guess.
+
+`LootManager.open(tokenDocument)` remains the guarded entry point every gesture and the chat card call.
 
 ## 7. Recipient Resolution
 
@@ -216,16 +336,23 @@ Concurrent requests against the same source Item or currency denomination must b
 
 ## 10. Item Rules
 
-The first version should preserve Squire's proven simple behavior unless the Blacksmith primitive specifies more:
+Mutation semantics belong to `api.inventory`, not to this plan. An earlier draft of this section restated
+its own copy rules and specified no stack merging; that is superseded. Curator must not carry a second,
+competing description of how an Item moves.
 
-- Copy the source Item data to the recipient.
-- Remove embedded identity before creation.
-- Set the transferred quantity on the new Item.
-- Reduce the source quantity or delete the source Item.
-- Do not automatically merge similar target stacks in the MVP.
-- Do not transfer nonphysical features, classes, subclasses, spells, or effects as loot.
+What Curator owns here is which Items are *offered*:
 
-Define the allowed D&D 5e item types explicitly after inspecting generated loot and live corpse inventories. Natural weapons, monster features, and spellcasting entries must not appear merely because they are embedded Items on the NPC.
+- Allowed D&D 5e types are `weapon`, `equipment`, `consumable`, `tool`, `loot`, and `container`. This matches
+  the primitive's `ITEM_NOT_TRANSFERABLE` whitelist. Natural weapons, monster features, classes,
+  subclasses, spells, and effects must never appear merely because they are embedded Items on the NPC.
+- The corpse is presented flattened: container contents are listed as individual rows and a container that
+  still holds contents is not offered. The primitive rejects it with `CONTAINER_HAS_CONTENTS`, and
+  flattening is better looting UX independently.
+- Stacking on arrival defaults to `merge`. Curator passes no `stack` override and no `ignoreFlags`; it
+  writes no transient flags to Items.
+
+Behavior verified in play goes to `architecture-loot.md`. Behavior the primitive defines stays in
+Blacksmith's documentation and is referenced, not copied.
 
 ## 11. Currency Rules
 
@@ -236,7 +363,9 @@ Define the allowed D&D 5e item types explicitly after inspecting generated loot 
 - Do not perform automatic denomination conversion.
 - Do not implement party splitting in the MVP.
 
-Currency and item mutations in Take All should produce an explicit batch result. Decide during implementation whether Take All is all-or-nothing or reports partial success; document the verified behavior in `architecture-loot.md`.
+Take All reports partial success and must return an explicit per-line batch result. It cannot be atomic:
+the inventory primitive locks per Actor UUID and exposes no batch call, so Take All is N sequential calls
+and any of them may fail independently. The window must show which lines moved and which did not.
 
 ## 12. Empty and Revival Behavior
 
@@ -254,9 +383,21 @@ On revival:
 - Close or invalidate open loot windows.
 - Clear loot flags.
 - Restore the token image through Curator's existing restoration path.
-- Never attempt `revertTokensFromItemPiles` after the migration.
 
 Items already taken remain with their recipients. Revival must not synthesize them back onto the revived Actor.
+
+### Repeat death
+
+`token-image-utilities.js` sets a separate `blnLootAdded` flag when generation runs, and `LootManager.clear`
+does not remove it. A token that dies, is revived, and dies again is therefore marked `ready` with no fresh
+loot, and if the first corpse was looted the second is empty. This is currently unintentional rather than
+decided. Choose one and record it in `architecture-loot.md`:
+
+- Generation is once per token, ever. Then a re-killed token must be marked `empty`, not `ready`, when it
+  carries `blnLootAdded` and holds no transferable contents.
+- Generation is once per death. Then revival must clear `blnLootAdded` alongside the loot flag.
+
+Do not leave the current behavior undocumented in either case.
 
 ## 13. Settings
 
@@ -273,51 +414,89 @@ Do not recreate Item Piles' per-token configuration interface. Curator flags des
 
 ## 14. Migration Away from Item Piles
 
-Migration should occur only after native looting passes live verification.
+**Done, and done early. This was a deliberate decision, not a sequencing mistake.**
 
-Remove:
+An earlier draft of this section required migration to wait for verified native looting, and section 15
+placed removal in Phase 5. Both were overtaken. Item Piles was removed in full during Phase 1, and
+`grep -rn "item-piles" scripts/` returns nothing: no availability checks or warnings, no `flags.item-piles`
+writes, no `turnTokensIntoItemPiles` or `revertTokensFromItemPiles` calls, no availability data passed to
+templates, no dependency labels in settings.
 
-- Item Piles availability checks and warnings.
-- `flags.item-piles` writes.
-- `turnTokensIntoItemPiles` calls.
-- `revertTokensFromItemPiles` calls.
-- Item Piles availability data passed to Curator templates.
-- Any Item Piles-specific labels or settings that no longer have meaning.
+The reason is that Item Piles caused more problems for corpse looting than it solved, and Curator goes live
+after native looting works. Nobody is stranded by the gap, so carrying a broken integration through four
+more phases bought nothing and would have kept its assumptions alive in the replacement.
 
-Existing worlds may contain already-converted Item Piles. Do not silently rewrite them. Document that existing piles remain owned by Item Piles, while newly prepared corpses use Curator's native state after migration.
+The accepted cost is that `main` is temporarily a state where corpses are marked `ready` and cannot be
+looted, until the Phase 1 context-menu entry and the Phase 2 transfer path land. Do not ship a build from
+that state.
+
+Existing worlds may contain already-converted Item Piles. Do not silently rewrite them. Existing piles
+remain owned by Item Piles; newly prepared corpses use Curator's native state.
 
 ## 15. Implementation Phases
 
-### Phase 0 — Confirm the shared primitive
+### Phase 0 — Confirm the shared primitives
 
-- Submit the Blacksmith inventory API request.
-- Agree on item and currency contracts, structured errors, serialization, and rollback behavior.
-- Add Blacksmith tests for the primitive before Curator consumes it.
+Blacksmith is building the interaction registry **first**, then `api.inventory` with `grantItem` as its
+first deliverable. Neither blocks Phase 1.
+
+- [x] Submit the Blacksmith inventory API request. Accepted; design lives in Blacksmith's
+      `plans/plan-inventory-api.md` and covers `transferItem`, `transferCurrency`, `grantItem`, and
+      `grantCurrency` with structured error codes, per-Actor locking, and rollback.
+- [x] Submit the token-interaction API request. Approved; contract confirmed in section 6.
+- [ ] Ask Blacksmith for `refreshInteraction(tokenDocument)` and for the stale-claim fallthrough answer
+      (section 6).
+- [ ] Blacksmith ships `api.tokens.registerInteraction`.
+- [ ] Blacksmith ships `api.inventory`. Curator has no transfer path until this lands.
+- [ ] Blacksmith tests the primitives before Curator consumes them.
+- [ ] Provide Blacksmith a player-login verification pass. Their bypass and fail-closed paths cannot be
+      tested from a GM client, since the whole point is behavior for a user with no permission on the
+      corpse. Curator supplies the world with a lootable corpse and a non-GM login.
 
 ### Phase 1 — State and read-only window
 
 - [x] Add the Curator loot state model.
 - [x] Separate loot generation from Item Piles conversion.
 - [x] Mark corpses `preparing` and `ready` around the current conversion path.
-- [ ] Add token interaction through a public Blacksmith API; direct Foundry/libWrapper wrapping is prohibited.
+- [x] Remove all Item Piles integration (pulled forward from Phase 5; see section 14).
 - [x] Render current allowed items and currency without mutation.
 - [x] Start `architecture-loot.md` with only implemented state ownership and lifecycle behavior.
+- [ ] **Add the loot button to the corpse chat card.** This is the Phase 1 interaction surface and the
+      current blocker on everything downstream. It needs nothing from Blacksmith. Canvas gestures are all
+      permission-gated and are not an alternative; see section 6.
+- [ ] Resolve what `tokenLootChatMessage` controls once the card carries the entry point.
+- [ ] Decide and record the repeat-death behavior from section 12.
+
+### Phase 1b — Canvas double-click
+
+Lands whenever `api.tokens.registerInteraction` ships; sequencing is Blacksmith's, not a Curator gate. The
+chat card keeps Phases 2 through 4 moving regardless.
+
+- Register `clickLeft2` in `LootManager.initialize()` per the confirmed contract in section 6.
+- Wrap the handler so it can neither throw nor return a rejected promise. A thrown handler is a dead
+  gesture, by design.
+- Guarantee re-evaluation after `markReady` and `clear`.
+- Verify with a non-GM login against a corpse the player has no Actor permission on: the loot window opens
+  and the Actor sheet does not.
 
 ### Phase 2 — Single-item transfer
 
 - Resolve recipients.
 - Add the quantity control.
-- Register the GM-authoritative socket handler.
-- Transfer single Items and partial stacks through Blacksmith.
-- Add structured success and failure feedback.
+- Register the GM-authoritative socket handler through Blacksmith's socket API. The inventory primitive
+  emits no socket traffic by design; routing and authorization are Curator's.
+- Transfer single Items and partial stacks through `api.inventory.transferItem`.
+- Add structured success and failure feedback keyed on the primitive's error codes.
 - Verify two clients attempting the same Item.
 
-### Phase 3 — Currency and Take All
+### Phase 3 — Currency, Take All, and generation migration
 
-- Add denomination transfers.
+- Add denomination transfers through `transferCurrency`.
 - Add Take All Currency.
 - Add Take All contents.
 - Specify and test partial-failure behavior.
+- Migrate loot generation in `loot-utilities.js` onto `grantItem` and `grantCurrency`, retiring the
+  absolute-total currency write that races today.
 
 ### Phase 4 — Synchronization and lifecycle
 
@@ -326,10 +505,10 @@ Existing worlds may contain already-converted Item Piles. Do not silently rewrit
 - Handle empty corpses.
 - Invalidate windows on revival, token deletion, Actor deletion, scene changes, and generation changes.
 
-### Phase 5 — Remove Item Piles
+### Phase 5 — Verification and release
 
-- Delete all Curator Item Piles integration.
-- Verify death, loot generation, looting, empty behavior, and revival without Item Piles active.
+- Verify death, loot generation, looting, empty behavior, and revival end to end.
+- Work the full section 16 matrix.
 - Update settings, README, changelog, and compatibility notes.
 - Finish `architecture-loot.md` from the implemented code and link it from relevant contributor documentation.
 
@@ -342,6 +521,18 @@ Existing worlds may contain already-converted Item Piles. Do not silently rewrit
 - Repeated HP updates at zero do not generate twice.
 - Revival while generation is still running.
 - Revival after partial looting.
+
+### Interaction and claim lifecycle
+
+- Non-GM player with no Actor permission on the corpse: double-click opens the loot window.
+- Non-GM player, same corpse: the Actor sheet never opens, on success or on handler failure.
+- Handler throws: the gesture does nothing, a Curator notification appears, and no sheet opens.
+- Corpse becomes `ready` when the resolved loot image equals the current texture, so no texture change
+  occurs. The claim must still attach.
+- Revival where the image restore path is skipped. The claim must not persist.
+- Non-corpse token double-click is unchanged for every user.
+- Token drawn on scene load while already `ready`.
+- Chat-card entry point works for a player who cannot interact with the token at all.
 
 ### Permissions and recipients
 
@@ -405,11 +596,25 @@ The plan records intent and unresolved choices. The architecture document record
 
 ## 18. Open Decisions
 
-- Exact token gesture and context-menu fallback.
-- Which D&D 5e Item types are lootable.
+Still open:
+
 - Default interaction distance.
 - Default empty-corpse behavior.
 - Whether quantity-one Items transfer immediately or require confirmation.
-- Whether Take All is atomic or may return partial success.
 - Whether an active GM is mandatory for GM-originated local interaction as well as player interaction.
 - Whether an empty corpse may still open for inspection.
+- Repeat-death loot behavior (section 12). Must be closed in Phase 1.
+- Whether a claimed token whose `matches` no longer holds swallows the gesture or falls through. Blacksmith
+  to confirm; Curator's revival behavior differs between the two.
+- Whether `clickRight2` is worth claiming as a secondary gesture. Do not request it without a use case.
+
+Closed:
+
+- **Token gesture.** The corpse chat card carries the Phase 1 entry point. Canvas double-click arrives via
+  `blacksmith.tokens.registerInteraction` with `gesture: 'clickLeft2'`; the contract is confirmed, not
+  proposed. A context menu is not an alternative — `_canHUD` requires OWNER. Section 6.
+- **Lootable Item types.** `weapon`, `equipment`, `consumable`, `tool`, `loot`, `container`, matching the
+  primitive's whitelist. Section 10.
+- **Take All atomicity.** Partial success. The primitive locks per Actor UUID and exposes no batch call, so
+  Take All is N sequential calls and cannot be atomic. It must report per-line results. Section 11.
+- **Item Piles removal timing.** Removed during Phase 1. Section 14.
