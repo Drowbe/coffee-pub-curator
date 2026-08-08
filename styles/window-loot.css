@@ -1,3 +1,8 @@
+/* The scroll chain for the capped height: every ancestor between the clamped
+   frame and the scrolling body must be allowed to shrink, or the body grows past
+   the cap instead of scrolling. */
+.curator-loot-window .window-content { min-height: 0; overflow: hidden; }
+.curator-loot-window .blacksmith-window-tool-root { min-height: 0; max-height: 100%; }
 .curator-loot-window .blacksmith-window-tool-body { min-height: 0; overflow: auto; }
 .curator-loot-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 8px; color: var(--blacksmith-tool-text); }
 .curator-loot-section { min-width: 0; padding: 8px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 6px; background: var(--blacksmith-tool-surface-raised); }
@@ -68,11 +73,19 @@
 .curator-loot-bury { display: flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 10px; border: 1px solid var(--blacksmith-tool-divider, rgba(0,0,0,.3)); border-radius: 5px; background: transparent; color: var(--blacksmith-tool-text-muted, inherit); font-size: .7rem; white-space: nowrap; cursor: pointer; }
 .curator-loot-bury:hover { border-color: #a4432f; background: rgba(164, 67, 47, .16); color: #a4432f; }
 
-.curator-loot-recipient { display: flex; gap: 6px; align-items: center; margin-top: 5px; font-size: .68rem; }
-.curator-loot-recipient > span { color: var(--blacksmith-tool-text-muted, inherit); text-transform: uppercase; letter-spacing: .05em; }
-.curator-loot-recipient > select { height: 22px; min-width: 0; max-width: 190px; padding: 0 4px; font-size: .72rem; }
-.curator-loot-recipient-fixed { margin-top: 5px; color: var(--blacksmith-tool-text-muted, inherit); font-size: .68rem; }
+/* The recipient is its own row so it reads like an item or currency row. */
+.curator-loot-actor { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 7px 8px; }
+.curator-loot-actor-portrait { display: block; width: 34px !important; height: 34px !important; max-width: 34px !important; object-fit: cover; border: 1px solid var(--blacksmith-tool-divider, rgba(0,0,0,.25)); border-radius: 50%; }
+.curator-loot-actor-copy { min-width: 0; }
+.curator-loot-actor-copy small, .curator-loot-actor-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curator-loot-actor-copy small { color: var(--blacksmith-tool-text-muted, inherit); font-size: .55rem; letter-spacing: .05em; text-transform: uppercase; }
+.curator-loot-actor-copy strong { font-size: .82rem; }
 .curator-loot-warning { color: #a4432f; }
+
+/* Blacksmith sets width: 300px on every primary button (window-template.css).
+   The footer is a flex row, so that stretches Loot All across it. */
+.curator-loot-window .blacksmith-window-tool-footer .blacksmith-window-btn-primary,
+.curator-loot-window .blacksmith-window-tool-footer .blacksmith-window-btn-secondary { width: auto; white-space: nowrap; }
 
 /* In-flight feedback only. The concurrency guarantee is the GM's. */
 .curator-loot-busy .curator-loot-content { pointer-events: none; opacity: .55; }

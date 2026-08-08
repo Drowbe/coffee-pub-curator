@@ -4,6 +4,7 @@
  */
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
+import { grantItems, grantCurrency } from './loot-inventory.js';
 
 export class LootUtilities {
     /**
@@ -40,6 +41,9 @@ export class LootUtilities {
 
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Found table "${table.name}", rolling ${timesToRoll} times`, "", true, false);
 
+            const pending = [];
+            const names = [];
+
             for (let i = 0; i < timesToRoll; i++) {
                 const roll = await table.draw({ displayChat: false });
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Roll ${i+1} results:`, roll, true, false);
@@ -65,16 +69,16 @@ export class LootUtilities {
                         }
 
                         if (item) {
-                            const itemData = item.toObject();
-                            if (itemData.system?.quantity !== undefined) {
-                                const maxQuantity = Math.max(1, Number(quantityMax) || 1);
-                                const quantity = maxQuantity > 1
-                                    ? Math.floor(Math.random() * maxQuantity) + 1
-                                    : 1;
-                                itemData.system.quantity = quantity;
-                            }
-                            await actor.createEmbeddedDocuments('Item', [itemData]);
-                            BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Added ${itemData.name} to ${actor.name}`, "", false, false);
+                            const maxQuantity = Math.max(1, Number(quantityMax) || 1);
+                            const quantity = item.system?.quantity !== undefined && maxQuantity > 1
+                                ? Math.floor(Math.random() * maxQuantity) + 1
+                                : 1;
+                            // Collected, not granted here. One grantItems call for the
+                            // whole table roll lets Blacksmith coalesce duplicates into a
+                            // single stack and costs at most two writes however many
+                            // results land; granting per result would produce a row each.
+                            pending.push({ itemUuid: item.uuid, quantity });
+                            names.push(item.name);
                         } else {
                             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Could not retrieve item from result`, "", false, false);
                         }
@@ -86,6 +90,15 @@ export class LootUtilities {
                     }
                 }
             }
+
+            if (!pending.length) return;
+
+            const granted = await grantItems({ targetActorUuid: actor.uuid, items: pending });
+            if (granted?.ok) {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Added ${pending.length} loot entries to ${actor.name}:`, names.join(', '), false, false);
+            } else {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Could not add loot to ${actor.name}:`, granted?.code ?? 'unknown', false, false);
+            }
         } catch (error) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error rolling loot table ${tableReference}:`, error, false, false);
         }
@@ -95,7 +108,6 @@ export class LootUtilities {
         if (!game.user.isGM) return;
 
         try {
-            const currency = actor.system.currency;
             const maxCopper = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxCopperAmount', 0)) || 0);
             const maxSilver = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxSilverAmount', 0)) || 0);
             const maxGold = Math.max(0, Number(BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenLootMaxGoldAmount', 0)) || 0);
@@ -108,12 +120,17 @@ export class LootUtilities {
             const platinumAmount = maxPlatinum > 0 ? Math.floor(Math.random() * maxPlatinum) + 1 : 0;
             const electrumAmount = maxElectrum > 0 ? Math.floor(Math.random() * maxElectrum) + 1 : 0;
 
-            await actor.update({
-                "system.currency.cp": currency.cp + copperAmount,
-                "system.currency.sp": currency.sp + silverAmount,
-                "system.currency.gp": currency.gp + goldAmount,
-                "system.currency.pp": currency.pp + platinumAmount,
-                "system.currency.ep": (currency.ep || 0) + electrumAmount
+            // Deltas, not absolute totals. The previous read-then-write raced any
+            // concurrent currency change on the same Actor.
+            await grantCurrency({
+                targetActorUuid: actor.uuid,
+                currency: {
+                    cp: copperAmount,
+                    sp: silverAmount,
+                    ep: electrumAmount,
+                    gp: goldAmount,
+                    pp: platinumAmount
+                }
             });
 
             BlacksmithUtils.postConsoleAndNotification(

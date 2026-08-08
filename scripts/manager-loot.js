@@ -2,7 +2,7 @@ import { MODULE } from './const.js';
 import { HookManager } from './manager-hooks.js';
 import { LootWindow } from './window-loot.js';
 import { notify } from './notifications.js';
-import { transferItem, transferCurrency, PHYSICAL_TYPES, DENOMINATIONS } from './loot-transfer.js';
+import { transferItem, transferCurrency, isPhysical, denominations } from './loot-inventory.js';
 
 // Shared teardown handle for every claim and hook this manager registers.
 const CONTEXT = 'curator-loot';
@@ -327,7 +327,7 @@ export class LootManager {
         switch (op) {
             case 'item': result = await this._processItem(corpse, payload, user); break;
             case 'currency': result = await this._processCurrency(corpse, payload, user); break;
-            case 'takeAll': result = await this._processTakeAll(corpse, payload, user); break;
+            case 'takeAll': return { ok: false, code: 'BATCH_UNAVAILABLE' };
             case 'distribute': result = await this._processDistribute(corpse, payload); break;
             default: return { ok: false, code: 'UNKNOWN_OPERATION' };
         }
@@ -385,43 +385,6 @@ export class LootManager {
     }
 
     /**
-     * Take All is N sequential calls and cannot be atomic — the primitive locks per
-     * Actor and exposes no batch call. It therefore reports per-line results and the
-     * window shows which lines moved.
-     */
-    static async _processTakeAll(corpse, payload, user) {
-        const check = this._validateRecipient(payload.recipientUuid, user, corpse);
-        if (!check.ok) return check;
-
-        const lines = [];
-        for (const item of corpse.items.filter((i) => PHYSICAL_TYPES.has(i.type))) {
-            const result = await transferItem({
-                sourceActorUuid: corpse.uuid,
-                targetActorUuid: check.actorUuid,
-                itemId: item.id
-            });
-            lines.push({ label: item.name, ...result });
-        }
-
-        const currency = {};
-        for (const denom of DENOMINATIONS) {
-            const held = Math.trunc(Number(corpse.system?.currency?.[denom] ?? 0));
-            if (held > 0) currency[denom] = held;
-        }
-        if (Object.keys(currency).length) {
-            const result = await transferCurrency({
-                sourceActorUuid: corpse.uuid,
-                targetActorUuid: check.actorUuid,
-                currency
-            });
-            lines.push({ label: 'Currency', ...result });
-        }
-
-        const moved = lines.filter((line) => line.ok).length;
-        return { ok: moved > 0, partial: moved !== lines.length, moved, total: lines.length, lines };
-    }
-
-    /**
      * Split every denomination evenly across the party. The remainder stays on the
      * corpse rather than being converted or favouring anyone: no automatic
      * denomination conversion, by decision.
@@ -432,7 +395,7 @@ export class LootManager {
 
         const share = {};
         let anything = false;
-        for (const denom of DENOMINATIONS) {
+        for (const denom of denominations()) {
             const held = Math.trunc(Number(corpse.system?.currency?.[denom] ?? 0));
             const each = Math.floor(held / members.length);
             if (each > 0) { share[denom] = each; anything = true; }
@@ -460,8 +423,8 @@ export class LootManager {
      */
     static async _processBury(tokenDocument, user) {
         const actor = tokenDocument.actor;
-        const itemCount = actor ? actor.items.filter((i) => PHYSICAL_TYPES.has(i.type)).length : 0;
-        const coinCount = DENOMINATIONS.reduce(
+        const itemCount = actor ? actor.items.filter((i) => isPhysical(i.type)).length : 0;
+        const coinCount = denominations().reduce(
             (sum, denom) => sum + Math.trunc(Number(actor?.system?.currency?.[denom] ?? 0)), 0
         );
 

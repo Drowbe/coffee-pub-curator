@@ -1,7 +1,7 @@
 import { BlacksmithToolWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-tool-base.js';
 import { MODULE } from './const.js';
 import { notify } from './notifications.js';
-import { PHYSICAL_TYPES, DENOMINATIONS } from './loot-transfer.js';
+import { isPhysical, denominations, isInventoryReady } from './loot-inventory.js';
 // Circular with manager-loot.js by design: that module imports this one for
 // LootWindow.open. Safe because every use below is inside a method, so the
 // binding is resolved at call time rather than at module evaluation.
@@ -26,7 +26,10 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             classes: ['curator-loot-window'],
             position: { width: 520, height: 'auto' },
             window: { title: 'Loot', resizable: false, minimizable: true },
-            windowSizeConstraints: { minWidth: 420, maxWidth: 660, maxHeight: 'calc(100vh - 16px)' },
+            // A well-stocked corpse can carry a dozen rows, and `calc(100vh - 16px)`
+            // let the window swallow the screen. Capped so the body scrolls instead,
+            // with the viewport term keeping it sane on a short display.
+            windowSizeConstraints: { minWidth: 420, maxWidth: 660, maxHeight: 'min(620px, calc(100vh - 100px))' },
             toolTitlebar: 'full',
             rememberPosition: false,
             windowPositionKey: 'curator-loot'
@@ -35,7 +38,6 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
 
     static ACTION_HANDLERS = {
         close: (_event, _target, win) => win.close(),
-        openSheet: (_event, _target, win) => win.openSheet(),
         take: (_event, target, win) => win.run(() => win.takeItem(target.dataset.itemId)),
         give: (_event, target, win) => win.run(() => win.giveItem(target.dataset.itemId)),
         party: (_event, target, win) => win.run(() => win.itemToParty(target.dataset.itemId)),
@@ -44,7 +46,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         distribute: (_event, _target, win) => win.run(() => win.distributeCurrency()),
         takeAll: (_event, _target, win) => win.run(() => win.takeAll()),
         allToParty: (_event, _target, win) => win.run(() => win.allToParty()),
-        bury: (_event, _target, win) => win.run(() => win.bury())
+        bury: (_event, _target, win) => win.run(() => win.bury()),
+        changeRecipient: (_event, _target, win) => win.changeRecipient()
     };
 
     constructor(tokenDocument, options = {}) {
@@ -85,20 +88,6 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
 
     async _resolveToken() {
         return fromUuid(this.tokenUuid);
-    }
-
-    /**
-     * The window base delegates click only. A <select> reports its value on
-     * change, so the recipient picker is wired here rather than through
-     * ACTION_HANDLERS.
-     */
-    _onRender(context, options) {
-        super._onRender?.(context, options);
-        const select = this.element?.querySelector('select[data-recipient]');
-        if (select && select.dataset.curatorBound !== 'true') {
-            select.dataset.curatorBound = 'true';
-            select.addEventListener('change', (event) => this.setRecipient(event.target.value));
-        }
     }
 
     // ==============================================================
@@ -158,6 +147,72 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         });
     }
 
+    /**
+     * Pick an Actor through Blacksmith's entity list rather than a select or a
+     * button row: it renders portraits, a type line, and disabled reasons, and it
+     * is the control the plan named for recipient selection.
+     */
+    async _pickActor({ title, actors, selectedUuid, confirmLabel = 'Select', confirmIcon = 'fa-solid fa-check' }) {
+        const blacksmith = _blacksmith();
+        if (typeof blacksmith?.entityList?.create !== 'function' || typeof blacksmith?.dialog?.wait !== 'function') {
+            notify.warn('The Blacksmith entity list is unavailable.');
+            return null;
+        }
+        if (!actors.length) return null;
+
+        const list = blacksmith.entityList.create({
+            entities: actors.map((actor) => ({
+                id: actor.uuid,
+                uuid: actor.uuid,
+                name: actor.name,
+                img: actor.img
+            })),
+            mode: 'single',
+            inputName: 'curator-loot-actor',
+            selected: selectedUuid ?? actors[0].uuid
+        });
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `<div class="blacksmith-field">${list.html}</div>`;
+        // Attached while detached, for the same reason as the quantity control:
+        // dialog.wait() moves the content node in rather than copying it.
+        list.attach(wrapper);
+
+        let chosen = null;
+        const outcome = await blacksmith.dialog.wait({
+            title,
+            content: wrapper,
+            buttons: [
+                {
+                    action: 'select',
+                    label: confirmLabel,
+                    icon: confirmIcon,
+                    default: true,
+                    callback: () => { chosen = list.getSelectedIds()?.[0] ?? null; }
+                },
+                { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }
+            ],
+            closeValue: null,
+            cancelValue: null
+        });
+        list.destroy();
+
+        return outcome?.value === 'select' ? chosen : null;
+    }
+
+    async changeRecipient() {
+        const options = this.recipients;
+        if (options.length < 2) return;
+        const picked = await this._pickActor({
+            title: 'Looting As',
+            actors: options,
+            selectedUuid: this.recipient?.uuid,
+            confirmLabel: 'Use This Character',
+            confirmIcon: 'fa-solid fa-user-check'
+        });
+        if (picked) this.setRecipient(picked);
+    }
+
     /** Ask how many only when there is a choice to make. */
     async _askQuantity(label, max) {
         if (max <= 1) return max;
@@ -179,9 +234,12 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="blacksmith-field">${control.html}</div>`;
 
-        // The control is read off the submitted form, not the controller: wait()
-        // exposes no render hook, and its button callbacks run after the dialog has
-        // closed with the form element handed over.
+        // Attach while the wrapper is still detached. dialog.wait() offers no render
+        // hook, but it *moves* an element content node into the dialog rather than
+        // copying it, so a listener bound now survives the move. Without this the
+        // slider works but the Take/Leave captions never update as it is dragged.
+        control.attach(wrapper);
+
         let chosen = null;
         const outcome = await blacksmith.dialog.wait({
             title: `Take ${label}`,
@@ -192,7 +250,11 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     label: 'Take',
                     icon: 'fa-solid fa-hand',
                     default: true,
-                    callback: (form) => { chosen = Number(form?.elements?.[inputName]?.value ?? max); }
+                    // getValue() is integer-clamped and independent of the DOM; the
+                    // form read is a fallback for a control that failed to bind.
+                    callback: (form) => {
+                        chosen = control.getValue() ?? Number(form?.elements?.[inputName]?.value ?? max);
+                    }
                 },
                 { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }
             ],
@@ -238,22 +300,15 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             notify.warn('There is nobody in the party to give this to.');
             return;
         }
-        const blacksmith = _blacksmith();
-        if (typeof blacksmith?.dialog?.choose !== 'function') {
-            notify.warn('The Blacksmith dialog API is unavailable.');
-            return;
-        }
-
         const context = await this._itemContext(itemId);
         if (!context) return;
 
-        const picked = await blacksmith.dialog.choose({
+        const recipientUuid = await this._pickActor({
             title: `Give ${context.item.name}`,
-            content: `<p>Who receives <strong>${context.item.name}</strong>?</p>`,
-            choices: choices.map((actor) => ({ id: actor.uuid, label: actor.name, icon: 'fa-solid fa-user' }))
+            actors: choices,
+            confirmLabel: 'Give',
+            confirmIcon: 'fa-solid fa-hand-holding-heart'
         });
-        if (picked?.action !== 'submit') return;
-        const recipientUuid = picked.value ?? null;
         if (!recipientUuid) return;
 
         const amount = await this._askQuantity(context.item.name, context.quantity);
@@ -351,8 +406,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     }
 
     /**
-     * Batch operations report partial success because they cannot be atomic — the
-     * transfer primitive locks per Actor and has no batch call.
+     * `ok: true, merged: false` is success — the item arrived as its own row rather
+     * than joining a stack. Only an explicit `partial` flag means anything was left.
      */
     _report(result, successMessage) {
         if (result?.ok && result.partial) {
@@ -364,25 +419,65 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             if (successMessage) notify.info(successMessage);
             return;
         }
-        notify.error(this._explain(result?.code, result));
+        this._reportFailure(result);
+    }
+
+    _reportFailure(result) {
+        const code = result?.code;
+
+        // A half-completed transfer is repairable by hand, but only if the GM is
+        // told which item landed and what both sides now read. Never swallow these.
+        if (code === 'SOURCE_UPDATE_FAILED' || code === 'ROLLBACK_FAILED') {
+            console.error(`${MODULE.TITLE} | Loot transfer left an inconsistent state:`, result);
+            const detail = [
+                result.targetItemId ? `target item ${result.targetItemId}` : null,
+                result.merged === true ? 'merged into an existing stack' : null,
+                Number.isFinite(result.quantity) ? `quantity ${result.quantity}` : null
+            ].filter(Boolean).join(', ');
+            notify.error(
+                code === 'ROLLBACK_FAILED'
+                    ? `The transfer failed and could not be undone${detail ? ` (${detail})` : ''}. A GM must check both sheets — details are in the console.`
+                    : `The item arrived but the body was not updated${detail ? ` (${detail})` : ''}. A GM must check both sheets — details are in the console.`
+            );
+            return;
+        }
+
+        // The only code describing a state that will change on its own.
+        if (code === 'LOCK_TIMEOUT') {
+            notify.warn('The body is busy with another transfer. Try that again.');
+            return;
+        }
+
+        notify.error(this._explain(code, result));
     }
 
     _explain(code, result) {
         switch (code) {
+            case 'INVENTORY_UNAVAILABLE': return 'The Blacksmith inventory API is not available.';
+            case 'BATCH_UNAVAILABLE': return 'Take All is waiting on a batch API from Blacksmith.';
             case 'NO_ACTIVE_GM': return 'No GM is connected, so loot cannot be moved.';
             case 'TIMEOUT': return 'The GM did not respond in time.';
             case 'NOT_LOOTABLE': return 'This body is no longer lootable.';
+            case 'NOT_A_CORPSE': return 'That is not a Curator corpse.';
             case 'STALE_GENERATION': return 'This body has changed since the window opened.';
-            case 'SOURCE_ITEM_NOT_FOUND': return 'Somebody else took that first.';
+            case 'SOURCE_ITEM_NOT_FOUND':
+            case 'ITEM_NOT_FOUND': return 'Somebody else took that first.';
+            case 'SOURCE_ACTOR_NOT_FOUND': return 'This body is no longer on the scene.';
+            case 'TARGET_ACTOR_NOT_FOUND': return 'That character could not be found.';
+            case 'INVALID_QUANTITY': return 'That is not a valid amount.';
             case 'INSUFFICIENT_QUANTITY': return `Only ${result?.available} left.`;
+            case 'INVALID_CURRENCY': return 'That is not a valid coin amount.';
             case 'INSUFFICIENT_CURRENCY': return `Only ${result?.available} ${String(result?.denomination ?? '').toUpperCase()} left.`;
-            case 'CONTAINER_HAS_CONTENTS': return 'Empty the container before moving it.';
+            // contentCount is null when Blacksmith could not determine it and refused
+            // to be safe, so only name a number when there is one.
+            case 'CONTAINER_HAS_CONTENTS': return Number.isFinite(result?.contentCount)
+                ? `Unpack ${result.contentCount} item${result.contentCount === 1 ? '' : 's'} first.`
+                : 'Empty the container before moving it.';
             case 'ITEM_NOT_TRANSFERABLE': return 'That is not something you can carry off.';
+            case 'TARGET_CREATE_FAILED': return 'That could not be added to the recipient.';
             case 'RECIPIENT_NOT_ALLOWED': return 'That character cannot receive this.';
             case 'NO_PARTY_MEMBERS': return 'There are no party members to share with.';
             case 'SAME_ACTOR': return 'That is already where it is.';
-            case 'NOT_A_CORPSE': return 'That is not a Curator corpse.';
-            case 'ROLLBACK_FAILED': return 'The transfer half-failed. Ask your GM to check both sheets.';
             default: return 'That loot action could not be completed.';
         }
     }
@@ -400,7 +495,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         let currencies = [];
 
         if (!missing) {
-            items = actor.items.filter((item) => PHYSICAL_TYPES.has(item.type)).map((item) => ({
+            items = actor.items.filter((item) => isPhysical(item.type)).map((item) => ({
                 id: item.id,
                 name: item.name,
                 img: item.img,
@@ -412,7 +507,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             const containersWithContents = new Set(items.map((item) => item.containerId).filter(Boolean));
             items = items.filter((item) => item.type !== 'container' || !containersWithContents.has(item.id));
 
-            currencies = DENOMINATIONS.map((key) => ({
+            currencies = denominations().map((key) => ({
                 key,
                 label: CURRENCY_LABELS[key],
                 value: Math.trunc(Number(actor.system?.currency?.[key] ?? 0)),
@@ -438,43 +533,69 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             partyName: party?.name ?? null,
             hasParty: Boolean(party),
             recipientName: recipient?.name ?? null,
-            recipientOptions: options.map((member) => ({
-                uuid: member.uuid,
-                name: member.name,
-                selected: member.uuid === recipient?.uuid
-            })),
+            recipientImg: recipient?.img ?? 'icons/svg/mystery-man.svg',
             hasRecipientChoice: options.length > 1,
             hasRecipient: Boolean(recipient)
         });
-
-        const canAct = !missing && (items.length > 0 || currencies.length > 0);
 
         return {
             appId: this.id,
             bodyContent,
             showToolFooter: true,
             toolFooterLeft: `
-                <button type="button" class="blacksmith-window-btn-primary" data-action="takeAll" ${canAct && recipient ? '' : 'disabled'}>
-                    <i class="fa-solid fa-hands-holding"></i> Take All
-                </button>
-                <button type="button" class="blacksmith-window-btn-secondary" data-action="allToParty" ${canAct && party ? '' : 'disabled'}>
-                    <i class="fa-solid fa-users"></i> All to Party
+                <button type="button" class="blacksmith-window-btn-secondary" data-action="close">
+                    <i class="fa-solid fa-check"></i> Done
                 </button>`,
             toolFooterRight: `
-                ${game.user.isGM && !missing ? `
-                <button type="button" class="blacksmith-window-btn-secondary" data-action="openSheet">
-                    <i class="fa-solid fa-user"></i> Sheet
-                </button>` : ''}
-                <button type="button" class="blacksmith-window-btn-secondary" data-action="close">
-                    <i class="fa-solid fa-xmark"></i> Close
+                <button type="button" class="blacksmith-window-btn-secondary" data-action="allToParty" disabled
+                        data-tooltip="Waiting on a batch transfer API from Blacksmith">
+                    <i class="fa-solid fa-users"></i> Loot to Party
+                </button>
+                <button type="button" class="blacksmith-window-btn-primary" data-action="takeAll" disabled
+                        data-tooltip="Waiting on a batch transfer API from Blacksmith">
+                    <i class="fa-solid fa-hands-holding"></i> Loot All
                 </button>`
         };
+    }
+
+    /**
+     * Sheet access lives in the titlebar rather than the footer: it is GM-only
+     * inspection, not a loot action, and the footer is reserved for the latter.
+     */
+    getToolHeaderActions() {
+        if (!game.user.isGM) return [];
+        return [
+            {
+                id: 'curator-loot-sheet',
+                icon: 'fa-solid fa-user',
+                label: 'Character Sheet',
+                onClick: () => void this.openSheet()
+            },
+            {
+                id: 'curator-loot-prototype',
+                icon: 'fa-solid fa-chess-pawn',
+                label: 'Prototype Token',
+                onClick: () => void this.openPrototypeToken()
+            }
+        ];
     }
 
     async openSheet() {
         if (!game.user.isGM) return;
         const token = await this._resolveToken();
         token?.actor?.sheet?.render(true, { token });
+    }
+
+    async openPrototypeToken() {
+        if (!game.user.isGM) return;
+        const token = await this._resolveToken();
+        const prototype = token?.actor?.prototypeToken;
+        const sheetClass = CONFIG.Token?.prototypeSheetClass;
+        if (!prototype || !sheetClass) {
+            notify.warn('This corpse has no prototype token.');
+            return;
+        }
+        new sheetClass({ prototype }).render(true);
     }
 
     _onClose(options) {

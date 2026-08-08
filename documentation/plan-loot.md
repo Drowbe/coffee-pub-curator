@@ -114,16 +114,15 @@ That document is the contract. Where this plan and that one disagree, that one w
 
 Do not build a second permanent item-transfer engine in Curator while the Blacksmith API request is active. A temporary adapter is acceptable only if it has the same contract as the proposed API and is explicitly scheduled for deletion.
 
-**The adapter now exists and this rule is what governs it.** `loot-transfer.js` implements `transferItem`
-and `transferCurrency` to the contract above — same call shape, same success shape, same error codes, same
-per-Actor locking, same create-target-then-reduce-source ordering, same reset set and merge predicate. Every
-entry point checks `blacksmith.inventory` first and delegates when it is present, so the local
-implementation stops executing on the day Blacksmith ships without a Curator change. Retiring it is deleting
-the file and re-pointing two imports.
+**The rule held and the adapter is gone.** `loot-transfer.js` existed for exactly one working session while
+`api.inventory` was in development, and was deleted the day Blacksmith shipped. Curator now owns no item or
+currency mutation code at all. `loot-inventory.js` replaces it and is a thin accessor with no logic: it
+resolves `blacksmith.inventory`, forwards the four calls, and returns `INVENTORY_UNAVAILABLE` when the API
+is absent. Nothing may grow there — if a call needs wrapping, that belongs in `manager-loot.js`.
 
-Nothing Curator-specific may be added to it. Authorization, recipient policy, distance, and notifications
-live in `manager-loot.js`. `grantItem` and `grantCurrency` are deliberately **not** adapted: loot generation
-still uses `loot-utilities.js` and migrates when Blacksmith ships, per Phase 3.
+`PHYSICAL_TYPES` and `DENOMINATIONS` are read from `blacksmith.inventory` rather than copied, so Curator
+cannot drift from the whitelist the primitive enforces. The local fallback lists exist only to render the
+window before the API finishes loading.
 
 ## 5. Corpse State Model
 
@@ -289,8 +288,17 @@ Suggested behavior:
 - No eligible Actor: explain that the user has no owned character available to receive loot.
 - GM: allow selection from eligible character Actors, with an option to inspect the corpse without choosing a recipient.
 
-The recipient UUID travels with each request but is never trusted without GM-side validation. The window
-uses a plain select rather than Blacksmith's entity-list; revisit if the list ever needs search or portraits.
+The recipient UUID travels with each request but is never trusted without GM-side validation.
+
+Both actor pickers — Looting As and Give To — use `blacksmith.entityList` inside a `dialog.wait`, not a
+select and not `dialog.choose`. Rows carry the portrait and the name only: the dialog title already says what
+is being chosen, so a prompt line and a per-row type label both just repeat it. The window shows the current
+recipient on its own row — small circular portrait, "Looting as", the name, and a Change button — so it reads
+like the item and currency rows rather than as a caption on the corpse card. The one-character case shows the
+row without a Change button and costs no clicks.
+
+Row action buttons are icon-only with tooltips. Take, Give, and Party sit together in a cluster, and one
+labelled button beside two icons reads as though only the labelled one is a real action.
 
 ### Give To, and the boundary it moves
 
@@ -343,7 +351,7 @@ The window must render from current Actor data. It must not hold a snapshot as t
 
 ### Actions
 
-Implemented surface:
+Implemented surface. Take All and All to Party are present but disabled — see Phase 3.
 
 | Control | Where | Sends to |
 |---|---|---|
@@ -351,13 +359,57 @@ Implemented surface:
 | Give | item row | any party character, chosen in a dialog |
 | Party | item row, currency row | the dnd5e primary party Group Actor |
 | Distribute | currency header | every party character, split evenly |
-| Take All | footer | the acting recipient |
-| All to Party | footer | the party Group Actor |
+| Loot All | footer, primary | *disabled* — awaiting `transferItems` |
+| Loot to Party | footer | *disabled* — awaiting `transferItems` |
 | Bury | subject card | nobody; deletes the token after GM approval |
-| Sheet (GM), Close | footer | — |
+| Character Sheet, Prototype Token | titlebar, GM only | — |
+| Done | footer | closes the window |
 
 Take prompts for a quantity through Blacksmith's Quantity Split only when the stack is above one. A
 single-quantity row transfers on click.
+
+Neither the quantity prompt nor the actor picker passes `modal`. `api.dialog` used to default to
+`modal: true`, which called `<dialog>.showModal()` and froze the loot window behind it; the default is now
+`false`. Bury's confirmation **does** stay modal, because `confirm` defaults to `modal: destructive` and
+bury is destructive. Do not pass `modal: true` on the loot pickers — the window must stay draggable while
+one is open.
+
+### Footer convention
+
+**One primary action, rightmost. Secondary actions left.** This applies to every Curator window, not only
+this one:
+
+```
+[ Done ]                              [ Loot to Party ] [ Loot All ]
+```
+
+GM-only sheet access is a titlebar action rather than a footer button — it is inspection, not a loot action,
+and the footer belongs to loot actions. `getToolHeaderActions()` supplies Character Sheet and Prototype
+Token; in micro-titlebar mode the base folds both into the window's context menu automatically.
+
+Prototype Token must be opened as `new CONFIG.Token.prototypeSheetClass({ prototype }).render(true)`.
+`PrototypeToken` is a DataModel with **no `sheet` getter**, so `prototype.sheet?.render()` optional-chains
+into silence — a dead button with no error.
+
+Blacksmith sets `width: 300px` on `.blacksmith-window-btn-primary` in `window-template.css`. In a flex
+footer that stretches the primary action across the row, so the loot window resets it to `auto` in its own
+scope. Worth raising with Blacksmith rather than each consumer overriding it.
+
+### Rendering failures
+
+Most codes describe a state that will not change, so they get one sentence and no retry. Three do not:
+
+- **`LOCK_TIMEOUT`** is the only code worth offering a retry on, because it is the only one that resolves on
+  its own. Everything else describes a settled state.
+- **`CONTAINER_HAS_CONTENTS`** carries `contentCount`, so the message names it — "Unpack 7 items first"
+  rather than a flat refusal. A null count means Blacksmith could not determine it and refused to be safe,
+  so the message must not invent a number.
+- **`SOURCE_UPDATE_FAILED` and `ROLLBACK_FAILED`** carry `targetItemId`, `merged`, `quantity`, and both
+  observed quantities. These are logged in full and surfaced, never swallowed: they are what makes a broken
+  state repairable by hand.
+
+`ok: true, merged: false` is **success**, not partial failure — the item arrived as its own row instead of
+joining a stack. Only an explicit `partial` flag on a batch result means something was left behind.
 
 Disable actions while that window has a request in flight. This is user feedback, not the concurrency guarantee.
 
@@ -540,9 +592,12 @@ replacing a surface.
       `game.socket` channel rather than Blacksmith's socket API, because Curator already ran a raw channel
       for `showImage` and two transports in one module is worse than one. `module.json` now declares
       `"socket": true`, which that existing path silently needed and did not have.
-- [x] Transfer single Items and partial stacks through the `transferItem` contract.
-- [x] Structured failure feedback keyed on the primitive's error codes.
-- [ ] Verify two clients attempting the same Item.
+- [x] Transfer single Items and partial stacks through `blacksmith.inventory.transferItem`.
+- [x] Structured failure feedback keyed on the primitive's error codes, including the three that need more
+      than a sentence — see below.
+- [ ] Verify two clients attempting the same Item. **Blacksmith cannot cover this**: their lock is
+      per-client by design and consumers route through one GM handler, so the cross-client race is Curator's
+      to verify.
 
 ### Phase 3 — Currency, Take All, and generation migration
 
@@ -552,8 +607,16 @@ replacing a surface.
 - [x] Give To, Party, and All to Party.
 - [x] Bury, scoped to Curator corpses and gated on GM approval.
 - [ ] Test partial-failure behavior against a real half-failure.
-- [ ] Migrate loot generation in `loot-utilities.js` onto `grantItem` and `grantCurrency` once Blacksmith
-      ships them, retiring the absolute-total currency write that races today.
+- [x] Migrate loot generation in `loot-utilities.js`. `_addRandomCoins` uses `grantCurrency` with deltas,
+      retiring the absolute-total write that raced.
+- [x] `_rollLootTable` accumulates every result across every roll and makes **one** `grantItems` call.
+      Granting per result was a defect: it cost a write each and produced a separate row per duplicate, so a
+      table rolled three times for the same item gave three rows instead of one stack. Batched, Blacksmith
+      coalesces duplicates and the whole roll costs at most two writes.
+- [ ] **Loot All and Loot to Party are disabled pending `transferItems`.** Blacksmith asked consumers not to
+      implement Take All as a loop over `transferItem`: N writes to one recipient means N encumbrance
+      recomputes, which turns their known cosmetic Squire race into a reliable one. The batch form has been
+      requested. The buttons stay visible and disabled with the reason in a tooltip rather than vanishing.
 
 ### Phase 4 — Synchronization and lifecycle
 
@@ -646,6 +709,22 @@ Curator-side additions:
 - Concurrent requests for the same denomination.
 - Recipient with missing or zero currency fields.
 
+### Reported back to Blacksmith
+
+The four they asked Curator to confirm, because the loot window is the first real consumer:
+
+- A row emptied by a full take vanishes from the window.
+- A partial take leaves the row showing the reduced quantity.
+- Taking an item the looter already holds grows that stack rather than adding a second row.
+- Any code the window cannot sensibly render.
+- Two players taking the same last item from one corpse. Blacksmith's harness cannot cover this — the lock
+  is per-client and consumers route through one GM handler — so it is Curator's to run.
+
+Two Squire issues were flagged as not-Curator-bugs and are now **fixed on Squire's side** — the `isNew` stamp
+moved to `preCreateItem` so it rides the original write, and Squire calls `registerTransientFlag`. Merging is
+no longer timing-dependent and the `dnd5eencumbered0` console noise should be gone. If either reappears,
+report it rather than working around it: it means something else is writing per item.
+
 ### Sharing, party, and disposal
 
 - Give To hands an item to a character the giver does not own, and it arrives.
@@ -653,8 +732,6 @@ Curator-side additions:
 - Party controls are disabled, with a stated reason, in a world with no primary party.
 - Distribute across 3 characters with 7 gp: each gets 2, 1 gp stays on the body.
 - Distribute with less than one per member returns `NOT_ENOUGH_TO_SPLIT` and moves nothing.
-- Take All against a body holding a container with contents: everything else moves, the container is
-  reported as left behind.
 - Bury as a non-GM prompts the GM, and declining leaves the token in place.
 - A crafted bury request naming a non-corpse token is rejected with `NOT_A_CORPSE`.
 - Bury closes the loot window on every client, not only the requester's.
@@ -675,7 +752,42 @@ Curator-side additions:
 - Token deletion closes or invalidates the window.
 - Scene change releases hooks and window references.
 
-## 17. Architecture Documentation Rule
+## 17. Blacksmith API Usage
+
+Curator's loot feature must consume shared controls rather than reimplement them. Current state:
+
+| API | Used for |
+|---|---|
+| `inventory` | every item and currency mutation, plus loot generation |
+| `tokens` | the `clickLeft2` corpse claim |
+| `entityList` | recipient and Give-to pickers |
+| `quantitySplit` | the how-many prompt |
+| `dialog` | quantity, actor picking, bury confirmation |
+| `toast` | all notifications, via `notifications.js` |
+| `chatCards` | the card HTML/CSS contract for the loot card |
+| window base | the loot window shell |
+
+Deliberately not used:
+
+- **`sockets`** — Curator runs its own `game.socket` channel. It already had one for `showImage`, and two
+  transports in one module is worse than one. Revisit if Curator ever needs SocketLib's guarantees.
+- **`registerWindow` / `openWindow`** — the registry exists so a toolbar or macro can open a window without
+  importing its class. The loot window cannot open without a specific corpse, so an id-only opener would
+  have nothing to open. Revisit if a "loot nearest corpse" tool is ever wanted.
+- **`registerTransientFlag`** — `api.inventory` exposes it so a module can declare item flags that must not
+  block a stack merge. Curator writes no flags to Items, so it has nothing to declare. Revisit only if that
+  changes.
+
+`getToolHeaderActions()` **is** used, for the GM's Character Sheet and Prototype Token entries. Bury stays in
+the subject card rather than the titlebar because it must state a reason when unavailable, which a titlebar
+icon cannot.
+
+Two controls with embedded markup — `entityList` and `quantitySplit` — are attached **while their wrapper is
+still detached**, before being handed to `dialog.wait`. The dialog moves an element content node in rather
+than copying it, so listeners bound beforehand survive. Neither control updates its own captions without
+`attach`, and that failure is silent: the input still reports a value, so it looks like it works.
+
+## 18. Architecture Documentation Rule
 
 `architecture-loot.md` should describe only behavior verified against implemented code. Add sections incrementally as phases land:
 
@@ -692,7 +804,7 @@ Curator-side additions:
 
 The plan records intent and unresolved choices. The architecture document records the system that actually exists.
 
-## 18. Open Decisions
+## 19. Open Decisions
 
 Still open:
 
