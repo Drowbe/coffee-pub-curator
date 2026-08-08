@@ -8,6 +8,7 @@ import { MODULE } from './const.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { LootUtilities } from './loot-utilities.js';
 import { LootManager } from './manager-loot.js';
+import { HookManager } from './manager-hooks.js';
 
 /**
  * Token Image Utilities
@@ -400,27 +401,38 @@ export class TokenImageUtilities {
                     if (existingTimeout) {
                         clearTimeout(existingTimeout);
                     }
-                    
-                    // Schedule loot actions after delay
-                    const timeoutId = setTimeout(async () => {
-                        // Find the SPECIFIC token by ID, not just any token with the same actor
-                        const lootToken = canvas.tokens.placeables.find(t => t.id === tokenId);
-                        if (lootToken) {
-                            const tokenHP = lootToken.actor.system.attributes.hp.value;
-                            
-                            if (tokenHP <= 0) {
-                                await TokenImageUtilities._convertTokenToLoot(lootToken);
-                            }
-                        }
 
-                        await TokenImageUtilities.updateTokenImage(token.document, 'loot');
-                        
-                        // Clean up the timeout ID after execution
-                        TokenImageUtilities._lootConversionTimeouts.delete(tokenId);
-                    }, delay);
-                    
-                    // Store the timeout ID for cleanup
-                    TokenImageUtilities._lootConversionTimeouts.set(tokenId, timeoutId);
+                    // Deferred until the encounter ends. Marked on the document rather
+                    // than held in memory so a reload mid-combat does not lose the body.
+                    // Branch rather than return: the overlay refresh at the end of this
+                    // function still has to run.
+                    const afterCombat = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertAfterCombat', false);
+                    const holdForCombat = afterCombat && game.combat?.started;
+                    if (holdForCombat) {
+                        await token.document.setFlag(MODULE.ID, 'lootAwaitingCombatEnd', true);
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Holding loot conversion for ${token.name} until combat ends`, "", true, false);
+                    } else {
+                        // Schedule loot actions after delay
+                        const timeoutId = setTimeout(async () => {
+                            // Find the SPECIFIC token by ID, not just any token with the same actor
+                            const lootToken = canvas.tokens.placeables.find(t => t.id === tokenId);
+                            if (lootToken) {
+                                const tokenHP = lootToken.actor.system.attributes.hp.value;
+
+                                if (tokenHP <= 0) {
+                                    await TokenImageUtilities._convertTokenToLoot(lootToken);
+                                }
+                            }
+
+                            await TokenImageUtilities.updateTokenImage(token.document, 'loot');
+
+                            // Clean up the timeout ID after execution
+                            TokenImageUtilities._lootConversionTimeouts.delete(tokenId);
+                        }, delay);
+
+                        // Store the timeout ID for cleanup
+                        TokenImageUtilities._lootConversionTimeouts.set(tokenId, timeoutId);
+                    }
                 }
             } else {
                 // *** RESTORE IMAGE MODE ***
@@ -436,6 +448,9 @@ export class TokenImageUtilities {
                 }
 
                 await LootManager.clear(token.document);
+                if (token.document.getFlag(MODULE.ID, 'lootAwaitingCombatEnd') !== undefined) {
+                    await token.document.unsetFlag(MODULE.ID, 'lootAwaitingCombatEnd');
+                }
                 
                 if (imageState && (imageState === 'dead' || imageState === 'loot')) {
                     // Get fresh document reference after Item Piles reversion
@@ -852,6 +867,43 @@ export class TokenImageUtilities {
      */
     static initialize() {
         // Dead token and image replacement hooks are registered by ImageCacheManager.initialize()
+        HookManager.registerHook({
+            name: 'deleteCombat',
+            description: 'Curator: convert bodies held back during the encounter',
+            context: 'curator-loot-combat',
+            key: 'curator-loot-after-combat',
+            priority: 3,
+            callback: (combat) => void TokenImageUtilities._convertPendingAfterCombat(combat)
+        });
+    }
+
+    /**
+     * Convert every body that died during the encounter, once it ends.
+     *
+     * Runs on the GM only: conversion writes to the Token and the Actor. A body that
+     * was revived before the encounter finished has had its flag cleared already and
+     * is skipped here by the HP re-check as well.
+     */
+    static async _convertPendingAfterCombat(combat) {
+        if (!game.user.isGM) return;
+        const scene = combat?.scene ?? canvas.scene;
+        if (!scene) return;
+
+        const waiting = scene.tokens.filter((tokenDocument) => tokenDocument.getFlag(MODULE.ID, 'lootAwaitingCombatEnd') === true);
+        if (!waiting.length) return;
+
+        for (const tokenDocument of waiting) {
+            try {
+                await tokenDocument.unsetFlag(MODULE.ID, 'lootAwaitingCombatEnd');
+                const token = canvas.tokens?.placeables.find((placeable) => placeable.id === tokenDocument.id);
+                if (!token) continue;
+                if (Number(token.actor?.system?.attributes?.hp?.value ?? 1) > 0) continue;
+                await TokenImageUtilities._convertTokenToLoot(token);
+                await TokenImageUtilities.updateTokenImage(tokenDocument, 'loot');
+            } catch (error) {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Error converting ${tokenDocument.name} after combat:`, error, false, false);
+            }
+        }
     }
 
     /**

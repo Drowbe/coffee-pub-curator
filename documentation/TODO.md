@@ -13,6 +13,38 @@
 - [ ] **Curator:** Normalize API inputs: accept canvas `Token`, `TokenDocument`, or `Actor`; derive as needed for processing and for "selected" context in windows.
 
 
+## Burying a body destroys its XP (cross-module, unresolved)
+
+Confirmed 2026-08-08 against the code, not suspected.
+
+Foundry removes a Combatant when its Token is deleted (`TokenDocument#_onDelete` calls `deleteCombatants`).
+Blacksmith's `XpManager` computes the award on the `deleteCombat` hook from `combat.combatants`
+(`xp-manager.js:337`, `getCombatMonsters`). So the roster is read **at combat end, from current state**: a
+body buried during the encounter is not in it, and its XP is silently gone. Nothing errors and nothing warns.
+
+Two paths reach it, and the automatic one is worse:
+
+- **Manual Bury** during combat. At least a GM approves it, so there is a moment to intervene.
+- **`lootBuryWhenEmpty`** auto-buries a fully-looted body. No dialog, no GM involvement — a player empties a
+  corpse mid-fight and the XP disappears. This is the sharper case and the one to fix first.
+
+**The right fix is Blacksmith's, and it is the one already proposed: derive XP from history rather than from
+current state.** Record defeated combatants as they are defeated, or snapshot the roster at combat start, so
+the award does not depend on the token still existing when the encounter ends. That also fixes every other
+cause of a mid-combat token deletion, of which Curator is only one.
+
+Curator-side mitigations, none implemented, in increasing order of restriction:
+
+1. Warn in the bury approval dialog when the token is a combatant in the active combat. Cheap, keeps GM
+   agency, does nothing for the automatic path.
+2. Suppress `lootBuryWhenEmpty` while its token is in an active combat, and sweep at `deleteCombat`. Closes
+   the silent path and matches the deferral `tokenConvertAfterCombat` already uses.
+3. Refuse bury outright during combat. Safest, most restrictive, and arguably not Curator's call to make.
+
+Sequencing note if a deferred bury is ever added: it must run **after** Blacksmith's XP hook, which is
+`deleteCombat` at priority 3. Curator's existing `deleteCombat` handler converts held bodies and deletes
+nothing, so there is no ordering hazard today — a bury sweep would introduce one.
+
 ## Shop Tokens (idea, not scheduled)
 
 Mark a token as a **shop** ahead of time and reuse the corpse-looting machinery with different rules. Recorded

@@ -40,6 +40,8 @@
     "tokenConvertDeadToLoot-Hint": "Requires the module 'Item Piles' be installed and enabled.",
     "tokenConvertDelay-Label": "Loot Delay",
     "tokenConvertDelay-Hint": "How many seconds to wait before the loot is converted to a pile?",
+    "tokenConvertAfterCombat-Label": "Convert After Combat",
+    "tokenConvertAfterCombat-Hint": "Hold loot conversion until the encounter ends. Bodies that drop during combat become lootable when combat finishes, rather than after the delay above. A creature revived before the encounter ends is never converted.",
     "tokenLootPileImage-Label": "Loot Token Image",
     "tokenLootPileImage-Hint": "Full path to loot token image (applied after token converted to loot pile).",
     "tokenLootSound-Label": "Loot Conversion Sound",

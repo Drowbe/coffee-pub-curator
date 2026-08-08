@@ -511,6 +511,11 @@ World setting candidates for an empty corpse:
 
 Choose one safe default during implementation. Deleting a token must occur only after authoritative confirmation that no transferable items or currency remain.
 
+**Deleting a token during combat destroys its XP award.** Foundry removes the Combatant with the Token, and
+Blacksmith reads the roster from `combat.combatants` at combat end, so a buried body contributes nothing.
+`lootBuryWhenEmpty` reaches this with no GM involvement at all. Unresolved; see `TODO.md`. Do not treat the
+current behavior as intended.
+
 On revival:
 
 - Invalidate the active `generationId` immediately.
@@ -543,6 +548,7 @@ A **Looting** section sits under Loot Configuration. All world scope — these a
 | `lootBuryWhenEmpty` | off | The token leaves the canvas once the last item and coin are gone. |
 | `lootProximity` | 0 | Feet a character must be within to loot. 0 means no distance requirement. |
 | `lootAllowInCombat` | off | Whether a body can be looted while a combat is running. |
+| `tokenConvertAfterCombat` | off | Holds conversion until the encounter ends (registered with the conversion settings, not this section). |
 | `lootSendToParty` | on | Shows the party controls. |
 | `lootSendToPlayer` | on | Shows Give To. |
 
@@ -550,6 +556,16 @@ A **Looting** section sits under Loot Configuration. All world scope — these a
 are re-checked in `_validateRecipient`, and combat and proximity are re-checked on the GM against current
 token positions. Hiding a button only removes it from the honest path; the GM handler is what makes the
 policy real.
+
+`tokenConvertAfterCombat` and `lootAllowInCombat` overlap but are not the same lever, and both are worth
+having. The first delays a body *becoming* lootable, so nothing is marked ready mid-encounter and the loot
+image does not appear until the fight is over. The second blocks the loot *action* against a body that is
+already ready. A GM who only wants the second still sees corpses convert during the fight.
+
+A body held for the encounter carries `lootAwaitingCombatEnd` on the Token — on the document rather than in
+memory, so a reload mid-combat does not lose it. `deleteCombat` sweeps the scene, re-checks that each one is
+still at zero HP, and converts. Revival before the encounter ends clears the flag, so a creature brought
+back is never converted.
 
 Proximity measures from the corpse to the nearest token the requesting user owns, via
 `canvas.grid.measurePath`, at request time — not at window-open time, because either token may have moved.
@@ -679,6 +695,12 @@ replacing a surface.
 ## 16. Verification Matrix
 
 ### Generation and state
+
+- With Convert After Combat on, a creature dying mid-encounter does not convert until combat ends: no loot
+  image, no lootable flag, no chat card.
+- The same creature revived before the encounter ends is never converted, and the holding flag is cleared.
+- Reloading the browser mid-combat does not lose a held body.
+- Ending combat converts every held body on the scene, and leaves any that were revived alone.
 
 - NPC death with items and currency.
 - NPC death with no generated loot.

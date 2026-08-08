@@ -348,6 +348,17 @@ export async function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    game.settings.register(MODULE.ID, 'tokenConvertAfterCombat', {
+        name: MODULE.ID + '.tokenConvertAfterCombat-Label',
+        hint: MODULE.ID + '.tokenConvertAfterCombat-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: false,
+        group: GROUP
+    });
+
     game.settings.register(MODULE.ID, 'tokenLootPileImage', {
         name: MODULE.ID + '.tokenLootPileImage-Label',
         hint: MODULE.ID + '.tokenLootPileImage-Hint',
