@@ -519,7 +519,6 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             tagSortMode: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenImageReplacementTagSortMode', 'count'),
             convertDeadToLoot: BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false),
             deadTokenReplacement: BlacksmithUtils.getSettingSafely(MODULE.ID, 'enableDeadTokenReplacement', false),
-            itemPilesInstalled: game.modules.get("item-piles")?.active || false,
             mode: this.mode,
             isTokenMode: this.mode === ImageCacheManager.MODES.TOKEN,
             isPortraitMode: this.mode === ImageCacheManager.MODES.PORTRAIT,

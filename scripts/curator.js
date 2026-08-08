@@ -4,6 +4,7 @@
 
 import { MODULE } from './const.js';
 import { HookManager } from './manager-hooks.js';
+import { LootManager } from './manager-loot.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { TokenImageUtilities } from './token-image-utilities.js';
 import { TokenImageReplacementWindow } from './token-image-replacement.js';
@@ -50,6 +51,7 @@ Hooks.once('ready', async function () {
     }
 
     await registerSettings(blacksmith);
+    LootManager.initialize();
 
     // Socket handler — must register for ALL users, not just GM
     game.socket.on(`module.${MODULE.ID}`, (data) => {
@@ -207,16 +209,6 @@ function initializeCurator(blacksmith) {
     HookManager.initialize();
     ImageCacheManager.initialize();
     TokenImageUtilities.initialize();
-
-    // Warn GM if Convert to Loot is enabled but Item Piles is not active
-    if (game.user.isGM) {
-        const lootEnabled = BlacksmithUtils.getSettingSafely(MODULE.ID, 'tokenConvertDeadToLoot', false);
-        if (lootEnabled && !game.modules.get('item-piles')?.active) {
-            notify.warn("Convert to Loot is enabled, but Item Piles is not active. Tokens will not be converted to loot piles.", {
-                stackKey: `${MODULE.ID}-item-piles-missing`
-            });
-        }
-    }
 
     registerMenubarIntegration(blacksmith).catch((error) => {
         console.error(`${MODULE.TITLE} | Menubar integration failed:`, error);

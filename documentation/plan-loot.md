@@ -1,7 +1,7 @@
 # Curator Looting Plan
 
-**Status:** Proposed  
-**Target:** Focused corpse looting owned by Curator  
+**Status:** Phase 1 in progress
+**Target:** Focused corpse looting owned by Curator
 **Architecture record:** Create `architecture-loot.md` as verified behavior lands. Do not copy this plan into the architecture document unchanged.
 
 ## 1. Objective
@@ -296,12 +296,12 @@ Existing worlds may contain already-converted Item Piles. Do not silently rewrit
 
 ### Phase 1 — State and read-only window
 
-- Add the Curator loot state model.
-- Separate loot generation from Item Piles conversion.
-- Mark corpses `preparing` and `ready` at the correct points.
-- Add token interaction.
-- Render current allowed items and currency without mutation.
-- Start `architecture-loot.md` with only verified state ownership and lifecycle behavior.
+- [x] Add the Curator loot state model.
+- [x] Separate loot generation from Item Piles conversion.
+- [x] Mark corpses `preparing` and `ready` around the current conversion path.
+- [ ] Add token interaction through a public Blacksmith API; direct Foundry/libWrapper wrapping is prohibited.
+- [x] Render current allowed items and currency without mutation.
+- [x] Start `architecture-loot.md` with only implemented state ownership and lifecycle behavior.
 
 ### Phase 2 — Single-item transfer
 
@@ -413,4 +413,3 @@ The plan records intent and unresolved choices. The architecture document record
 - Whether Take All is atomic or may return partial success.
 - Whether an active GM is mandatory for GM-originated local interaction as well as player interaction.
 - Whether an empty corpse may still open for inspection.
-

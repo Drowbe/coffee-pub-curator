@@ -1,0 +1,47 @@
+<div class="curator-loot-content">
+    {{#if missing}}
+        <div class="curator-loot-empty">This corpse is no longer available.</div>
+    {{else}}
+        <section class="curator-loot-section curator-loot-subject">
+            <div class="curator-loot-subject-image">
+                <img src="{{portraitImg}}" alt="{{tokenName}}">
+            </div>
+            <div class="curator-loot-subject-copy">
+                <div class="curator-loot-kicker">Corpse</div>
+                <div class="curator-loot-title">{{tokenName}}</div>
+                <div class="curator-loot-description">{{itemCount}} item rows · {{currencyCount}} currencies</div>
+            </div>
+        </section>
+
+        <section class="curator-loot-section">
+            <h3><span><i class="fa-solid fa-box-open"></i> Items</span><span class="curator-loot-count">{{itemCount}}</span></h3>
+            {{#if hasItems}}
+                <div class="curator-loot-item-list">
+                    {{#each items}}
+                        <div class="curator-loot-item" data-item-id="{{id}}">
+                            <img src="{{img}}" alt="">
+                            <div class="curator-loot-item-copy"><strong>{{name}}</strong><span>{{typeLabel}}</span></div>
+                            <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
+                            <button type="button" class="blacksmith-window-btn-secondary" disabled><i class="fa-solid fa-hand"></i> Take</button>
+                        </div>
+                    {{/each}}
+                </div>
+            {{else}}<div class="curator-loot-empty">No lootable items remain.</div>{{/if}}
+        </section>
+
+        <section class="curator-loot-section">
+            <h3><span><i class="fa-solid fa-coins"></i> Currency</span><span class="curator-loot-count">{{currencyCount}}</span></h3>
+            {{#if hasCurrency}}
+                <div class="curator-loot-currency-list">
+                    {{#each currencies}}
+                        <div class="curator-loot-currency curator-loot-currency-{{key}}">
+                            <div class="curator-loot-coin"><i class="fa-solid fa-coins"></i></div>
+                            <div class="curator-loot-currency-copy"><strong>{{value}}</strong><span>{{label}} · {{abbreviation}}</span></div>
+                            <button type="button" class="blacksmith-window-btn-secondary" disabled>Take</button>
+                        </div>
+                    {{/each}}
+                </div>
+            {{else}}<div class="curator-loot-empty">No currency remains.</div>{{/if}}
+        </section>
+    {{/if}}
+</div>

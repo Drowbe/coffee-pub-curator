@@ -7,6 +7,7 @@ import { notify } from './notifications.js';
 import { MODULE } from './const.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { LootUtilities } from './loot-utilities.js';
+import { LootManager } from './manager-loot.js';
 
 /**
  * Token Image Utilities
@@ -267,13 +268,7 @@ export class TokenImageUtilities {
                 return;
             }
             
-            // Check if Item Piles module is installed and active
-            if (!game.modules.get("item-piles")?.active) {
-                notify.warn("Convert to Loot is enabled, but Item Piles is not active. This token cannot be converted to a loot pile.", {
-                    stackKey: `${MODULE.ID}-item-piles-missing`
-                });
-                return;
-            }
+            const generationId = await LootManager.markPreparing(token.document);
             
             // Check if loot has already been added to this token
             const lootAlreadyAdded = token.document.getFlag(MODULE.ID, 'blnLootAdded');
@@ -289,32 +284,7 @@ export class TokenImageUtilities {
 
             // Epic loot roll is handled by addLootToActor when called above (first time); no second call here.
 
-            // Set up proper permissions before converting to item pile
-            const updates = {
-                "permission.default": CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED,
-                "flags.item-piles": {
-                    "enabled": true,
-                    "interactable": true,
-                    "lootable": true
-                }
-            };
-            
-            // Update token permissions
-            await token.document.update(updates);
-            
-            // Convert to item pile with proper configuration
-            // Pass tokenSettings to preserve our loot image and prevent Item Piles from changing it
-            await game.itempiles.API.turnTokensIntoItemPiles([token], {
-                pileSettings: {
-                    enabled: true,
-                    interactable: true,
-                    lootable: true,
-                    closed: false,
-                    shareItemsWithPlayers: true,
-                    displayOne: false,
-                    keepOriginal: true
-                }
-            });
+            await LootManager.markReady(token.document, generationId);
             
            
             // Play sound
@@ -442,10 +412,7 @@ export class TokenImageUtilities {
                             }
                         }
 
-                        // Apply loot image only if Item Piles is active
-                        if (game.modules.get("item-piles")?.active) {
-                            await TokenImageUtilities.updateTokenImage(token.document, 'loot');
-                        }
+                        await TokenImageUtilities.updateTokenImage(token.document, 'loot');
                         
                         // Clean up the timeout ID after execution
                         TokenImageUtilities._lootConversionTimeouts.delete(tokenId);
@@ -466,6 +433,8 @@ export class TokenImageUtilities {
                     clearTimeout(pendingTimeout);
                     TokenImageUtilities._lootConversionTimeouts.delete(token.id);
                 }
+
+                await LootManager.clear(token.document);
                 
                 if (imageState && (imageState === 'dead' || imageState === 'loot')) {
                     // Get fresh document reference after Item Piles reversion
@@ -473,15 +442,6 @@ export class TokenImageUtilities {
                     if (freshToken) {
                         // Restore the current image using unified function with fresh reference
                         await TokenImageUtilities.updateTokenImage(freshToken.document, 'restore');
-                    }
-                }
-
-                // If it was converted to loot pile, revert it to a token
-                if (imageState === 'loot' && game.modules.get("item-piles")?.active) {
-                    try {
-                        await game.itempiles.API.revertTokensFromItemPiles([token]);
-                    } catch (error) {
-                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ERROR reverting from item pile: ${error.message}`, "", false, false);
                     }
                 }
 

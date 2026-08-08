@@ -1,0 +1,48 @@
+.curator-loot-window .blacksmith-window-tool-body { min-height: 0; overflow: auto; }
+.curator-loot-content { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 8px; color: var(--blacksmith-tool-text); }
+.curator-loot-section { min-width: 0; padding: 8px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 6px; background: var(--blacksmith-tool-surface-raised); }
+.curator-loot-section > h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 7px; padding: 0 0 6px; border-bottom: 1px solid var(--blacksmith-tool-divider); color: var(--blacksmith-tool-accent); font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+.curator-loot-section > h3 i { width: 18px; text-align: center; }
+.curator-loot-count { min-width: 20px; padding: 1px 6px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 999px; background: var(--blacksmith-tool-surface-sunken); color: var(--blacksmith-tool-text-muted); font-size: .68rem; text-align: center; }
+
+.curator-loot-subject { display: flex; align-items: center; gap: 11px; padding: 10px; background: linear-gradient(135deg, var(--blacksmith-tool-surface-raised), var(--blacksmith-tool-surface-sunken)); }
+.curator-loot-subject-image { width: 58px; height: 58px; flex: 0 0 58px; overflow: hidden; border: 1px solid var(--blacksmith-tool-border); border-radius: 6px; box-shadow: 0 2px 7px rgba(0,0,0,.22); }
+.curator-loot-subject-image > img { display: block; width: 100% !important; height: 100% !important; max-width: none !important; object-fit: cover; border: 0; }
+.curator-loot-subject-copy { min-width: 0; }
+.curator-loot-kicker { color: var(--blacksmith-tool-accent); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.curator-loot-title { overflow: hidden; font-size: 1.05rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.curator-loot-description { margin-top: 4px; color: var(--blacksmith-tool-text-muted); font-size: .72rem; }
+
+.curator-loot-item-list { display: flex; flex-direction: column; gap: 4px; }
+.curator-loot-item { display: grid; grid-template-columns: 38px minmax(0,1fr) 42px 66px; gap: 8px; align-items: center; min-width: 0; padding: 5px; border: 1px solid transparent; border-radius: 5px; background: var(--blacksmith-tool-surface-sunken); }
+.curator-loot-item:hover { border-color: var(--blacksmith-tool-divider); background: var(--blacksmith-tool-surface-hover); }
+.curator-loot-item > img { display: block; width: 38px !important; height: 38px !important; max-width: 38px !important; object-fit: cover; border: 1px solid var(--blacksmith-tool-divider); border-radius: 4px; }
+.curator-loot-item-copy { min-width: 0; }
+.curator-loot-item-copy strong, .curator-loot-item-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curator-loot-item-copy strong { font-size: .82rem; }
+.curator-loot-item-copy span { margin-top: 1px; color: var(--blacksmith-tool-text-muted); font-size: .66rem; }
+.curator-loot-amount { text-align: center; }
+.curator-loot-amount small, .curator-loot-amount strong { display: block; }
+.curator-loot-amount small { color: var(--blacksmith-tool-text-muted); font-size: .55rem; letter-spacing: .05em; }
+.curator-loot-amount strong { font-size: .82rem; font-variant-numeric: tabular-nums; }
+.curator-loot-item > button, .curator-loot-currency > button { min-width: 0; min-height: 28px; margin: 0; padding: 2px 6px; font-size: .7rem; }
+
+.curator-loot-currency-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+.curator-loot-currency { display: grid; grid-template-columns: 30px minmax(0,1fr) 48px; gap: 7px; align-items: center; min-width: 0; padding: 6px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 5px; background: var(--blacksmith-tool-surface-sunken); }
+.curator-loot-coin { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: color-mix(in srgb, currentColor 16%, transparent); }
+.curator-loot-currency-cp .curator-loot-coin { color: #b87333; }
+.curator-loot-currency-sp .curator-loot-coin { color: #aeb8c2; }
+.curator-loot-currency-ep .curator-loot-coin { color: #79a89c; }
+.curator-loot-currency-gp .curator-loot-coin { color: #d5aa37; }
+.curator-loot-currency-pp .curator-loot-coin { color: #8fc7d8; }
+.curator-loot-currency-copy { min-width: 0; }
+.curator-loot-currency-copy strong, .curator-loot-currency-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curator-loot-currency-copy strong { font-size: .88rem; font-variant-numeric: tabular-nums; }
+.curator-loot-currency-copy span { color: var(--blacksmith-tool-text-muted); font-size: .62rem; }
+.curator-loot-empty { padding: 8px 3px; color: var(--blacksmith-tool-text-muted); font-size: .76rem; font-style: italic; text-align: center; }
+
+@media (max-width: 430px) {
+    .curator-loot-currency-list { grid-template-columns: 1fr; }
+    .curator-loot-item { grid-template-columns: 34px minmax(0,1fr) 36px 56px; gap: 6px; }
+    .curator-loot-item > img { width: 34px !important; height: 34px !important; }
+}

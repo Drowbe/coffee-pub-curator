@@ -11,16 +11,14 @@
             <span class="tir-toggle-label-right">Portraits</span>
         </div>
         <div class="tir-global-controls-right">
-            {{#if itemPilesInstalled}}
-            <!-- Loot Piles Toggle -->
+            <!-- Corpse Looting Toggle -->
             <div class="tir-toggle-container">
-                <span class="tir-toggle-label">Loot Piles</span>
+                <span class="tir-toggle-label">Corpse Loot</span>
                 <div class="tir-toggle">
                     <input type="checkbox" name="convertDeadToLoot" id="convertDeadToLoot" {{#if convertDeadToLoot}}checked{{/if}}>
                     <label for="convertDeadToLoot" class="tir-toggle-slider"></label>
                 </div>
             </div>
-            {{/if}}
             <!-- Convert Dead Toggle -->
             <div class="tir-toggle-container">
                 <span class="tir-toggle-label">Convert Dead</span>
