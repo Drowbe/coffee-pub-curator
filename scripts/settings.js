@@ -383,6 +383,75 @@ export async function registerSettings(blacksmithApi) {
         group: GROUP
     });
 
+    registerHeader('LootLooting', 'headingH3LootLooting-Label', 'headingH3LootLooting-Hint', 'H3', GROUP, 'world');
+
+    game.settings.register(MODULE.ID, 'lootBuryApproval', {
+        name: MODULE.ID + '.lootBuryApproval-Label',
+        hint: MODULE.ID + '.lootBuryApproval-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: true,
+        group: GROUP
+    });
+
+    game.settings.register(MODULE.ID, 'lootBuryWhenEmpty', {
+        name: MODULE.ID + '.lootBuryWhenEmpty-Label',
+        hint: MODULE.ID + '.lootBuryWhenEmpty-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: false,
+        group: GROUP
+    });
+
+    game.settings.register(MODULE.ID, 'lootProximity', {
+        name: MODULE.ID + '.lootProximity-Label',
+        hint: MODULE.ID + '.lootProximity-Hint',
+        scope: 'world',
+        config: true,
+        requiresReload: false,
+        type: Number,
+        range: { min: 0, max: 60, step: 5 },
+        default: 0,
+        group: GROUP
+    });
+
+    game.settings.register(MODULE.ID, 'lootAllowInCombat', {
+        name: MODULE.ID + '.lootAllowInCombat-Label',
+        hint: MODULE.ID + '.lootAllowInCombat-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: false,
+        group: GROUP
+    });
+
+    game.settings.register(MODULE.ID, 'lootSendToParty', {
+        name: MODULE.ID + '.lootSendToParty-Label',
+        hint: MODULE.ID + '.lootSendToParty-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: true,
+        group: GROUP
+    });
+
+    game.settings.register(MODULE.ID, 'lootSendToPlayer', {
+        name: MODULE.ID + '.lootSendToPlayer-Label',
+        hint: MODULE.ID + '.lootSendToPlayer-Hint',
+        type: Boolean,
+        config: true,
+        requiresReload: false,
+        scope: 'world',
+        default: true,
+        group: GROUP
+    });
+
     registerHeader('LootTreasure', 'headingH3LootTreasure-Label', 'headingH3LootTreasure-Hint', 'H3', GROUP, 'world');
 
     game.settings.register(MODULE.ID, 'tokenLootAddCoins', {

@@ -24,6 +24,9 @@ export class LootManager {
 
     static _interactionId = null;
     static _pending = new Map();
+    // Ledger writes are read-modify-write, and requests are handled concurrently,
+    // so they are chained rather than racing each other.
+    static _ledgerWrites = Promise.resolve();
 
     static initialize() {
         this._registerTokenInteraction();
@@ -39,6 +42,18 @@ export class LootManager {
         this._interactionId = null;
         HookManager.disposeByContext(CONTEXT);
     }
+
+    /** World settings are policy; read them through one place. */
+    static setting(key, fallback) {
+        try {
+            return game.settings.get(MODULE.ID, key);
+        } catch (_error) {
+            return fallback;
+        }
+    }
+
+    static get sendToPartyEnabled() { return this.setting('lootSendToParty', true) !== false; }
+    static get sendToPlayerEnabled() { return this.setting('lootSendToPlayer', true) !== false; }
 
     static _tokensApi() {
         return game.modules.get('coffee-pub-blacksmith')?.api?.tokens ?? null;
@@ -195,6 +210,59 @@ export class LootManager {
         return true;
     }
 
+    /**
+     * Who took what, on the Token document rather than in window memory.
+     *
+     * Authoritative, shared by every client for free, and still correct for a window
+     * opened after the fact — none of which a per-window snapshot manages.
+     */
+    static getTaken(tokenDocument) {
+        const taken = this.getState(tokenDocument)?.taken;
+        return Array.isArray(taken) ? taken : [];
+    }
+
+    /** The row order the body had before anything was taken from it. */
+    static getOrder(tokenDocument) {
+        const order = this.getState(tokenDocument)?.order;
+        return Array.isArray(order) ? order : [];
+    }
+
+    /**
+     * @param {string[]} order Item ids as they stood *before* this transfer. Stored
+     *   once, on the first take, so a looted row can keep its original position
+     *   rather than sliding to the end. Live indices shift as rows are removed, so
+     *   they cannot be used for this.
+     */
+    static recordTaken(tokenDocument, entries, order = []) {
+        if (!entries.length) return this._ledgerWrites;
+        this._ledgerWrites = this._ledgerWrites.then(async () => {
+            const state = this.getState(tokenDocument);
+            if (!state) return;
+            const taken = Array.isArray(state.taken) ? state.taken : [];
+            await tokenDocument.setFlag(MODULE.ID, this.FLAG, {
+                ...state,
+                order: Array.isArray(state.order) && state.order.length ? state.order : order,
+                taken: [...taken, ...entries]
+            });
+        }).catch((error) => console.error(`${MODULE.TITLE} | Could not record looted items:`, error));
+        return this._ledgerWrites;
+    }
+
+    static _currentOrder(corpse) {
+        return corpse.items.filter((item) => isPhysical(item.type)).map((item) => item.id);
+    }
+
+    static _snapshot(item, takerName) {
+        return {
+            itemId: item.id,
+            name: item.name,
+            img: item.img,
+            type: item.type,
+            typeLabel: item.type?.charAt(0).toUpperCase() + item.type?.slice(1),
+            by: takerName
+        };
+    }
+
     static async clear(tokenDocument) {
         if (tokenDocument?.getFlag(MODULE.ID, this.FLAG) !== undefined) {
             await tokenDocument.unsetFlag(MODULE.ID, this.FLAG);
@@ -319,7 +387,7 @@ export class LootManager {
         // Without this a client could ask the GM to delete any token on any scene.
         if (op === 'bury') {
             if (!this.getState(tokenDocument)?.enabled) return { ok: false, code: 'NOT_A_CORPSE' };
-            return this._processBury(tokenDocument, user);
+            return this._processBury(tokenDocument, user, payload);
         }
 
         const state = this.getState(tokenDocument);
@@ -331,17 +399,66 @@ export class LootManager {
         const corpse = tokenDocument.actor;
         if (!corpse) return { ok: false, code: 'SOURCE_ACTOR_NOT_FOUND' };
 
+        if (!user.isGM) {
+            if (game.combat?.started && this.setting('lootAllowInCombat', false) !== true) {
+                return { ok: false, code: 'COMBAT_ACTIVE' };
+            }
+            const reach = this._proximityCheck(tokenDocument, user);
+            if (!reach.ok) return reach;
+        }
+
         let result;
         switch (op) {
-            case 'item': result = await this._processItem(corpse, payload, user); break;
+            case 'item': result = await this._processItem(tokenDocument, corpse, payload, user); break;
             case 'currency': result = await this._processCurrency(corpse, payload, user); break;
-            case 'takeAll': result = await this._processTakeAll(corpse, payload, user); break;
+            case 'takeAll': result = await this._processTakeAll(tokenDocument, corpse, payload, user); break;
             case 'distribute': result = await this._processDistribute(corpse, payload); break;
             default: return { ok: false, code: 'UNKNOWN_OPERATION' };
         }
 
-        if (result.ok) this._broadcastRefresh(tokenDocument.uuid);
+        if (result.ok) {
+            this._broadcastRefresh(tokenDocument.uuid);
+            await this._buryIfEmptied(tokenDocument);
+        }
         return result;
+    }
+
+    static _remainingOn(actor) {
+        const items = actor ? actor.items.filter((item) => isPhysical(item.type)).length : 0;
+        const coins = denominations().reduce(
+            (sum, denom) => sum + Math.trunc(Number(actor?.system?.currency?.[denom] ?? 0)), 0
+        );
+        return { items, coins, empty: items === 0 && coins === 0 };
+    }
+
+    /** Optional tidy-up: a body with nothing left on it leaves the canvas. */
+    static async _buryIfEmptied(tokenDocument) {
+        if (this.setting('lootBuryWhenEmpty', false) !== true) return;
+        if (!this._remainingOn(tokenDocument.actor).empty) return;
+        LootWindow.closeForToken(tokenDocument.uuid);
+        game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
+        await tokenDocument.delete();
+    }
+
+    /**
+     * Distance is recalculated here from current token positions. A client cannot be
+     * trusted to measure its own range, and the corpse or the character may have
+     * moved since the window opened.
+     */
+    static _proximityCheck(tokenDocument, user) {
+        const limit = Number(this.setting('lootProximity', 0)) || 0;
+        if (limit <= 0) return { ok: true };
+
+        const scene = tokenDocument.parent;
+        const owned = scene?.tokens?.filter((token) => token.actor?.testUserPermission(user, 'OWNER')) ?? [];
+        if (!owned.length) return { ok: false, code: 'TOO_FAR', limit };
+
+        const origin = { x: tokenDocument.x, y: tokenDocument.y };
+        for (const token of owned) {
+            const distance = canvas.grid.measurePath([origin, { x: token.x, y: token.y }])?.distance;
+            if (Number.isFinite(distance) && distance <= limit) return { ok: true };
+        }
+        return { ok: false, code: 'TOO_FAR', limit };
     }
 
     /**
@@ -354,7 +471,10 @@ export class LootManager {
         if (corpse?.uuid === recipientUuid) return { ok: false, code: 'SAME_ACTOR' };
 
         const party = this.getPartyActor();
-        if (party?.uuid === recipientUuid) return { ok: true, actorUuid: recipientUuid };
+        if (party?.uuid === recipientUuid) {
+            if (!this.sendToPartyEnabled) return { ok: false, code: 'SEND_TO_PARTY_DISABLED' };
+            return { ok: true, actorUuid: recipientUuid };
+        }
 
         let actor = null;
         try {
@@ -365,21 +485,37 @@ export class LootManager {
         if (!actor || actor.type !== 'character') return { ok: false, code: 'TARGET_ACTOR_NOT_FOUND' };
         if (user.isGM) return { ok: true, actorUuid: recipientUuid };
         if (actor.testUserPermission(user, 'OWNER')) return { ok: true, actorUuid: recipientUuid };
+        // Giving to somebody else's character is the Give To path, so the setting
+        // that hides that control must also refuse a crafted request for it.
         if (this.getPartyCharacters().some((member) => member.uuid === recipientUuid)) {
+            if (!this.sendToPlayerEnabled) return { ok: false, code: 'SEND_TO_PLAYER_DISABLED' };
             return { ok: true, actorUuid: recipientUuid };
         }
         return { ok: false, code: 'RECIPIENT_NOT_ALLOWED' };
     }
 
-    static async _processItem(corpse, payload, user) {
+    static async _processItem(tokenDocument, corpse, payload, user) {
         const check = this._validateRecipient(payload.recipientUuid, user, corpse);
         if (!check.ok) return check;
-        return transferItem({
+
+        // Captured before the transfer: a fully-taken row is gone afterwards.
+        const item = corpse.items.get(payload.itemId);
+        const taker = fromUuidSync(check.actorUuid)?.name ?? 'Someone';
+        const snapshot = item ? this._snapshot(item, taker) : null;
+        const order = this._currentOrder(corpse);
+
+        const result = await transferItem({
             sourceActorUuid: corpse.uuid,
             targetActorUuid: check.actorUuid,
             itemId: payload.itemId,
             quantity: payload.quantity
         });
+
+        // Only a row that emptied is "looted"; a partial take leaves a live row.
+        if (result.ok && result.sourceDeleted && snapshot) {
+            await this.recordTaken(tokenDocument, [snapshot], order);
+        }
+        return result;
     }
 
     static async _processCurrency(corpse, payload, user) {
@@ -398,13 +534,16 @@ export class LootManager {
      * so a packed container is refused on its own entry while everything else still
      * goes. Currency is a second call because it is a different primitive.
      */
-    static async _processTakeAll(corpse, payload, user) {
+    static async _processTakeAll(tokenDocument, corpse, payload, user) {
         const check = this._validateRecipient(payload.recipientUuid, user, corpse);
         if (!check.ok) return check;
 
         // Names are captured before the transfer; a moved row is gone afterwards.
         const sources = corpse.items.filter((item) => isPhysical(item.type));
         const labels = new Map(sources.map((item) => [item.id, item.name]));
+        const taker = fromUuidSync(check.actorUuid)?.name ?? 'Someone';
+        const snapshots = new Map(sources.map((item) => [item.id, this._snapshot(item, taker)]));
+        const order = sources.map((item) => item.id);
         const lines = [];
 
         if (sources.length) {
@@ -415,10 +554,15 @@ export class LootManager {
             });
             // A whole-call rejection has no per-item detail to report.
             if (!Array.isArray(batch?.results)) return batch;
+            const taken = [];
             batch.results.forEach((entry, index) => {
                 const itemId = entry?.itemId ?? sources[index]?.id;
                 lines.push({ label: labels.get(itemId) ?? 'Item', ...entry });
+                if (entry?.ok && entry.sourceDeleted && snapshots.has(itemId)) {
+                    taken.push(snapshots.get(itemId));
+                }
             });
+            await this.recordTaken(tokenDocument, taken, order);
         }
 
         const currency = {};
@@ -477,35 +621,81 @@ export class LootManager {
      * confirms first — deleting a scene document is the GM's call, and the GM is the
      * only one who can see what is being destroyed.
      */
-    static async _processBury(tokenDocument, user) {
-        const actor = tokenDocument.actor;
-        const itemCount = actor ? actor.items.filter((i) => isPhysical(i.type)).length : 0;
-        const coinCount = denominations().reduce(
-            (sum, denom) => sum + Math.trunc(Number(actor?.system?.currency?.[denom] ?? 0)), 0
-        );
+    /**
+     * Who is asking, for the approval prompt. The character they are looting as is
+     * the most accurate answer; the assigned character and then the user avatar are
+     * fallbacks for a request that carries no recipient.
+     */
+    static _askerFor(user, recipientUuid) {
+        let actor = null;
+        try {
+            actor = recipientUuid ? fromUuidSync(recipientUuid) : null;
+        } catch (_error) {
+            actor = null;
+        }
+        actor ??= user.character ?? null;
+        return {
+            name: actor?.name ?? user.name,
+            img: actor?.img ?? user.avatar ?? 'icons/svg/mystery-man.svg',
+            subtitle: actor ? user.name : null
+        };
+    }
+
+    static async _processBury(tokenDocument, user, payload = {}) {
+        const { items: itemCount, coins: coinCount, empty } = this._remainingOn(tokenDocument.actor);
 
         const remaining = [];
         if (itemCount) remaining.push(`${itemCount} item${itemCount === 1 ? '' : 's'}`);
         if (coinCount) remaining.push(`${coinCount} coin${coinCount === 1 ? '' : 's'}`);
 
+        // An empty body is buried without asking. A body that still holds something
+        // is destroyed by burying it, so that is the case the GM signs off on.
+        if (empty || this.setting('lootBuryApproval', true) !== true) {
+            LootWindow.closeForToken(tokenDocument.uuid);
+            game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
+            await tokenDocument.delete();
+            return { ok: true };
+        }
+
+        const asker = this._askerFor(user, payload.recipientUuid);
+        const body = `
+            <div class="curator-bury-request">
+                <div class="curator-bury-portrait"><img src="${asker.img}" alt=""></div>
+                <div class="curator-bury-copy">
+                    <strong>${asker.name}</strong>
+                    ${asker.subtitle ? `<span>${asker.subtitle}</span>` : ''}
+                    <p>Wants to bury <strong>${tokenDocument.name}</strong>.</p>
+                    <p>${remaining.length
+                        ? `The body still holds ${remaining.join(' and ')}. Burying removes the token and destroys what is left on it.`
+                        : 'The body is empty. Burying removes the token from the scene.'}</p>
+                </div>
+            </div>`;
+
         const dialog = game.modules.get('coffee-pub-blacksmith')?.api?.dialog;
-        const body = remaining.length
-            ? `<p><strong>${user.name}</strong> wants to bury <strong>${tokenDocument.name}</strong>.</p>
-               <p>The body still holds ${remaining.join(' and ')}. Burying removes the token from the scene and destroys what is left on it.</p>`
-            : `<p><strong>${user.name}</strong> wants to bury <strong>${tokenDocument.name}</strong>.</p>
-               <p>The body is empty. Burying removes the token from the scene.</p>`;
+        let approved = false;
 
-        const confirmed = typeof dialog?.confirm === 'function'
-            ? await dialog.confirm({
-                title: 'Bury Corpse',
+        if (typeof dialog?.wait === 'function') {
+            // wait() rather than confirm() so the button order is ours: the decline is
+            // secondary and sits left, approve is the primary action on the right.
+            const outcome = await dialog.wait({
+                title: 'Bury Request',
                 content: body,
-                confirmLabel: 'Bury',
-                confirmIcon: 'fa-solid fa-shovel',
-                destructive: true
-            })
-            : await foundry.applications.api.DialogV2.confirm({ window: { title: 'Bury Corpse' }, content: body, rejectClose: false });
+                modal: true,
+                buttons: [
+                    { action: 'cancel', label: 'Decline', icon: 'fa-solid fa-xmark' },
+                    { action: 'approve', label: 'Approve', icon: 'fa-solid fa-shovel', default: true, destructive: true }
+                ],
+                closeValue: null,
+                cancelValue: null
+            });
+            approved = outcome?.value === 'approve';
+        } else {
+            approved = await foundry.applications.api.DialogV2.confirm({
+                window: { title: 'Bury Request' }, content: body, rejectClose: false
+            });
+        }
 
-        if (!confirmed) return { ok: false, code: 'BURY_DECLINED' };
+        if (!approved) return { ok: false, code: 'BURY_DECLINED' };
 
         LootWindow.closeForToken(tokenDocument.uuid);
         game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });

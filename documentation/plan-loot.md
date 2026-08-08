@@ -35,7 +35,8 @@ The result should feel like a purpose-built loot window, not a smaller clone of 
 
 ### Explicitly excluded
 
-- Merchants, stores, buying, selling, pricing, or restocking.
+- Merchants, stores, buying, selling, pricing, or restocking. Revisiting this as "shop tokens" reusing the
+  same machinery is recorded in `TODO.md`; the exclusion stands until that gets a decision of its own.
 - Generic piles dropped onto the canvas.
 - Item Piles configuration compatibility.
 - Sharing entitlements or per-player reserved shares.
@@ -331,6 +332,30 @@ Build an Application V2 window on Blacksmith's shared window base.
 
 ### Item list
 
+**A taken row is struck through and labelled "Looted by <character>", not removed.** The record is a ledger
+on the Token document (`flags.<module>.loot.taken`), written by the GM as part of the same handler that
+performed the transfer.
+
+It deliberately does **not** live in window memory. A per-window snapshot was tried first and is wrong for
+the case that matters: several people looting one body. It cannot name the taker, it differs per client, and
+a window opened after an item was taken shows nothing. A ledger on the document is authoritative, reaches
+every client through the document update, and is still complete for a window opened later.
+
+Only a row that emptied is recorded — `sourceDeleted` on the transfer result. A partial take leaves a live
+row at the reduced quantity, because it has not been looted, only reduced.
+
+**A looted row keeps its original position.** The first take also stores `order`: the item ids as they stood
+before anything was removed. Rendering ranks live rows and ledger rows against that list, so a struck-through
+row sits exactly where the item was rather than sliding to the bottom. Live indices cannot be used for this —
+they shift every time a row is removed, so a second take would misplace the first. Anything added to the body
+after that snapshot is unranked and falls to the end in its own order.
+
+Currency is not recorded. A denomination is a balance rather than a row and can be drawn down by several
+people, so "looted by" has no single answer for it.
+
+Ledger writes are read-modify-write and requests are handled concurrently, so they are chained through a
+single promise rather than issued in parallel.
+
 Each row should show:
 
 - Item image.
@@ -384,7 +409,10 @@ dialog it raises**, not only the loot window:
 [ Cancel ]                                                  [ Take ]
 ```
 
-`dialog.wait` renders buttons in array order, so the cancel entry comes first in the array.
+`dialog.wait` renders buttons in array order, so the cancel entry comes first in the array. The GM's bury
+prompt uses `wait` rather than `confirm` for exactly this reason — `confirm` owns its own button order, and
+this one reads `[ Decline ] [ Approve ]`. It passes `modal: true` deliberately: an approval a GM can miss
+behind another window is worse than one that interrupts.
 
 GM-only sheet access is a titlebar action rather than a footer button — it is inspection, not a loot action,
 and the footer belongs to loot actions. `getToolHeaderActions()` supplies Character Sheet and Prototype
@@ -507,14 +535,25 @@ Do not leave the current behavior undocumented in either case.
 
 ## 13. Settings
 
-Keep the settings small and domain-specific:
+A **Looting** section sits under Loot Configuration. All world scope — these are policy, not preference:
 
-- Enable corpse looting.
-- Interaction distance in grid units; zero may mean unlimited if that convention is documented clearly.
-- Allow item inspection.
-- Enable Take All.
-- Empty-corpse behavior.
-- Optional loot interaction sound.
+| Setting | Default | Effect |
+|---|---|---|
+| `lootBuryApproval` | on | A body still holding items or coins needs GM sign-off before burial. An empty one is buried without asking. |
+| `lootBuryWhenEmpty` | off | The token leaves the canvas once the last item and coin are gone. |
+| `lootProximity` | 0 | Feet a character must be within to loot. 0 means no distance requirement. |
+| `lootAllowInCombat` | off | Whether a body can be looted while a combat is running. |
+| `lootSendToParty` | on | Shows the party controls. |
+| `lootSendToPlayer` | on | Shows Give To. |
+
+**A setting that hides a control must also refuse the request.** `lootSendToParty` and `lootSendToPlayer`
+are re-checked in `_validateRecipient`, and combat and proximity are re-checked on the GM against current
+token positions. Hiding a button only removes it from the honest path; the GM handler is what makes the
+policy real.
+
+Proximity measures from the corpse to the nearest token the requesting user owns, via
+`canvas.grid.measurePath`, at request time — not at window-open time, because either token may have moved.
+The GM is exempt from both combat and proximity.
 
 Do not recreate Item Piles' per-token configuration interface. Curator flags describe runtime state; world settings describe policy.
 
@@ -725,18 +764,61 @@ The four they asked Curator to confirm, because the loot window is the first rea
 - Two players taking the same last item from one corpse. Blacksmith's harness cannot cover this — the lock
   is per-client and consumers route through one GM handler — so it is Curator's to run.
 
-Two Squire issues were flagged as not-Curator-bugs and are now **fixed on Squire's side** — the `isNew` stamp
-moved to `preCreateItem` so it rides the original write, and Squire calls `registerTransientFlag`. Merging is
-no longer timing-dependent and the `dnd5eencumbered0` console noise should be gone. If either reappears,
-report it rather than working around it: it means something else is writing per item.
+Both previously-known issues are fixed upstream and neither is expected noise any more:
+
+- Squire moved its `isNew` stamp to `preCreateItem` so it rides the original write, and calls
+  `registerTransientFlag`. Merging is no longer timing-dependent.
+- Blacksmith serialises dnd5e's encumbrance recompute per Actor (`enableEncumbranceGuard`, world setting,
+  on by default). `The _id [dnd5eencumbered0] already exists` should no longer appear.
+
+**A reappearance of either is now a report, not a workaround.** Both root causes are addressed, so it would
+mean something unknown is writing twice to an Actor, and Blacksmith wants to see it. Do not add a guard here.
+
+The guard does not remove the reason to batch. `transferItems` and `grantItems` are used because fewer
+writes is better on its own merits; the guard only means correctness no longer depends on remembering them.
 
 ### Batch transfer
 
-- Loot All over a corpse holding a packed bag: every other row moves, the bag is reported as left behind
-  with its content count.
+Blacksmith's consolidated list, after three fixes landed under Curator. Their ranking: the encumbrance check
+is where a failure is most interesting now, and the packed-bag case is the one most likely to be wrong in a
+way that looks fine.
+
+1. Loot All over a corpse holding a packed bag: every other row moves, and the bag comes back
+   `CONTAINER_HAS_CONTENTS` with its `itemId` and count rather than failing the whole call.
+2. A corpse holding two identical stacks arrives as one coalesced stack, not two rows.
+3. The quantity slider no longer freezes the window — drag the window while it is open.
+4. A two-button footer lays out correctly with no local width reset. That is the case the shared class's
+   fixed 300px was breaking.
+5. No `dnd5eencumbered0` errors looting several items onto a near-encumbered character.
+
+Also:
+
 - Loot All where the recipient already holds one of the items: that stack grows rather than gaining a row.
-- Loot All on a corpse holding two identical stacks: they arrive coalesced into one stack.
 - Loot All and Loot to Party are disabled against a Blacksmith without `transferItems`.
+
+### Several people looting one body
+
+- Two players take the same last item at once: one succeeds, the other is told somebody took it first.
+  Nothing is duplicated and no total changes.
+- Both players' windows refresh after either take, without either reopening.
+- The item shows "Looted by" the character that actually received it, on both clients.
+- A third player opening the window afterwards sees the same looted rows with the same names.
+- A partial take by one player leaves a live row at the reduced quantity for the other, not a looted row.
+- Taking the second of three rows, then the first, leaves all three in their original order with two struck
+  through — the case that catches position tracking based on live indices.
+- Revival clears the ledger along with the rest of the loot flag.
+
+### Settings enforcement
+
+- With `lootProximity` at 30, looting from across the map is refused with the distance in the message, and
+  works after moving closer. Zero disables the check.
+- With `lootAllowInCombat` off, looting during an active combat is refused; the GM is unaffected.
+- With `lootSendToParty` off, the party controls disappear **and** a crafted request naming the party Actor
+  is refused.
+- With `lootSendToPlayer` off, Give To disappears **and** a crafted request naming another player's
+  character is refused.
+- With `lootBuryApproval` off, burying a full body happens immediately with no GM prompt.
+- With `lootBuryWhenEmpty` on, taking the last coin removes the token and closes every open window.
 
 ### Embedded controls
 
@@ -752,7 +834,8 @@ report it rather than working around it: it means something else is writing per 
 - Party controls are disabled, with a stated reason, in a world with no primary party.
 - Distribute across 3 characters with 7 gp: each gets 2, 1 gp stays on the body.
 - Distribute with less than one per member returns `NOT_ENOUGH_TO_SPLIT` and moves nothing.
-- Bury as a non-GM prompts the GM, and declining leaves the token in place.
+- Bury as a non-GM prompts the GM with the asking character's portrait and name, and Decline leaves the
+  token in place.
 - A crafted bury request naming a non-corpse token is rejected with `NOT_A_CORPSE`.
 - Bury closes the loot window on every client, not only the requester's.
 

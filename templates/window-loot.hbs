@@ -19,7 +19,7 @@
 
         <section class="curator-loot-section curator-loot-actor">
             {{#if hasRecipient}}
-                <img class="curator-loot-actor-portrait" src="{{recipientImg}}" alt="">
+                <div class="curator-loot-actor-image"><img src="{{recipientImg}}" alt=""></div>
                 <div class="curator-loot-actor-copy">
                     <small>Looting as</small>
                     <strong>{{recipientName}}</strong>
@@ -31,7 +31,7 @@
                     </button>
                 {{/if}}
             {{else}}
-                <img class="curator-loot-actor-portrait" src="icons/svg/mystery-man.svg" alt="">
+                <div class="curator-loot-actor-image"><img src="icons/svg/mystery-man.svg" alt=""></div>
                 <div class="curator-loot-actor-copy">
                     <small>Looting as</small>
                     <strong class="curator-loot-warning">No character available</strong>
@@ -44,24 +44,36 @@
             {{#if hasItems}}
                 <div class="curator-loot-item-list">
                     {{#each items}}
-                        <div class="curator-loot-item" data-item-id="{{id}}">
+                        <div class="curator-loot-item{{#if looted}} curator-loot-item-looted{{/if}}" data-item-id="{{id}}">
                             <img src="{{img}}" alt="">
                             <div class="curator-loot-item-copy"><strong>{{name}}</strong><span>{{typeLabel}}</span></div>
-                            <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
-                            <div class="curator-loot-row-actions">
-                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="take" data-item-id="{{id}}"
-                                        {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take this">
-                                    <i class="fa-solid fa-hand"></i>
-                                </button>
-                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="give" data-item-id="{{id}}"
-                                        data-tooltip="Give to another party member">
-                                    <i class="fa-solid fa-hand-holding-heart"></i>
-                                </button>
-                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="party" data-item-id="{{id}}"
-                                        {{#unless ../hasParty}}disabled{{/unless}} data-tooltip="Send to the party inventory">
-                                    <i class="fa-solid fa-users"></i>
-                                </button>
-                            </div>
+                            {{#if looted}}
+                                {{!-- The row stays so the body reads as a record of what was on it. --}}
+                                <div class="curator-loot-amount"><small>&nbsp;</small><strong>—</strong></div>
+                                <div class="curator-loot-row-actions">
+                                    <span class="curator-loot-taken"><i class="fa-solid fa-check"></i> Looted by {{by}}</span>
+                                </div>
+                            {{else}}
+                                <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
+                                <div class="curator-loot-row-actions">
+                                    <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="take" data-item-id="{{id}}"
+                                            {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take this">
+                                        <i class="fa-solid fa-hand"></i>
+                                    </button>
+                                    {{#if ../canGive}}
+                                        <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="give" data-item-id="{{id}}"
+                                                data-tooltip="Give to another party member">
+                                            <i class="fa-solid fa-hand-holding-heart"></i>
+                                        </button>
+                                    {{/if}}
+                                    {{#if ../hasParty}}
+                                        <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="party" data-item-id="{{id}}"
+                                                data-tooltip="Send to the party inventory">
+                                            <i class="fa-solid fa-users"></i>
+                                        </button>
+                                    {{/if}}
+                                </div>
+                            {{/if}}
                         </div>
                     {{/each}}
                 </div>
@@ -92,10 +104,12 @@
                                         {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take some of this">
                                     <i class="fa-solid fa-hand"></i>
                                 </button>
-                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="partyCurrency" data-denom="{{key}}"
-                                        {{#unless ../hasParty}}disabled{{/unless}} data-tooltip="Send to the party inventory">
-                                    <i class="fa-solid fa-users"></i>
-                                </button>
+                                {{#if ../hasParty}}
+                                    <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="partyCurrency" data-denom="{{key}}"
+                                            data-tooltip="Send to the party inventory">
+                                        <i class="fa-solid fa-users"></i>
+                                    </button>
+                                {{/if}}
                             </div>
                         </div>
                     {{/each}}

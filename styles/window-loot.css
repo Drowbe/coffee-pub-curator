@@ -11,8 +11,12 @@
 .curator-loot-count { min-width: 20px; padding: 1px 6px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 999px; background: var(--blacksmith-tool-surface-sunken); color: var(--blacksmith-tool-text-muted); font-size: .68rem; text-align: center; }
 
 .curator-loot-subject { display: flex; align-items: center; gap: 11px; padding: 10px; background: linear-gradient(135deg, var(--blacksmith-tool-surface-raised), var(--blacksmith-tool-surface-sunken)); }
-.curator-loot-subject-image { width: 58px; height: 58px; flex: 0 0 58px; overflow: hidden; border: 1px solid var(--blacksmith-tool-border); border-radius: 6px; box-shadow: 0 2px 7px rgba(0,0,0,.22); }
-.curator-loot-subject-image > img { display: block; width: 100% !important; height: 100% !important; max-width: none !important; object-fit: cover; border: 0; }
+.curator-loot-subject-image,
+.curator-loot-actor-image { overflow: hidden; border: 1px solid var(--blacksmith-tool-border); border-radius: 6px; box-shadow: 0 2px 7px rgba(0,0,0,.22); }
+.curator-loot-subject-image > img,
+.curator-loot-actor-image > img { display: block; width: 100% !important; height: 100% !important; max-width: none !important; object-fit: cover; border: 0; }
+.curator-loot-subject-image { width: 58px; height: 58px; flex: 0 0 58px; }
+.curator-loot-actor-image { width: 34px; height: 34px; flex: 0 0 34px; }
 .curator-loot-subject-copy { min-width: 0; }
 .curator-loot-kicker { color: var(--blacksmith-tool-accent); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .curator-loot-title { overflow: hidden; font-size: 1.05rem; font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
@@ -75,7 +79,6 @@
 
 /* The recipient is its own row so it reads like an item or currency row. */
 .curator-loot-actor { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 7px 8px; }
-.curator-loot-actor-portrait { display: block; width: 34px !important; height: 34px !important; max-width: 34px !important; object-fit: cover; border: 1px solid var(--blacksmith-tool-divider, rgba(0,0,0,.25)); border-radius: 50%; }
 .curator-loot-actor-copy { min-width: 0; }
 .curator-loot-actor-copy small, .curator-loot-actor-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .curator-loot-actor-copy small { color: var(--blacksmith-tool-text-muted, inherit); font-size: .55rem; letter-spacing: .05em; text-transform: uppercase; }
@@ -90,3 +93,18 @@
     .curator-loot-row-actions > button span { display: none; }
     .curator-loot-currency-list { grid-template-columns: 1fr; }
 }
+
+/* A looted row stays in place as a record of what the body carried. */
+.curator-loot-item-looted { opacity: .5; }
+.curator-loot-item-looted .curator-loot-item-copy strong { text-decoration: line-through; }
+.curator-loot-taken { display: inline-flex; align-items: center; gap: 5px; min-width: 0; padding: 2px 8px; overflow: hidden; color: var(--blacksmith-tool-text-muted, inherit); font-size: .64rem; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
+.curator-loot-item-looted .curator-loot-row-actions { min-width: 0; }
+
+/* GM bury-approval prompt: who is asking, and what is on the body. */
+.curator-bury-request { display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 12px; align-items: start; }
+.curator-bury-portrait { width: 56px; height: 56px; overflow: hidden; border: 1px solid rgba(0,0,0,.35); border-radius: 6px; box-shadow: 0 2px 7px rgba(0,0,0,.22); }
+.curator-bury-portrait > img { display: block; width: 100% !important; height: 100% !important; max-width: none !important; object-fit: cover; border: 0; }
+.curator-bury-copy { min-width: 0; }
+.curator-bury-copy > strong { display: block; font-size: 1.05em; }
+.curator-bury-copy > span { display: block; margin-top: 1px; opacity: .7; font-size: .8em; }
+.curator-bury-copy > p { margin: 6px 0 0; }

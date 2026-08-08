@@ -425,7 +425,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     }
 
     async bury() {
-        const result = await this._send('bury', {});
+        // The character being looted as travels with the request so the GM's prompt
+        // can show who is actually asking.
+        const result = await this._send('bury', { recipientUuid: this.recipient?.uuid ?? null });
         if (result?.code === 'BURY_DECLINED') {
             notify.info('The GM declined to bury this body.');
             return;
@@ -485,6 +487,10 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             case 'INVENTORY_UNAVAILABLE': return 'The Blacksmith inventory API is not available.';
             case 'DUPLICATE_ITEM': return 'That item was listed twice in one request.';
             case 'NOTHING_TO_TAKE': return 'There is nothing left on this body.';
+            case 'COMBAT_ACTIVE': return 'You cannot loot while combat is under way.';
+            case 'TOO_FAR': return `You need to be within ${result?.limit} feet of the body.`;
+            case 'SEND_TO_PARTY_DISABLED': return 'Sending loot to the party is turned off in this world.';
+            case 'SEND_TO_PLAYER_DISABLED': return 'Giving loot to other players is turned off in this world.';
             case 'NO_ACTIVE_GM': return 'No GM is connected, so loot cannot be moved.';
             case 'TIMEOUT': return 'The GM did not respond. If this keeps happening, the world may need a restart.';
             case 'NOT_LOOTABLE': return 'This body is no longer lootable.';
@@ -537,6 +543,23 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             const containersWithContents = new Set(items.map((item) => item.containerId).filter(Boolean));
             items = items.filter((item) => item.type !== 'container' || !containersWithContents.has(item.id));
 
+            // Looted rows come from the Token's ledger, not from this window's memory,
+            // so they are the same on every client and survive reopening the window.
+            const taken = LootManager.getTaken(token).map((entry) => ({ ...entry, id: entry.itemId, looted: true }));
+            items = [...items.map((item) => ({ ...item, looted: false })), ...taken];
+
+            // A looted row holds its original place rather than sliding to the bottom.
+            // The order is the one the body had before anything was taken; anything
+            // added since is unranked and falls to the end in its own order.
+            const order = LootManager.getOrder(token);
+            if (order.length) {
+                const rank = (id) => {
+                    const index = order.indexOf(id);
+                    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+                };
+                items.sort((a, b) => rank(a.id) - rank(b.id));
+            }
+
             currencies = denominations().map((key) => ({
                 key,
                 label: CURRENCY_LABELS[key],
@@ -549,21 +572,23 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const options = this.recipients;
         const recipient = this.recipient;
 
-        const canLootAll = !missing && hasBatchTransfer() && (items.length > 0 || currencies.length > 0);
+        const available = items.filter((item) => !item.looted);
+        const canLootAll = !missing && hasBatchTransfer() && (available.length > 0 || currencies.length > 0);
 
         const bodyContent = await foundry.applications.handlebars.renderTemplate(TEMPLATE, {
             missing,
             tokenName: token?.name ?? 'Missing Corpse',
             portraitImg: actor?.img ?? 'icons/svg/mystery-man.svg',
             items,
-            itemCount: items.length,
+            itemCount: available.length,
             hasItems: items.length > 0,
             currencies,
             currencyCount: currencies.length,
             hasCurrency: currencies.length > 0,
             isGM: game.user.isGM,
             partyName: party?.name ?? null,
-            hasParty: Boolean(party),
+            hasParty: Boolean(party) && LootManager.sendToPartyEnabled,
+            canGive: LootManager.sendToPlayerEnabled,
             recipientName: recipient?.name ?? null,
             recipientImg: recipient?.img ?? 'icons/svg/mystery-man.svg',
             hasRecipientChoice: options.length > 1,
@@ -580,7 +605,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                 </button>`,
             toolFooterRight: `
                 <button type="button" class="blacksmith-window-btn-secondary" data-action="allToParty"
-                        ${canLootAll && party ? '' : 'disabled'} data-tooltip="Send everything to the party inventory">
+                        ${canLootAll && party && LootManager.sendToPartyEnabled ? '' : 'disabled'} data-tooltip="Send everything to the party inventory">
                     <i class="fa-solid fa-users"></i> Loot to Party
                 </button>
                 <button type="button" class="blacksmith-window-btn-primary" data-action="takeAll"
