@@ -2,7 +2,7 @@ import { MODULE } from './const.js';
 import { HookManager } from './manager-hooks.js';
 import { LootWindow } from './window-loot.js';
 import { notify } from './notifications.js';
-import { transferItem, transferCurrency, isPhysical, denominations } from './loot-inventory.js';
+import { transferItem, transferItems, transferCurrency, isPhysical, denominations } from './loot-inventory.js';
 
 // Shared teardown handle for every claim and hook this manager registers.
 const CONTEXT = 'curator-loot';
@@ -239,7 +239,15 @@ export class LootManager {
     static _registerSocket() {
         game.socket.on(CHANNEL, (data) => {
             if (data?.action === REQUEST) {
-                if (!game.user.isGM || !this._isAnsweringGM()) return;
+                if (!game.user.isGM) return;
+                if (!this._isAnsweringGM()) {
+                    console.debug(`${MODULE.TITLE} | Loot request "${data.op}" ignored; another GM is answering.`);
+                    return;
+                }
+                // Logged on receipt so a player-side timeout can be told apart from a
+                // request that never arrived — the usual cause of the latter is
+                // module.json's socket flag not being live yet.
+                console.debug(`${MODULE.TITLE} | Loot request "${data.op}" received from ${game.users.get(data.userId)?.name ?? data.userId}.`);
                 void this._handleRequest(data);
                 return;
             }
@@ -327,7 +335,7 @@ export class LootManager {
         switch (op) {
             case 'item': result = await this._processItem(corpse, payload, user); break;
             case 'currency': result = await this._processCurrency(corpse, payload, user); break;
-            case 'takeAll': return { ok: false, code: 'BATCH_UNAVAILABLE' };
+            case 'takeAll': result = await this._processTakeAll(corpse, payload, user); break;
             case 'distribute': result = await this._processDistribute(corpse, payload); break;
             default: return { ok: false, code: 'UNKNOWN_OPERATION' };
         }
@@ -382,6 +390,54 @@ export class LootManager {
             targetActorUuid: check.actorUuid,
             currency: payload.currency
         });
+    }
+
+    /**
+     * One `transferItems` call, not a loop over `transferItem`: the batch form costs
+     * at most two writes per Actor however many rows move, and it validates per item,
+     * so a packed container is refused on its own entry while everything else still
+     * goes. Currency is a second call because it is a different primitive.
+     */
+    static async _processTakeAll(corpse, payload, user) {
+        const check = this._validateRecipient(payload.recipientUuid, user, corpse);
+        if (!check.ok) return check;
+
+        // Names are captured before the transfer; a moved row is gone afterwards.
+        const sources = corpse.items.filter((item) => isPhysical(item.type));
+        const labels = new Map(sources.map((item) => [item.id, item.name]));
+        const lines = [];
+
+        if (sources.length) {
+            const batch = await transferItems({
+                sourceActorUuid: corpse.uuid,
+                targetActorUuid: check.actorUuid,
+                items: sources.map((item) => ({ itemId: item.id }))
+            });
+            // A whole-call rejection has no per-item detail to report.
+            if (!Array.isArray(batch?.results)) return batch;
+            batch.results.forEach((entry, index) => {
+                const itemId = entry?.itemId ?? sources[index]?.id;
+                lines.push({ label: labels.get(itemId) ?? 'Item', ...entry });
+            });
+        }
+
+        const currency = {};
+        for (const denom of denominations()) {
+            const held = Math.trunc(Number(corpse.system?.currency?.[denom] ?? 0));
+            if (held > 0) currency[denom] = held;
+        }
+        if (Object.keys(currency).length) {
+            const result = await transferCurrency({
+                sourceActorUuid: corpse.uuid,
+                targetActorUuid: check.actorUuid,
+                currency
+            });
+            lines.push({ label: 'Currency', ...result });
+        }
+
+        if (!lines.length) return { ok: false, code: 'NOTHING_TO_TAKE' };
+        const moved = lines.filter((line) => line.ok).length;
+        return { ok: moved > 0, partial: moved !== lines.length, moved, total: lines.length, lines };
     }
 
     /**

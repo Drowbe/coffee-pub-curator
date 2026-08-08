@@ -82,10 +82,6 @@
 .curator-loot-actor-copy strong { font-size: .82rem; }
 .curator-loot-warning { color: #a4432f; }
 
-/* Blacksmith sets width: 300px on every primary button (window-template.css).
-   The footer is a flex row, so that stretches Loot All across it. */
-.curator-loot-window .blacksmith-window-tool-footer .blacksmith-window-btn-primary,
-.curator-loot-window .blacksmith-window-tool-footer .blacksmith-window-btn-secondary { width: auto; white-space: nowrap; }
 
 /* In-flight feedback only. The concurrency guarantee is the GM's. */
 .curator-loot-busy .curator-loot-content { pointer-events: none; opacity: .55; }

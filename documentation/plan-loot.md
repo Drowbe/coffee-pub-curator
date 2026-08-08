@@ -359,8 +359,8 @@ Implemented surface. Take All and All to Party are present but disabled — see 
 | Give | item row | any party character, chosen in a dialog |
 | Party | item row, currency row | the dnd5e primary party Group Actor |
 | Distribute | currency header | every party character, split evenly |
-| Loot All | footer, primary | *disabled* — awaiting `transferItems` |
-| Loot to Party | footer | *disabled* — awaiting `transferItems` |
+| Loot All | footer, primary | the acting recipient, in one `transferItems` call |
+| Loot to Party | footer | the party Group Actor, in one `transferItems` call |
 | Bury | subject card | nobody; deletes the token after GM approval |
 | Character Sheet, Prototype Token | titlebar, GM only | — |
 | Done | footer | closes the window |
@@ -374,14 +374,17 @@ Neither the quantity prompt nor the actor picker passes `modal`. `api.dialog` us
 bury is destructive. Do not pass `modal: true` on the loot pickers — the window must stay draggable while
 one is open.
 
-### Footer convention
+### Footer and dialog button convention
 
-**One primary action, rightmost. Secondary actions left.** This applies to every Curator window, not only
-this one:
+**One primary action, rightmost. Secondary actions left.** This applies to every Curator window **and every
+dialog it raises**, not only the loot window:
 
 ```
 [ Done ]                              [ Loot to Party ] [ Loot All ]
+[ Cancel ]                                                  [ Take ]
 ```
+
+`dialog.wait` renders buttons in array order, so the cancel entry comes first in the array.
 
 GM-only sheet access is a titlebar action rather than a footer button — it is inspection, not a loot action,
 and the footer belongs to loot actions. `getToolHeaderActions()` supplies Character Sheet and Prototype
@@ -391,9 +394,9 @@ Prototype Token must be opened as `new CONFIG.Token.prototypeSheetClass({ protot
 `PrototypeToken` is a DataModel with **no `sheet` getter**, so `prototype.sheet?.render()` optional-chains
 into silence — a dead button with no error.
 
-Blacksmith sets `width: 300px` on `.blacksmith-window-btn-primary` in `window-template.css`. In a flex
-footer that stretches the primary action across the row, so the loot window resets it to `auto` in its own
-scope. Worth raising with Blacksmith rather than each consumer overriding it.
+`.blacksmith-window-btn-primary` carried `width: 300px` until 2026-08-08, which stretched the primary action
+across a flex footer. Fixed in the shared class; Curator's local override has been removed. Do not
+reintroduce a width reset — if a footer button looks wrong, it is a shared-class problem.
 
 ### Rendering failures
 
@@ -613,10 +616,12 @@ replacing a surface.
       Granting per result was a defect: it cost a write each and produced a separate row per duplicate, so a
       table rolled three times for the same item gave three rows instead of one stack. Batched, Blacksmith
       coalesces duplicates and the whole roll costs at most two writes.
-- [ ] **Loot All and Loot to Party are disabled pending `transferItems`.** Blacksmith asked consumers not to
-      implement Take All as a loop over `transferItem`: N writes to one recipient means N encumbrance
-      recomputes, which turns their known cosmetic Squire race into a reliable one. The batch form has been
-      requested. The buttons stay visible and disabled with the reason in a tooltip rather than vanishing.
+- [x] **Loot All and Loot to Party use `blacksmith.inventory.transferItems`.** Never a loop over
+      `transferItem`: the batch form costs at most two writes per Actor however many rows move, validates
+      per item, and coalesces duplicate rows into one stack. Results are index-aligned, so a packed
+      container fails on its own entry with `CONTAINER_HAS_CONTENTS` while every other row still moves.
+      Currency is a second call because it is a different primitive. Both buttons disable themselves when
+      `transferItems` is absent, so an older Blacksmith degrades rather than erroring.
 
 ### Phase 4 — Synchronization and lifecycle
 
@@ -725,6 +730,21 @@ moved to `preCreateItem` so it rides the original write, and Squire calls `regis
 no longer timing-dependent and the `dnd5eencumbered0` console noise should be gone. If either reappears,
 report it rather than working around it: it means something else is writing per item.
 
+### Batch transfer
+
+- Loot All over a corpse holding a packed bag: every other row moves, the bag is reported as left behind
+  with its content count.
+- Loot All where the recipient already holds one of the items: that stack grows rather than gaining a row.
+- Loot All on a corpse holding two identical stacks: they arrive coalesced into one stack.
+- Loot All and Loot to Party are disabled against a Blacksmith without `transferItems`.
+
+### Embedded controls
+
+- Drag the quantity slider: the Take and Leave captions track it.
+- Pick the second character in Looting As, confirm, and take an item: it lands on the character that was
+  picked, not the first in the list.
+- The loot window stays draggable while a dialog is open.
+
 ### Sharing, party, and disposal
 
 - Give To hands an item to a character the giver does not own, and it arrives.
@@ -782,10 +802,18 @@ Deliberately not used:
 the subject card rather than the titlebar because it must state a reason when unavailable, which a titlebar
 icon cannot.
 
-Two controls with embedded markup — `entityList` and `quantitySplit` — are attached **while their wrapper is
-still detached**, before being handed to `dialog.wait`. The dialog moves an element content node in rather
-than copying it, so listeners bound beforehand survive. Neither control updates its own captions without
-`attach`, and that failure is silent: the input still reports a value, so it looks like it works.
+Both embedded controls — `entityList` and `quantitySplit` — must be attached **after their markup is in the
+document**, never to a detached wrapper. Attaching early was tried and does not work, whatever the dialog's
+move-not-copy semantics suggest.
+
+`dialog.wait` exposes no render hook, so the pattern is: start the dialog without awaiting it, poll a few
+animation frames for the input by `name`, `attach` to its `.application` ancestor, then await the dialog.
+
+**The failure is silent and expensive.** An unbound control still renders and still reports a value through
+the form, so a quantity slider looks alive while its captions never move, and an entity list hands back the
+*initial* selection instead of what the user picked — meaning loot silently goes to the wrong character.
+Both button callbacks therefore fall back to reading the submitted form when binding did not succeed, and
+the failure is logged.
 
 ## 18. Architecture Documentation Rule
 

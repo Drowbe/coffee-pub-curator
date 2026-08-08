@@ -1,7 +1,7 @@
 import { BlacksmithToolWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-tool-base.js';
 import { MODULE } from './const.js';
 import { notify } from './notifications.js';
-import { isPhysical, denominations, isInventoryReady } from './loot-inventory.js';
+import { isPhysical, denominations, hasBatchTransfer } from './loot-inventory.js';
 // Circular with manager-loot.js by design: that module imports this one for
 // LootWindow.open. Safe because every use below is inside a method, so the
 // binding is resolved at call time rather than at module evaluation.
@@ -15,6 +15,29 @@ let _lastRecipientUuid = null;
 
 function _blacksmith() {
     return game.modules.get('coffee-pub-blacksmith')?.api ?? null;
+}
+
+/**
+ * Attach an embedded Blacksmith control once its markup is actually in the
+ * document.
+ *
+ * Attaching to a detached wrapper before handing it to dialog.wait() does not
+ * work, whatever the move-not-copy semantics suggest — the control ends up
+ * unbound, and that failure is silent: the inputs still render and still report
+ * a value, so a slider looks alive while its captions never move and an entity
+ * list hands back the initial selection rather than the user's. dialog.wait()
+ * exposes no render hook, so poll a few frames for the input instead.
+ */
+async function _attachWhenRendered(control, inputName, frames = 20) {
+    for (let i = 0; i < frames; i++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const live = document.querySelector(`[name="${inputName}"]`);
+        if (!live) continue;
+        control.attach(live.closest('.application') ?? live.closest('form') ?? document.body);
+        return true;
+    }
+    console.warn(`${MODULE.TITLE} | Control "${inputName}" never rendered; falling back to form values.`);
+    return false;
 }
 
 export class LootWindow extends BlacksmithToolWindowBaseV2 {
@@ -172,29 +195,36 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             selected: selectedUuid ?? actors[0].uuid
         });
 
+        const inputName = 'curator-loot-actor';
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="blacksmith-field">${list.html}</div>`;
-        // Attached while detached, for the same reason as the quantity control:
-        // dialog.wait() moves the content node in rather than copying it.
-        list.attach(wrapper);
 
         let chosen = null;
-        const outcome = await blacksmith.dialog.wait({
+        let bound = false;
+        const pending = blacksmith.dialog.wait({
             title,
             content: wrapper,
+            // Secondary action left, primary right — the same order as the window footer.
             buttons: [
+                { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
                 {
                     action: 'select',
                     label: confirmLabel,
                     icon: confirmIcon,
                     default: true,
-                    callback: () => { chosen = list.getSelectedIds()?.[0] ?? null; }
-                },
-                { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }
+                    callback: (form) => {
+                        chosen = bound
+                            ? list.getSelectedIds()?.[0] ?? null
+                            : form?.elements?.[inputName]?.value ?? null;
+                    }
+                }
             ],
             closeValue: null,
             cancelValue: null
         });
+
+        bound = await _attachWhenRendered(list, inputName);
+        const outcome = await pending;
         list.destroy();
 
         return outcome?.value === 'select' ? chosen : null;
@@ -234,33 +264,32 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const wrapper = document.createElement('div');
         wrapper.innerHTML = `<div class="blacksmith-field">${control.html}</div>`;
 
-        // Attach while the wrapper is still detached. dialog.wait() offers no render
-        // hook, but it *moves* an element content node into the dialog rather than
-        // copying it, so a listener bound now survives the move. Without this the
-        // slider works but the Take/Leave captions never update as it is dragged.
-        control.attach(wrapper);
-
         let chosen = null;
-        const outcome = await blacksmith.dialog.wait({
+        let bound = false;
+        const pending = blacksmith.dialog.wait({
             title: `Take ${label}`,
             content: wrapper,
+            // Secondary action left, primary right — the same order as the window footer.
             buttons: [
+                { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
                 {
                     action: 'take',
                     label: 'Take',
                     icon: 'fa-solid fa-hand',
                     default: true,
-                    // getValue() is integer-clamped and independent of the DOM; the
-                    // form read is a fallback for a control that failed to bind.
+                    // getValue() is integer-clamped and DOM-independent, but it is only
+                    // correct once the control is bound; read the form otherwise.
                     callback: (form) => {
-                        chosen = control.getValue() ?? Number(form?.elements?.[inputName]?.value ?? max);
+                        chosen = bound ? control.getValue() : Number(form?.elements?.[inputName]?.value ?? max);
                     }
-                },
-                { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }
+                }
             ],
             closeValue: null,
             cancelValue: null
         });
+
+        bound = await _attachWhenRendered(control, inputName);
+        const outcome = await pending;
         control.destroy();
 
         if (outcome?.value !== 'take') return null;
@@ -454,9 +483,10 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     _explain(code, result) {
         switch (code) {
             case 'INVENTORY_UNAVAILABLE': return 'The Blacksmith inventory API is not available.';
-            case 'BATCH_UNAVAILABLE': return 'Take All is waiting on a batch API from Blacksmith.';
+            case 'DUPLICATE_ITEM': return 'That item was listed twice in one request.';
+            case 'NOTHING_TO_TAKE': return 'There is nothing left on this body.';
             case 'NO_ACTIVE_GM': return 'No GM is connected, so loot cannot be moved.';
-            case 'TIMEOUT': return 'The GM did not respond in time.';
+            case 'TIMEOUT': return 'The GM did not respond. If this keeps happening, the world may need a restart.';
             case 'NOT_LOOTABLE': return 'This body is no longer lootable.';
             case 'NOT_A_CORPSE': return 'That is not a Curator corpse.';
             case 'STALE_GENERATION': return 'This body has changed since the window opened.';
@@ -519,6 +549,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const options = this.recipients;
         const recipient = this.recipient;
 
+        const canLootAll = !missing && hasBatchTransfer() && (items.length > 0 || currencies.length > 0);
+
         const bodyContent = await foundry.applications.handlebars.renderTemplate(TEMPLATE, {
             missing,
             tokenName: token?.name ?? 'Missing Corpse',
@@ -547,12 +579,12 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     <i class="fa-solid fa-check"></i> Done
                 </button>`,
             toolFooterRight: `
-                <button type="button" class="blacksmith-window-btn-secondary" data-action="allToParty" disabled
-                        data-tooltip="Waiting on a batch transfer API from Blacksmith">
+                <button type="button" class="blacksmith-window-btn-secondary" data-action="allToParty"
+                        ${canLootAll && party ? '' : 'disabled'} data-tooltip="Send everything to the party inventory">
                     <i class="fa-solid fa-users"></i> Loot to Party
                 </button>
-                <button type="button" class="blacksmith-window-btn-primary" data-action="takeAll" disabled
-                        data-tooltip="Waiting on a batch transfer API from Blacksmith">
+                <button type="button" class="blacksmith-window-btn-primary" data-action="takeAll"
+                        ${canLootAll && recipient ? '' : 'disabled'} data-tooltip="Take everything">
                     <i class="fa-solid fa-hands-holding"></i> Loot All
                 </button>`
         };

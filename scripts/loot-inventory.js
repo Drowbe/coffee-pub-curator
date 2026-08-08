@@ -54,6 +54,17 @@ export async function transferItem(request) {
     return api.transferItem(request);
 }
 
+export async function transferItems(request) {
+    const api = inventoryApi();
+    if (typeof api?.transferItems !== 'function') return unavailable('transferItems');
+    return api.transferItems(request);
+}
+
+/** Whether the batch transfer form is available. Take All requires it. */
+export function hasBatchTransfer() {
+    return typeof inventoryApi()?.transferItems === 'function';
+}
+
 export async function transferCurrency(request) {
     const api = inventoryApi();
     if (typeof api?.transferCurrency !== 'function') return unavailable('transferCurrency');
