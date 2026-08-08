@@ -114,6 +114,17 @@ That document is the contract. Where this plan and that one disagree, that one w
 
 Do not build a second permanent item-transfer engine in Curator while the Blacksmith API request is active. A temporary adapter is acceptable only if it has the same contract as the proposed API and is explicitly scheduled for deletion.
 
+**The adapter now exists and this rule is what governs it.** `loot-transfer.js` implements `transferItem`
+and `transferCurrency` to the contract above — same call shape, same success shape, same error codes, same
+per-Actor locking, same create-target-then-reduce-source ordering, same reset set and merge predicate. Every
+entry point checks `blacksmith.inventory` first and delegates when it is present, so the local
+implementation stops executing on the day Blacksmith ships without a Curator change. Retiring it is deleting
+the file and re-pointing two imports.
+
+Nothing Curator-specific may be added to it. Authorization, recipient policy, distance, and notifications
+live in `manager-loot.js`. `grantItem` and `grantCurrency` are deliberately **not** adapted: loot generation
+still uses `loot-utilities.js` and migrates when Blacksmith ships, per Phase 3.
+
 ## 5. Corpse State Model
 
 Use Curator flags as the authoritative marker. Do not infer lootability merely from `hp === 0`, an image path, or the presence of inventory.
@@ -278,7 +289,26 @@ Suggested behavior:
 - No eligible Actor: explain that the user has no owned character available to receive loot.
 - GM: allow selection from eligible character Actors, with an option to inspect the corpse without choosing a recipient.
 
-The recipient UUID travels with each request but is never trusted without GM-side validation.
+The recipient UUID travels with each request but is never trusted without GM-side validation. The window
+uses a plain select rather than Blacksmith's entity-list; revisit if the list ever needs search or portraits.
+
+### Give To, and the boundary it moves
+
+Give To hands an item to a character the acting user does not own, with no approval from the recipient or
+the GM. That is a deliberate decision and it moves two lines this plan drew elsewhere: section 2 excludes
+trade and approval workflows, and the rule above restricts recipients to Actors the user owns. Both still
+stand for *taking*; Give To is the single exception, and the GM handler encodes it as exactly that.
+
+The GM accepts a recipient when the requester owns it, **or** it is a character in the primary party, **or**
+it is the party Group Actor. Anything else is `RECIPIENT_NOT_ALLOWED`, so a client cannot name an arbitrary
+Actor.
+
+### Party
+
+The party is the dnd5e primary party Group Actor (`game.actors.party`), which carries its own inventory and
+currency. Party characters come from `system.playerCharacters`, falling back to every player-owned character
+Actor when no primary party is configured. Where no party exists the Party and All to Party controls are
+disabled with the reason stated, rather than hidden.
 
 ## 8. Loot Window
 
@@ -313,9 +343,21 @@ The window must render from current Actor data. It must not hold a snapshot as t
 
 ### Actions
 
-- Take All, controlled by a world setting.
-- Refresh only if automatic refresh proves unreliable.
-- Close.
+Implemented surface:
+
+| Control | Where | Sends to |
+|---|---|---|
+| Take | item row, currency row | the acting recipient |
+| Give | item row | any party character, chosen in a dialog |
+| Party | item row, currency row | the dnd5e primary party Group Actor |
+| Distribute | currency header | every party character, split evenly |
+| Take All | footer | the acting recipient |
+| All to Party | footer | the party Group Actor |
+| Bury | subject card | nobody; deletes the token after GM approval |
+| Sheet (GM), Close | footer | — |
+
+Take prompts for a quantity through Blacksmith's Quantity Split only when the stack is above one. A
+single-quantity row transfers on click.
 
 Disable actions while that window has a request in flight. This is user feedback, not the concurrency guarantee.
 
@@ -365,7 +407,12 @@ Blacksmith's documentation and is referenced, not copied.
 - Add the transferred amount to the recipient's corresponding balance.
 - Re-read both balances on the GM immediately before mutation.
 - Do not perform automatic denomination conversion.
-- Do not implement party splitting in the MVP.
+
+Distribute splits every denomination evenly across the party using integer division. **The remainder stays
+on the corpse** — no conversion, no favouring whoever is first in the list, and the corpse simply is not
+empty yet. Distributing 7 gp across 3 characters gives each 2 gp and leaves 1 gp to be taken.
+`NOT_ENOUGH_TO_SPLIT` comes back when no denomination divides at least once. This supersedes the earlier
+"no party splitting in the MVP" line.
 
 Take All reports partial success and must return an explicit per-line batch result. It cannot be atomic:
 the inventory primitive locks per Actor UUID and exposes no batch call, so Take All is N sequential calls
@@ -487,22 +534,26 @@ replacing a surface.
 
 ### Phase 2 — Single-item transfer
 
-- Resolve recipients.
-- Add the quantity control.
-- Register the GM-authoritative socket handler through Blacksmith's socket API. The inventory primitive
-  emits no socket traffic by design; routing and authorization are Curator's.
-- Transfer single Items and partial stacks through `api.inventory.transferItem`.
-- Add structured success and failure feedback keyed on the primitive's error codes.
-- Verify two clients attempting the same Item.
+- [x] Resolve recipients, with a remembered choice and a header selector when there is more than one.
+- [x] Add the quantity control, prompting only for stacks above one.
+- [x] Register the GM-authoritative handler. **Deviation from the original line:** it uses Curator's own
+      `game.socket` channel rather than Blacksmith's socket API, because Curator already ran a raw channel
+      for `showImage` and two transports in one module is worse than one. `module.json` now declares
+      `"socket": true`, which that existing path silently needed and did not have.
+- [x] Transfer single Items and partial stacks through the `transferItem` contract.
+- [x] Structured failure feedback keyed on the primitive's error codes.
+- [ ] Verify two clients attempting the same Item.
 
 ### Phase 3 — Currency, Take All, and generation migration
 
-- Add denomination transfers through `transferCurrency`.
-- Add Take All Currency.
-- Add Take All contents.
-- Specify and test partial-failure behavior.
-- Migrate loot generation in `loot-utilities.js` onto `grantItem` and `grantCurrency`, retiring the
-  absolute-total currency write that races today.
+- [x] Denomination transfers through `transferCurrency`.
+- [x] Take All contents and currency, reporting per-line partial success.
+- [x] Distribute currency evenly across the party, remainder left on the body.
+- [x] Give To, Party, and All to Party.
+- [x] Bury, scoped to Curator corpses and gated on GM approval.
+- [ ] Test partial-failure behavior against a real half-failure.
+- [ ] Migrate loot generation in `loot-utilities.js` onto `grantItem` and `grantCurrency` once Blacksmith
+      ships them, retiring the absolute-total currency write that races today.
 
 ### Phase 4 — Synchronization and lifecycle
 
@@ -594,6 +645,19 @@ Curator-side additions:
 - Whole denomination transfer.
 - Concurrent requests for the same denomination.
 - Recipient with missing or zero currency fields.
+
+### Sharing, party, and disposal
+
+- Give To hands an item to a character the giver does not own, and it arrives.
+- A crafted request naming an Actor outside the party is rejected with `RECIPIENT_NOT_ALLOWED`.
+- Party controls are disabled, with a stated reason, in a world with no primary party.
+- Distribute across 3 characters with 7 gp: each gets 2, 1 gp stays on the body.
+- Distribute with less than one per member returns `NOT_ENOUGH_TO_SPLIT` and moves nothing.
+- Take All against a body holding a container with contents: everything else moves, the container is
+  reported as left behind.
+- Bury as a non-GM prompts the GM, and declining leaves the token in place.
+- A crafted bury request naming a non-corpse token is rejected with `NOT_A_CORPSE`.
+- Bury closes the loot window on every client, not only the requester's.
 
 ### Concurrency and failure
 

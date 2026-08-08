@@ -10,7 +10,25 @@
                 <div class="curator-loot-kicker">Corpse</div>
                 <div class="curator-loot-title">{{tokenName}}</div>
                 <div class="curator-loot-description">{{itemCount}} item rows · {{currencyCount}} currencies</div>
+                {{#if hasRecipientChoice}}
+                    <label class="curator-loot-recipient">
+                        <span>Taking as</span>
+                        <select data-recipient>
+                            {{#each recipientOptions}}
+                                <option value="{{uuid}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+                            {{/each}}
+                        </select>
+                    </label>
+                {{else if hasRecipient}}
+                    <div class="curator-loot-recipient-fixed">Taking as <strong>{{recipientName}}</strong></div>
+                {{else}}
+                    <div class="curator-loot-recipient-fixed curator-loot-warning">No character available to receive loot</div>
+                {{/if}}
             </div>
+            {{!-- Bury is open to everyone; a GM always confirms before the token goes. --}}
+            <button type="button" class="curator-loot-bury" data-action="bury" data-tooltip="Bury this body and remove the token">
+                <i class="fa-solid fa-shovel"></i> Bury
+            </button>
         </section>
 
         <section class="curator-loot-section">
@@ -22,7 +40,20 @@
                             <img src="{{img}}" alt="">
                             <div class="curator-loot-item-copy"><strong>{{name}}</strong><span>{{typeLabel}}</span></div>
                             <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
-                            <button type="button" class="blacksmith-window-btn-secondary" disabled><i class="fa-solid fa-hand"></i> Take</button>
+                            <div class="curator-loot-row-actions">
+                                <button type="button" class="blacksmith-window-btn-secondary" data-action="take" data-item-id="{{id}}"
+                                        {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take this">
+                                    <i class="fa-solid fa-hand"></i> Take
+                                </button>
+                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="give" data-item-id="{{id}}"
+                                        data-tooltip="Give to another party member">
+                                    <i class="fa-solid fa-hand-holding-heart"></i>
+                                </button>
+                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="party" data-item-id="{{id}}"
+                                        {{#unless ../hasParty}}disabled{{/unless}} data-tooltip="Send to the party inventory">
+                                    <i class="fa-solid fa-users"></i>
+                                </button>
+                            </div>
                         </div>
                     {{/each}}
                 </div>
@@ -30,14 +61,34 @@
         </section>
 
         <section class="curator-loot-section">
-            <h3><span><i class="fa-solid fa-coins"></i> Currency</span><span class="curator-loot-count">{{currencyCount}}</span></h3>
+            <h3>
+                <span><i class="fa-solid fa-coins"></i> Currency</span>
+                <span class="curator-loot-head-actions">
+                    {{#if hasCurrency}}
+                        <button type="button" class="blacksmith-window-btn-secondary" data-action="distribute"
+                                data-tooltip="Split evenly across the party; the remainder stays on the body">
+                            <i class="fa-solid fa-scale-balanced"></i> Distribute
+                        </button>
+                    {{/if}}
+                    <span class="curator-loot-count">{{currencyCount}}</span>
+                </span>
+            </h3>
             {{#if hasCurrency}}
                 <div class="curator-loot-currency-list">
                     {{#each currencies}}
                         <div class="curator-loot-currency curator-loot-currency-{{key}}">
                             <div class="curator-loot-coin"><i class="fa-solid fa-coins"></i></div>
                             <div class="curator-loot-currency-copy"><strong>{{value}}</strong><span>{{label}} · {{abbreviation}}</span></div>
-                            <button type="button" class="blacksmith-window-btn-secondary" disabled>Take</button>
+                            <div class="curator-loot-row-actions">
+                                <button type="button" class="blacksmith-window-btn-secondary" data-action="takeCurrency" data-denom="{{key}}"
+                                        {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take some of this">
+                                    <i class="fa-solid fa-hand"></i>
+                                </button>
+                                <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="partyCurrency" data-denom="{{key}}"
+                                        {{#unless ../hasParty}}disabled{{/unless}} data-tooltip="Send to the party inventory">
+                                    <i class="fa-solid fa-users"></i>
+                                </button>
+                            </div>
                         </div>
                     {{/each}}
                 </div>

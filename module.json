@@ -17,7 +17,7 @@
     "verified": "13",
     "maximum": "14"
   },
-  "socket": false,
+  "socket": true,
   "library": false,
 
   "authors": [
@@ -51,6 +51,7 @@
     "scripts/settings.js",
     "scripts/manager-hooks.js",
     "scripts/loot-utilities.js",
+    "scripts/loot-transfer.js",
     "scripts/manager-loot.js",
     "scripts/manager-image-cache.js",
     "scripts/manager-image-matching.js",
