@@ -53,6 +53,14 @@ Hooks.once('ready', async function () {
     await registerSettings(blacksmith);
     LootManager.initialize();
 
+    // Exposed before the GM gate below: the token interaction claim has to be
+    // verified from a non-GM client, because a GM passes every permission predicate
+    // and proves nothing about the bypass. See documentation/plan-loot.md section 16.
+    const curatorModule = game.modules.get(MODULE.ID);
+    if (curatorModule) {
+        curatorModule.api = { ...(curatorModule.api ?? {}), loot: LootManager };
+    }
+
     // Socket handler — must register for ALL users, not just GM
     game.socket.on(`module.${MODULE.ID}`, (data) => {
         if (data?.action === 'showImage') {
@@ -233,7 +241,9 @@ function initializeCurator(blacksmith) {
 
     const module = game.modules.get(MODULE.ID);
     if (module) {
+        // Merge: LootManager is already exposed for all users during ready.
         module.api = {
+            ...(module.api ?? {}),
             getCombatContextMenuItems(context) {
                 const { combat, combatantId, canvasToken, x, y } = context || {};
                 // The window opens against whatever token is selected, so both

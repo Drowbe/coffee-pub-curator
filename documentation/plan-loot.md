@@ -1,8 +1,9 @@
 # Curator Looting Plan
 
 **Status:** Phase 1 in progress. Item Piles integration is already fully removed (see section 14).
-Blacksmith has approved and is building `api.tokens.registerInteraction` (contract in section 6) ahead of
-`api.inventory`. Neither blocks Phase 1.
+Blacksmith has **shipped** `api.tokens.registerInteraction` to `master`, untagged, ahead of `api.inventory`
+(contract in section 6). Curator owes them the unprivileged-client verification pass; nothing of Curator's
+is waiting on Blacksmith except item transfer.
 **Target:** Focused corpse looting owned by Curator
 **Architecture record:** Create `architecture-loot.md` as verified behavior lands. Do not copy this plan into the architecture document unchanged.
 
@@ -139,9 +140,10 @@ Expected states:
 
 The `generationId` distinguishes the current death event from stale windows or delayed socket requests. Revival clears or invalidates it.
 
-Every transition into or out of `ready` must be followed by a guaranteed interaction re-evaluation, because
-Blacksmith evaluates a claim once per token draw rather than per gesture. See the redraw subsection of
-section 6; this is a correctness requirement of the state model, not a rendering detail.
+`state === 'ready'` is read synchronously on every double-click by Blacksmith's interaction registry, twice
+per gesture, and a promise returned from that read would grant the gesture unconditionally. The state model
+therefore carries two hard constraints: the readiness test stays a plain flag read, and it returns the same
+answer across two consecutive calls. See section 6.
 
 ## 6. Interaction Model
 
@@ -183,10 +185,11 @@ re-validates. This is what unblocks Phases 2 through 4.
 Consequence for the setting: with the card as the interaction surface, `tokenLootChatMessage` can no longer
 simply suppress it. Split announcement from access, or make the card unconditional when looting is enabled.
 
-#### Canvas gestures: `blacksmith.tokens.registerInteraction` — approved and confirmed
+#### Canvas gestures: `blacksmith.tokens.registerInteraction` — shipped
 
-Requested, approved, and being built **before** `api.inventory`. The contract below is settled; code against
-it, not against the earlier request draft.
+Implemented and on Blacksmith `master` (4ab16566), ahead of `api.inventory`. Untagged, so `module.json`
+still reads 13.15.3 while the code is present in the install. Build against it now. Reference:
+Blacksmith wiki, *API: Tokens* and *Architecture: Token Interactions*.
 
 Why an API and not a hook, kept because it is the reason the shape is what it is: `Token#_onClickLeft2`
 (`foundry.mjs:143318`) emits no hook, the permission predicate runs before the handler
@@ -194,7 +197,9 @@ Why an API and not a hook, kept because it is the reason the shape is what it is
 can participate in a decision that has already been made.
 
 ```js
-const id = blacksmith.tokens.registerInteraction({
+const api = game.modules.get('coffee-pub-blacksmith').api;
+
+this._lootClaim = api.tokens.registerInteraction({
     id: 'curator-loot',
     module: 'coffee-pub-curator',
     gesture: 'clickLeft2',
@@ -204,64 +209,63 @@ const id = blacksmith.tokens.registerInteraction({
     handler: (token, event) => LootManager.open(token.document),
     context: 'curator-loot'
 });
+
+// teardown
+api.tokens.disposeByContext('curator-loot');
 ```
 
-Registration belongs in `LootManager.initialize()`, which is currently an empty stub holding the place.
-Teardown uses `disposeByContext('curator-loot')`; `unregisterInteraction(id)` handles a single claim.
+`matches` receives the Token **document**; `handler` receives the Token **placeable**. Registration belongs
+in `LootManager.initialize()`, which is currently an empty stub holding the place.
 
-**Confirmed contract, and what each point obliges Curator to do:**
+**Feature-detect before registering.** The registry is unreleased. Until Blacksmith tags a build carrying
+it, `api.tokens?.registerInteraction` is absent for anyone on a released Blacksmith, and Curator's
+`module.json` requires only the manifest, not a version. Guard the call and fall back silently to the chat
+card; do not warn a user about a capability they never asked for.
 
-- **Foundry gesture keys, not friendly names.** `clickLeft2`, not `doubleClick`. v1 accepts `clickLeft2` and
-  `clickRight2` only; `clickLeft`, `clickRight`, `dragStart`, `dragLeftStart`, and `hoverIn` are rejected
-  with an error because claiming them would break selection, dragging, or the HUD. The data model is
-  gesture-keyed, so adding one later is small — but Curator must not plan around a gesture it has not
-  justified.
-- **`matches` must be synchronous and cheap.** It runs once per token draw. No `await`, no compendium
-  lookups, no UUID resolution. `LootManager.isLootable` already satisfies this: it is a single `getFlag`
-  read and must stay that way. Do not let recipient eligibility, distance, or actor-type checks migrate into
-  it — those belong in `LootManager.open` and in the GM handler.
+**Contract, and what each point obliges Curator to do:**
+
+- **Foundry gesture keys, not friendly names.** `clickLeft2`, not `doubleClick`. `api.tokens.ALLOWED_GESTURES`
+  is authoritative. Only `clickLeft2` and `clickRight2` are claimable; anything else throws with a readable
+  message, because the rest drive selection, dragging, and hover. The registry is gesture-keyed throughout,
+  so widening it is small — but Curator must not plan around a gesture it has not justified.
+- **`matches` must be synchronous, and cannot be async.** This is a correctness rule, not a style
+  preference: Foundry's permission predicate is synchronous and **a promise is truthy**, so returning one
+  would grant the gesture unconditionally. `LootManager.isLootable` already satisfies this — a single
+  `getFlag` read — and must stay that way. Recipient eligibility, distance, and any UUID resolution belong
+  in `LootManager.open` and in the GM handler, never here.
+- **`isLootable` must be stable across two consecutive calls.** Foundry evaluates permission and dispatches
+  the handler in two separate calls, so Blacksmith re-verifies the claim at dispatch and suppresses rather
+  than falls through if it stopped matching. A double-click that does nothing on a token that looks lootable
+  means `isLootable` is unstable between the two calls. Report that to Blacksmith rather than working around
+  it. Concretely: never let `isLootable` depend on anything transient — selection, distance, hover state,
+  time, or an in-flight request.
 - **A thrown handler is a dead gesture, not a fallback.** Blacksmith deliberately does not fall through to
-  Foundry's handler on error, because permission is already relaxed at that point and falling through would
-  open the Actor sheet to a player who could not otherwise open it. Curator's handler must therefore never
-  throw and never return a rejected promise: wrap `LootManager.open` in `try/catch` **and** attach a
-  `.catch()`, since `open` is async and a rejection would not surface synchronously. A failure must produce
-  a Curator notification, not silence.
+  Foundry's handler on error, because `bypassPermission` may already have granted the gesture and falling
+  through would open the Actor sheet to a player who could not otherwise open it. Curator's handler must
+  never throw and never return a rejected promise: wrap `LootManager.open` in `try/catch` **and** attach a
+  `.catch()`, since `open` is async and a rejection would not surface synchronously. A failure produces a
+  Curator notification, not silence.
 
-**Implementation note that changes our risk profile, in our favor.** Blacksmith patches one token
-instance's one gesture key from a post-draw hook off its existing `Token.prototype.draw` wrapper, at the
-moment `activateListeners()` has assigned a fresh `mouseInteractionManager`. There is no class-level wrapper
-and no shared code path. Consequences: an unmatched token is untouched rather than merely permitted-as-before,
-and the `bypassPermission` scoping we asked for is structural rather than disciplined. Blacksmith also
-confirmed that `Token#_canView` has exactly one consumer in the entire v13 client — the `clickLeft2` entry in
-the permissions map — so even a naive relaxation could not have reached the Actor sheet by another route.
-Record that as a fact about v13, not a guarantee to build on; re-verify it in `migration-v14.md`.
+**Evaluation timing, and why the earlier draft of this section is void.** Blacksmith evaluates `matches`
+**per gesture**, not once per token draw. An earlier revision of this plan derived a whole redraw-staleness
+requirement from the draw-time model in their design note: that `markReady` and `clear` each needed a
+guaranteed re-evaluation, that the death sequence was correct only by accident of `updateTokenImage`
+following `markReady`, and that Curator should request a `refreshInteraction` call. **All of that is void.**
+Blacksmith changed the model deliberately, citing exactly our central case — a creature that dies
+mid-session becomes lootable without redrawing, and a draw-time decision would leave that corpse
+unclaimable. Nothing in Curator needs to force a redraw, and the ordering of `markReady` against the loot
+image swap no longer affects interaction. The cost is that `isLootable` runs on every double-click, which
+the stability and synchronicity rules above already cover.
 
-#### Consequence: every loot state transition needs a guaranteed redraw
+**Mechanism, recorded because it bounds our risk.** Blacksmith patches one token instance's one gesture key
+rather than wrapping `Token`'s predicates at class level. An unmatched token is untouched rather than
+merely permitted-as-before, so the `bypassPermission` scoping is structural rather than disciplined.
+Blacksmith also confirmed `Token#_canView` has exactly one consumer in the entire v13 client — the
+`clickLeft2` entry in the permissions map. Record that as a fact about v13 today, not a guarantee to build
+on; re-verify it against v14.
 
-Because `matches` is evaluated per draw and not per gesture, a state change with no subsequent redraw leaves
-the token's claim stale for the rest of the session. This is Curator's problem to solve, not Blacksmith's.
-
-Current behavior is correct **by accident**. `_convertTokenToLoot` calls `markReady`, and the caller then
-calls `updateTokenImage(token.document, 'loot')`, whose texture change forces the redraw that evaluates
-`matches` against `ready`. Reverse those two lines and double-click silently stops working. Two live holes:
-
-- If the configured loot image resolves to the token's current texture, there is no texture change and
-  possibly no redraw, so a `ready` corpse is never claimed.
-- On revival, `LootManager.clear` unsets the flag and the restore path redraws — but only when `imageState`
-  is set. If restore is skipped, the claim persists on a token that no longer matches. The window still
-  refuses to open, because `LootManager.open` re-checks `isLootable`, so this degrades to a double-click
-  that does nothing rather than a leak. It is still wrong.
-
-Required rule: **`markReady` and `clear` must each be followed by a guaranteed re-evaluation**, not by a
-redraw that happens to be nearby. Ask Blacksmith for an explicit
-`blacksmith.tokens.refreshInteraction(tokenDocument)` rather than having Curator force `token.draw()`, which
-is expensive and reaches past the API. Until that exists, make the ordering dependency explicit in the code
-with a comment naming this section, and cover it in the verification matrix.
-
-Also confirm with Blacksmith whether a claimed token whose `matches` no longer holds swallows the gesture or
-falls through to Foundry. Curator's behavior differs between the two and the plan should not guess.
-
-`LootManager.open(tokenDocument)` remains the guarded entry point every gesture and the chat card call.
+`LootManager.open(tokenDocument)` remains the guarded entry point that both the gesture and the chat card
+call. It re-checks `isLootable` independently of the registry.
 
 ## 7. Recipient Resolution
 
@@ -443,15 +447,13 @@ first deliverable. Neither blocks Phase 1.
 - [x] Submit the Blacksmith inventory API request. Accepted; design lives in Blacksmith's
       `plans/plan-inventory-api.md` and covers `transferItem`, `transferCurrency`, `grantItem`, and
       `grantCurrency` with structured error codes, per-Actor locking, and rollback.
-- [x] Submit the token-interaction API request. Approved; contract confirmed in section 6.
-- [ ] Ask Blacksmith for `refreshInteraction(tokenDocument)` and for the stale-claim fallthrough answer
-      (section 6).
-- [ ] Blacksmith ships `api.tokens.registerInteraction`.
-- [ ] Blacksmith ships `api.inventory`. Curator has no transfer path until this lands.
+- [x] Submit the token-interaction API request. Approved.
+- [x] Blacksmith ships `api.tokens.registerInteraction` (master 4ab16566, untagged). Contract in section 6.
+- [ ] **Run the unprivileged-client verification pass and report back.** Owed to Blacksmith, and gating
+      their release of the feature. It cannot be run from a GM account, because a GM passes every predicate.
+      See the interaction block in section 16.
+- [ ] Blacksmith ships `api.inventory`, `grantItem` first. Curator has no transfer path until this lands.
 - [ ] Blacksmith tests the primitives before Curator consumes them.
-- [ ] Provide Blacksmith a player-login verification pass. Their bypass and fail-closed paths cannot be
-      tested from a GM client, since the whole point is behavior for a user with no permission on the
-      corpse. Curator supplies the world with a lootable corpse and a non-GM login.
 
 ### Phase 1 — State and read-only window
 
@@ -461,23 +463,27 @@ first deliverable. Neither blocks Phase 1.
 - [x] Remove all Item Piles integration (pulled forward from Phase 5; see section 14).
 - [x] Render current allowed items and currency without mutation.
 - [x] Start `architecture-loot.md` with only implemented state ownership and lifecycle behavior.
-- [ ] **Add the loot button to the corpse chat card.** This is the Phase 1 interaction surface and the
-      current blocker on everything downstream. It needs nothing from Blacksmith. Canvas gestures are all
-      permission-gated and are not an alternative; see section 6.
-- [ ] Resolve what `tokenLootChatMessage` controls once the card carries the entry point.
+- [x] **Add the loot button to the corpse chat card.** Curator now renders its own `card-loot.hbs` rather
+      than Blacksmith's shared loot-drop block, because the card is an access surface and not only an
+      announcement. Canvas gestures are all permission-gated and are not an alternative; see section 6.
+- [x] Resolve what `tokenLootChatMessage` controls once the card carries the entry point. It still gates
+      the card; the setting hint now states that turning it off removes the permission-free access path.
 - [ ] Decide and record the repeat-death behavior from section 12.
 
 ### Phase 1b — Canvas double-click
 
-Lands whenever `api.tokens.registerInteraction` ships; sequencing is Blacksmith's, not a Curator gate. The
-chat card keeps Phases 2 through 4 moving regardless.
+Unblocked. The registry is in the install. The chat card remains the entry point for anyone on a released
+Blacksmith and for players who cannot interact with the token at all, so this adds a gesture rather than
+replacing a surface.
 
-- Register `clickLeft2` in `LootManager.initialize()` per the confirmed contract in section 6.
-- Wrap the handler so it can neither throw nor return a rejected promise. A thrown handler is a dead
-  gesture, by design.
-- Guarantee re-evaluation after `markReady` and `clear`.
-- Verify with a non-GM login against a corpse the player has no Actor permission on: the loot window opens
-  and the Actor sheet does not.
+- [x] Register `clickLeft2` in `LootManager.initialize()` per the contract in section 6.
+- [x] Feature-detect `api.tokens?.registerInteraction` and degrade silently to the chat card.
+- [x] Dispose via `disposeByContext('curator-loot')` in `LootManager.teardown()`.
+- [x] Wrap the handler so it can neither throw nor return a rejected promise. `openSafely` catches
+      synchronously **and** attaches `.catch()`, since `open` is async.
+- [x] Expose `LootManager` on `module.api.loot` for every user, not only the GM, so the section 16 checks
+      are runnable from a player console.
+- [ ] **Run the section 16 interaction block against a non-GM login and report results to Blacksmith.**
 
 ### Phase 2 — Single-item transfer
 
@@ -522,16 +528,44 @@ chat card keeps Phases 2 through 4 moving regardless.
 - Revival while generation is still running.
 - Revival after partial looting.
 
-### Interaction and claim lifecycle
+### Interaction and permission bypass
 
-- Non-GM player with no Actor permission on the corpse: double-click opens the loot window.
-- Non-GM player, same corpse: the Actor sheet never opens, on success or on handler failure.
-- Handler throws: the gesture does nothing, a Curator notification appears, and no sheet opens.
-- Corpse becomes `ready` when the resolved loot image equals the current texture, so no texture change
-  occurs. The claim must still attach.
-- Revival where the image restore path is skipped. The claim must not persist.
-- Non-corpse token double-click is unchanged for every user.
-- Token drawn on scene load while already `ready`.
+**Owed to Blacksmith and gating their release.** Must be run from a non-GM login; a GM passes every
+predicate and proves nothing.
+
+Blacksmith has already confirmed on a player session that a non-GM double-clicking a matched NPC runs the
+claim's handler and does not open the Actor sheet. The bypass itself works. What they could not test is
+**scoping**: their test claim matched every NPC, so blanket relaxation and per-token relaxation were
+indistinguishable. Curator's `isLootable` is the first predicate that says no to something, which is why
+this pass is ours to run.
+
+`module.api.loot` is exposed to every user for exactly this, so the checks need no file edits:
+
+1. Non-GM with no permission on the corpse Actor: double-click opens the Curator loot window, no sheet.
+   Regression check — already confirmed generically, still worth one click with the real predicate.
+2. **Same player, an NPC token that is not lootable and that they lack permission on: double-click does
+   nothing.** This is the whole ask. If a sheet opens, the relaxation is leaking past Curator's claim; stop
+   and tell Blacksmith immediately, because they will pull the feature rather than patch around it.
+   Everything else here failing is a bug; this one is a security regression.
+3. Same player, their own character token: sheet opens normally.
+4. `game.modules.get('coffee-pub-blacksmith').api.tokens.disposeByContext('curator-loot')` while a corpse is
+   on screen: that player's double-click reverts to doing nothing, with no redraw required.
+5. Deliberate handler failure, from the player console:
+   `game.modules.get('coffee-pub-curator').api.loot.open = () => { throw new Error('verify'); }`
+   Double-click must open nothing — specifically not the Actor sheet. Blacksmith suppresses rather than
+   falls through, because permission has already been granted by that point. Reload to undo.
+
+Curator-side additions:
+
+- Creature dies mid-session with the corpse already on screen and no redraw: double-click works. This is the
+  case Blacksmith moved to per-gesture evaluation to cover.
+- Handler throws: the gesture does nothing, a Curator notification appears, no sheet opens.
+- Revived NPC: double-click no longer opens the loot window and does not open a sheet for an unprivileged
+  player.
+- A double-click that does nothing on a token that looks lootable: treat as an `isLootable` stability
+  failure across Blacksmith's two evaluation calls and report it rather than working around it.
+- Released-Blacksmith install without the registry: registration is skipped silently and the chat card still
+  works.
 - Chat-card entry point works for a player who cannot interact with the token at all.
 
 ### Permissions and recipients
@@ -604,15 +638,16 @@ Still open:
 - Whether an active GM is mandatory for GM-originated local interaction as well as player interaction.
 - Whether an empty corpse may still open for inspection.
 - Repeat-death loot behavior (section 12). Must be closed in Phase 1.
-- Whether a claimed token whose `matches` no longer holds swallows the gesture or falls through. Blacksmith
-  to confirm; Curator's revival behavior differs between the two.
 - Whether `clickRight2` is worth claiming as a secondary gesture. Do not request it without a use case.
 
 Closed:
 
-- **Token gesture.** The corpse chat card carries the Phase 1 entry point. Canvas double-click arrives via
-  `blacksmith.tokens.registerInteraction` with `gesture: 'clickLeft2'`; the contract is confirmed, not
-  proposed. A context menu is not an alternative — `_canHUD` requires OWNER. Section 6.
+- **Token gesture.** Canvas double-click via `blacksmith.tokens.registerInteraction` with
+  `gesture: 'clickLeft2'`; shipped, not proposed. The corpse chat card stays as the permission-free surface
+  and the fallback for installs without the registry. A context menu is not an alternative — `_canHUD`
+  requires OWNER. Section 6.
+- **Claim staleness.** Not a problem. Blacksmith evaluates per gesture, not per draw, so no Curator-side
+  redraw guarantee is needed. Section 6.
 - **Lootable Item types.** `weapon`, `equipment`, `consumable`, `tool`, `loot`, `container`, matching the
   primitive's whitelist. Section 10.
 - **Take All atomicity.** Partial success. The primitive locks per Actor UUID and exposes no batch call, so

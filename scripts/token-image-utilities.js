@@ -293,16 +293,17 @@ export class TokenImageUtilities {
                 await BlacksmithUtils.playSound(sound, 0.5, false, true);
             }
             
-            // Send chat message if enabled
+            // Send chat message if enabled. The card is Curator's own template rather
+            // than Blacksmith's shared loot-drop block because it now carries the loot
+            // button — the only entry point with no canvas permission gate, and the
+            // fallback wherever Blacksmith predates the token interaction registry.
+            // Disabling this setting therefore removes that access path; see
+            // documentation/plan-loot.md section 6.
             if (game.settings.get(MODULE.ID, 'tokenLootChatMessage')) {
-                const messageData = {
-                    isPublic: true,
-                    theme: 'default',
-                    isLootDrop: true,
-                    tokenName: token.name
-                };
-
-                const messageHtml = await foundry.applications.handlebars.renderTemplate('modules/coffee-pub-blacksmith/templates/cards-common.hbs', messageData);
+                const messageHtml = await foundry.applications.handlebars.renderTemplate(
+                    'modules/coffee-pub-curator/templates/card-loot.hbs',
+                    { tokenName: token.name, tokenUuid: token.document.uuid }
+                );
 
                 await ChatMessage.create({
                     content: messageHtml,

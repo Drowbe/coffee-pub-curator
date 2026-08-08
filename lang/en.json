@@ -45,7 +45,7 @@
     "tokenLootSound-Label": "Loot Conversion Sound",
     "tokenLootSound-Hint": "",
     "tokenLootChatMessage-Label": "Loot Chat Message",
-    "tokenLootChatMessage-Hint": "Send loot updates to the chat log.",
+    "tokenLootChatMessage-Hint": "Post a loot card to chat when a creature drops its belongings. The card carries the Loot button, which is the only way to open a corpse without canvas permission on its token, so turning this off removes that access path.",
     "headingH3LootTreasure-Label": "Coins",
     "headingH3LootTreasure-Hint": "",
     "tokenLootAddCoins-Label": "Add Coins",

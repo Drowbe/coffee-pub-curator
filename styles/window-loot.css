@@ -46,3 +46,10 @@
     .curator-loot-item { grid-template-columns: 34px minmax(0,1fr) 36px 56px; gap: 6px; }
     .curator-loot-item > img { width: 34px !important; height: 34px !important; }
 }
+
+/* Loot chat card. Self-contained: --blacksmith-tool-* are scoped to the tool
+   window and are not available inside the chat log. */
+.curator-loot-card .curator-loot-card-button { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 8px 0 0; padding: 6px 10px; border: 1px solid rgba(0,0,0,.35); border-radius: 4px; background: rgba(0,0,0,.28); color: inherit; font-size: .82rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
+.curator-loot-card .curator-loot-card-button:hover { border-color: rgba(0,0,0,.55); background: rgba(0,0,0,.4); }
+.curator-loot-card .curator-loot-card-button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.curator-loot-card .curator-loot-card-button i { flex: 0 0 auto; }
