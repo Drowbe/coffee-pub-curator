@@ -403,6 +403,17 @@ Implemented surface. Take All and All to Party are present but disabled — see 
 Take prompts for a quantity through Blacksmith's Quantity Split only when the stack is above one. A
 single-quantity row transfers on click.
 
+### GM quantity editing
+
+A GM can double-click any live row's quantity to change it in place: Enter commits, Escape cancels, clicking
+away commits. **Setting it to zero removes the item**, confirmed — "there are none left" and "take it off the
+body" are the same statement about a stack, so it is also the removal gesture and no separate control is
+needed.
+
+This is the GM curating what is on the body, not a loot action, so it writes to the Item directly rather than
+going through the GM socket handler players use. It is gated on `game.user.isGM` and only offered where the
+Item actually carries a numeric quantity.
+
 Neither the quantity prompt nor the actor picker passes `modal`. `api.dialog` used to default to
 `modal: true`, which called `<dialog>.showModal()` and froze the loot window behind it; the default is now
 `false`. Bury's confirmation **does** stay modal, because `confirm` defaults to `modal: destructive` and

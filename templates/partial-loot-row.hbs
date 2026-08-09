@@ -18,7 +18,14 @@
             <span class="curator-loot-taken"><i class="fa-solid fa-check"></i> Looted by {{by}}</span>
         </div>
     {{else}}
-        <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
+        {{#if canEditQuantity}}
+            <div class="curator-loot-amount curator-loot-amount-editable" data-edit-qty="{{id}}"
+                 data-tooltip="Double-click to change; 0 removes it">
+                <small>QTY</small><strong>{{quantity}}</strong>
+            </div>
+        {{else}}
+            <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
+        {{/if}}
         {{#if busy}}
             <div class="curator-loot-row-actions">
                 <span class="curator-loot-blocked"><i class="fa-solid fa-circle-notch fa-spin"></i></span>

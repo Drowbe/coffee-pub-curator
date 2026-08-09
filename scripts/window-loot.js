@@ -126,6 +126,90 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         return fromUuid(this.tokenUuid);
     }
 
+    /**
+     * Double-click a quantity to edit it in place. GM only — this is the GM curating
+     * what is on the body, not a loot action, so it writes directly rather than going
+     * through the GM socket handler that players use.
+     */
+    _onRender(context, options) {
+        super._onRender?.(context, options);
+        for (const cell of this.element?.querySelectorAll('[data-edit-qty]') ?? []) {
+            if (cell.dataset.curatorBound === 'true') continue;
+            cell.dataset.curatorBound = 'true';
+            cell.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this._beginQuantityEdit(cell);
+            });
+        }
+    }
+
+    _beginQuantityEdit(cell) {
+        if (this.busy || cell.querySelector('input')) return;
+        const itemId = cell.getAttribute('data-edit-qty');
+        const value = cell.querySelector('strong');
+        if (!value) return;
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.step = '1';
+        input.value = value.textContent.trim();
+        input.className = 'curator-loot-qty-input';
+
+        value.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let settled = false;
+        const finish = async (commit) => {
+            if (settled) return;
+            settled = true;
+            const next = Math.trunc(Number(input.value));
+            input.replaceWith(value);
+            if (commit && Number.isFinite(next) && next >= 0) await this._applyQuantity(itemId, next);
+            await this.render(false);
+        };
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') { event.preventDefault(); void finish(true); }
+            else if (event.key === 'Escape') { event.preventDefault(); void finish(false); }
+        });
+        // Clicking away commits, matching the rest of the suite.
+        input.addEventListener('blur', () => void finish(true));
+    }
+
+    async _applyQuantity(itemId, quantity) {
+        if (!game.user.isGM) return;
+        const token = await this._resolveToken();
+        const item = token?.actor?.items?.get(itemId);
+        if (!item) return;
+        if (Number(item.system?.quantity ?? 0) === quantity) return;
+
+        try {
+            if (quantity > 0) {
+                await item.update({ 'system.quantity': quantity });
+                return;
+            }
+            // Zero and "remove it" are the same statement about a stack, so that is
+            // the removal gesture — confirmed, because it destroys the row.
+            const blacksmith = _blacksmith();
+            const confirmed = typeof blacksmith?.dialog?.confirm === 'function'
+                ? await blacksmith.dialog.confirm({
+                    title: 'Remove Item',
+                    content: `<p>Remove <strong>${item.name}</strong> from ${token.name}?</p>`,
+                    confirmLabel: 'Remove',
+                    confirmIcon: 'fa-solid fa-trash',
+                    destructive: true
+                })
+                : true;
+            if (confirmed) await item.delete();
+        } catch (error) {
+            console.error(`${MODULE.TITLE} | Could not change quantity:`, error);
+            notify.error(`Could not change the quantity of ${item.name}.`);
+        }
+    }
+
     // ==============================================================
     // ===== RECIPIENT ==============================================
     // ==============================================================
@@ -639,6 +723,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             const decorate = (item) => ({
                 ...item,
                 busy: item.id === busyRow,
+                // GM-only, and only where there is a number to change.
+                canEditQuantity: game.user.isGM && !item.looted && Number.isFinite(item.quantity),
                 canTake: Boolean(recipient) && !item.packed && !item.looted,
                 showGive: canGive && !item.packed && !item.looted,
                 showParty: canParty && !item.packed && !item.looted

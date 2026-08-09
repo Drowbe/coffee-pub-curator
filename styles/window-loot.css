@@ -145,3 +145,10 @@
    short; this stops a long one wrapping rather than relying on that alone. */
 .curator-dialog .dialog-buttons button,
 .curator-dialog button[data-action] { white-space: nowrap; }
+
+/* GM inline quantity editing. */
+.curator-loot-amount-editable { border-radius: 4px; cursor: text; }
+.curator-loot-amount-editable:hover { background: var(--blacksmith-tool-surface-hover, rgba(0,0,0,.07)); }
+.curator-loot-qty-input { width: 100%; min-width: 0; height: 19px; padding: 0 2px; border: 1px solid var(--blacksmith-tool-field-focus-border, rgba(193,87,1,.75)); border-radius: 3px; background: var(--blacksmith-tool-field-background, #fff); color: var(--blacksmith-tool-field-text, inherit); font-size: .8rem; font-variant-numeric: tabular-nums; text-align: center; }
+.curator-loot-qty-input::-webkit-outer-spin-button,
+.curator-loot-qty-input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }

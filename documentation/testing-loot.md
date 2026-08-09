@@ -45,6 +45,9 @@ game.modules.get('coffee-pub-curator').api.loot
 - [x] Resize the window; corpse card and "Looting as" row stay pinned while rows scroll under them.
 - [x] Titlebar (GM): **Character Sheet** opens the sheet.
 - [x] Titlebar (GM): **Prototype Token** opens the prototype config.
+- [ ] GM double-clicks a quantity → edits in place; Enter commits, Escape reverts, clicking away commits.
+- [ ] Setting a quantity to 0 → confirms, then removes the row.
+- [ ] A player sees no editable quantities.
 - [x] Footer reads `[ Done ]` left, `[ Loot to Party ] [ Loot All ]` right, sized to content.
 - [x] Window stays draggable while a dialog is open.
 
