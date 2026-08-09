@@ -16,10 +16,22 @@
 // A try/catch around the write is the backstop, not the fix: it tells you the
 // write failed, not that it should never have run.
 
+/**
+ * Whether an embedded document is still present in its parent collection.
+ *
+ * Works for any embedded type — Tokens and Tiles both reach this, and both are
+ * written to on a delay by the drop-shadow path.
+ */
+export function isEmbeddedAlive(doc) {
+    if (!doc) return false;
+    const collection = doc.collectionName ?? doc.constructor?.collectionName;
+    if (!collection) return false;
+    return Boolean(doc.parent?.[collection]?.get(doc.id));
+}
+
 /** Whether a Token document is still present in its scene. */
 export function isTokenAlive(tokenDocument) {
-    if (!tokenDocument) return false;
-    return Boolean(tokenDocument.parent?.tokens?.get(tokenDocument.id));
+    return isEmbeddedAlive(tokenDocument);
 }
 
 /**

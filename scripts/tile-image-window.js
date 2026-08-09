@@ -8,6 +8,7 @@ import { notify } from './notifications.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { UIContextMenu } from './ui-context-menu.js';
+import { isEmbeddedAlive } from './document-liveness.js';
 import { getTileImagePaths, getTileLibraries } from './settings.js';
 
 const TILE_MODE = ImageCacheManager.MODES.TILE;
@@ -649,8 +650,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
                     }
                 }];
                 setTimeout(() => {
+                    // Re-checked inside the timer: the 150ms wait is the window in
+                    // which the tile can be deleted, and TokenMagic writes a flag to
+                    // the document. Same defect as the token drop shadow.
                     const placeable = tileDoc.object;
-                    if (placeable) TokenMagic.addUpdateFilters(placeable, shadowParams);
+                    if (!placeable || placeable.destroyed || !isEmbeddedAlive(tileDoc)) return;
+                    Promise.resolve(TokenMagic.addUpdateFilters(placeable, shadowParams))
+                        .catch((error) => console.warn(`${MODULE.TITLE} | Tile drop shadow could not be applied:`, error));
                 }, 150);
             }
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME,

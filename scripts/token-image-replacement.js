@@ -1546,7 +1546,14 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         const params = TokenImageReplacementWindow._tmfxShadowParams();
         setTimeout(() => {
             for (const placeable of placeables) {
-                if (placeable) TokenMagic.addUpdateFilters(placeable, params);
+                // Re-checked inside the timer, not before scheduling it. The 150ms
+                // wait is precisely the window in which the token can be deleted, and
+                // TokenMagic writes a flag to the document — which throws
+                // "does not exist in the EmbeddedCollection" once it is gone.
+                if (!placeable || placeable.destroyed) continue;
+                if (!isTokenAlive(placeable.document)) continue;
+                Promise.resolve(TokenMagic.addUpdateFilters(placeable, params))
+                    .catch((error) => console.warn(`${MODULE.TITLE} | Drop shadow could not be applied:`, error));
             }
         }, 150);
     }

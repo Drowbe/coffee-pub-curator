@@ -90,13 +90,35 @@ reporting "error moving X" instead of "X is gone".
 ordinary play conceals for months. Treat "only reproducible under the harness" as a reason to fix, not a
 reason to discount.
 
-The checks live in `document-liveness.js` as `isTokenAlive` / `isActorAlive`, one definition rather than a
-copy per caller. A sweep of Curator on 2026-08-08 found three more instances of the same shape, all fixed:
+**A guard before scheduling is not a guard.** The drop-shadow path was "fixed" once by checking the token
+was alive before calling `_applyDropShadowToPlaceables` — but that method schedules a 150ms `setTimeout`, and
+the check has to be *inside* the timer, because the wait is precisely the window in which the token can be
+deleted. Blacksmith's harness found it still throwing after the first fix. **Whatever runs after the delay is
+what needs the check, not whatever scheduled it.**
+
+The same defect existed a second time in `tile-image-window.js`, applying a shadow to a tile on an identical
+150ms timer. Tiles are embedded documents too, so `isEmbeddedAlive` is the general check and `isTokenAlive`
+is a thin alias for it.
+
+Also attach a `.catch()` to anything async fired from a timer. `TokenMagic.addUpdateFilters` returns a
+promise, so even with the liveness check a rejection would surface as "Uncaught (in promise)" with no
+callsite worth reading.
+
+The checks live in `document-liveness.js` as `isEmbeddedAlive` / `isTokenAlive` / `isActorAlive`, one
+definition rather than a copy per caller. Sweeps of Curator on 2026-08-08 found five more instances of the
+same shape, all fixed:
 
 - The delayed loot conversion re-found its token after the timer, then wrote the loot image using the
   reference captured *before* the delay. The re-find was there; the write ignored it.
 - `_convertTokenToLoot` marked a body ready after loot generation had awaited, without re-checking.
 - `_processBury` deleted a token after a GM approval dialog that stays open for as long as the GM leaves it.
+- The token drop shadow wrote a TokenMagic flag 150ms after being scheduled, with the liveness check outside
+  the timer instead of inside it.
+- The tile drop shadow did the same thing, and had never been checked at all.
+
+**How to sweep for it:** `grep -rn "setTimeout(" scripts/` and look at what each timer touches when it fires.
+A timer that only moves DOM or window state is fine; one that writes to a document needs the check inside the
+callback. That is how both shadow instances were found.
 
 ## Do not fork Blacksmith code
 

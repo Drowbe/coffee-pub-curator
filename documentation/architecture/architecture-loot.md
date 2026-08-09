@@ -162,6 +162,9 @@ Anything writing to a Token, or to an Actor belonging to one, **after an await**
 exists. A guard at the top of an async function proves nothing ten awaits later. `document-liveness.js` holds
 the checks.
 
+A check before scheduling a timer is not a check: it has to be **inside** the callback, because the delay is
+the window in which the document can be deleted.
+
 An unlinked token's Actor is synthetic and dies with its token, so a flag write to it lands on the token's
 embedded document — checking the Actor never catches that. Foundry reports the failure as
 `undefined id [...] does not exist in the EmbeddedCollection`, which reads as a collection problem rather
