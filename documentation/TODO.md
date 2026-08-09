@@ -54,6 +54,27 @@ Sequencing note retained in case a deferred bury is ever added for other reasons
 **after** Blacksmith's `deleteCombat` handlers. Curator's existing one converts held bodies and deletes
 nothing, so there is no ordering hazard today.
 
+## Async writes must re-check the document still exists
+
+Fixed 2026-08-08 in `token-image-replacement.js`, reported by Blacksmith whose harness creates and deletes
+tokens fast enough to expose it. Recorded because the shape will recur.
+
+`_onTokenCreated` runs a settle delay and a matching pass before it writes. A token deleted inside that
+window leaves every later write aimed at a document that is gone —
+`undefined id [...] does not exist in the EmbeddedCollection`. It surfaced as an **uncaught** rejection
+because both `update()` calls were wrapped in try/catch but the `setFlag()` that stored the original
+portrait was not, so it was the only one that could escape.
+
+Two rules for anything on this path:
+
+- Re-check with `_tokenStillExists` / `_actorStillExists` **after every await**, not once at entry. A guard
+  at the top of an async function proves nothing about the state ten awaits later.
+- An unlinked token's Actor is synthetic and dies with its token, so `actor.setFlag` on one goes at the
+  token's embedded document and fails the same way. Checking the Actor is not enough; check its token.
+
+A try/catch around each write is the backstop, not the fix — swallowing the error would still mean doing
+pointless work and logging noise.
+
 ## Shop Tokens (idea, not scheduled)
 
 Mark a token as a **shop** ahead of time and reuse the corpse-looting machinery with different rules. Recorded
