@@ -37,7 +37,7 @@
     "headingH3LootConfiguration-Label": "Configuration",
     "headingH3LootConfiguration-Hint": "",
     "tokenConvertDeadToLoot-Label": "Convert Dead to Loot",
-    "tokenConvertDeadToLoot-Hint": "Requires the module 'Item Piles' be installed and enabled.",
+    "tokenConvertDeadToLoot-Hint": "Turn defeated NPCs into lootable bodies. Players double-click a body to open the loot window. Loot is generated once per creature, so a body that is revived and killed again offers whatever is left rather than a fresh drop.",
     "tokenConvertDelay-Label": "Loot Delay",
     "tokenConvertDelay-Hint": "How many seconds to wait before the loot is converted to a pile?",
     "tokenConvertAfterCombat-Label": "Convert After Combat",

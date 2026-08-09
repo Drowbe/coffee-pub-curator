@@ -465,7 +465,7 @@ export class TokenImageUtilities {
                 }
                 
                 if (imageState && (imageState === 'dead' || imageState === 'loot')) {
-                    // Get fresh document reference after Item Piles reversion
+                    // Re-resolve: the loot flag clear above may have replaced the document
                     const freshToken = canvas.tokens.get(token.id);
                     if (freshToken) {
                         // Restore the current image using unified function with fresh reference
