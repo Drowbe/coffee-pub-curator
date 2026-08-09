@@ -1,276 +1,42 @@
 // ==================================================================
-// ===== UI CONTEXT MENU – Shared menu with optional flyouts =========
+// ===== UI CONTEXT MENU — accessor for Blacksmith's shared menu =====
 // ==================================================================
+//
+// This file used to be a 276-line fork of Blacksmith's UIContextMenu. It was
+// deleted on 2026-08-08 after Blacksmith found it carrying four bugs they had
+// already fixed upstream: dismissal bound in the bubble phase (trapped open by
+// any consumer calling stopPropagation), Escape closing the window instead of
+// the menu, a 150ms arming delay that swallowed genuine outside clicks, and no
+// height cap so a long menu ran off the screen unreachable.
+//
+// A diff confirmed the fork contained nothing the shared version lacked — the
+// only lines unique to it were the four defects. Do not reintroduce a copy. If
+// Curator needs behaviour the shared menu does not have, that is a change to
+// Blacksmith's, not a reason to fork again.
+//
+// Surface: documentation/api/api-contextmenu.md in Blacksmith.
 
-export class UIContextMenu {
-    static _openMenus = new Map(); // id -> { root, close }
+import { MODULE } from './const.js';
 
-    static close(id) {
-        const entry = this._openMenus.get(id);
-        if (entry?.close) {
-            entry.close();
-        }
-    }
-
-    static closeAll() {
-        for (const id of this._openMenus.keys()) {
-            this.close(id);
-        }
-    }
-
-    /**
-     * Show a context menu at screen coordinates.
-     * @param {Object} options
-     * @param {string} options.id - Unique menu id
-     * @param {number} options.x - clientX
-     * @param {number} options.y - clientY
-     * @param {{ module?: Array, core?: Array, gm?: Array }|Array} options.zones - zones object or flat items array
-     * @param {HTMLElement} [options.root] - Root element to append menu to (default: document.body). Use when the trigger is in a popout window.
-     * @param {string} [options.className] - Extra class for styling
-     * @param {string} [options.zoneClass] - Class to use for flat items zone (default core)
-     */
-    static show(options) {
-        const { id, x, y, zones, root: rootOption, className = '', zoneClass = 'core', maxWidth = 300 } = options || {};
-        if (!id) throw new Error('UIContextMenu.show requires an id');
-
-        this.close(id);
-
-        const root = rootOption || document.body;
-        const doc = root.ownerDocument || document;
-
-        const menu = doc.createElement('div');
-        menu.id = id;
-        menu.className = `context-menu ${className}`.trim();
-        menu.style.visibility = 'hidden';
-        menu.style.left = '0px';
-        menu.style.top = '0px';
-        if (maxWidth) {
-            menu.style.maxWidth = `${maxWidth}px`;
-        }
-
-        const appendZone = (zoneName, items) => {
-            if (!items?.length) return;
-            const zone = doc.createElement('div');
-            zone.className = `context-menu-zone context-menu-zone-${zoneName}`;
-            items.forEach((item) => {
-                this._appendItem(zone, item, menu, id, doc);
-            });
-            menu.appendChild(zone);
-        };
-
-        const addSeparator = () => {
-            const sep = doc.createElement('div');
-            sep.className = 'context-menu-separator';
-            menu.appendChild(sep);
-        };
-
-        if (Array.isArray(zones)) {
-            appendZone(zoneClass, zones);
-        } else {
-            appendZone('module', zones?.module);
-            if (zones?.module?.length) addSeparator();
-            appendZone('core', zones?.core);
-            if (zones?.gm?.length) addSeparator();
-            appendZone('gm', zones?.gm);
-        }
-
-        root.appendChild(menu);
-
-        this._positionMenu(menu, x, y);
-
-        const clickClose = (e) => {
-            if (!menu.isConnected) return;
-            if (!menu.contains(e.target)) {
-                this.close(id);
-            }
-        };
-        const keyClose = (e) => {
-            if (e.key === 'Escape') {
-                this.close(id);
-            }
-        };
-
-        const close = () => {
-            this._closeSubmenu(menu);
-            doc.removeEventListener('click', clickClose);
-            doc.removeEventListener('keydown', keyClose);
-            menu.remove();
-            this._openMenus.delete(id);
-        };
-
-        this._openMenus.set(id, { root: menu, close });
-
-        setTimeout(() => {
-            doc.addEventListener('click', clickClose);
-            doc.addEventListener('keydown', keyClose);
-        }, 150);
-    }
-
-    static _appendItem(zoneEl, item, rootMenu, rootId, doc = document) {
-        if (item.separator) {
-            const sep = doc.createElement('div');
-            sep.className = 'context-menu-separator';
-            zoneEl.appendChild(sep);
-            return;
-        }
-
-        const menuItemEl = doc.createElement('div');
-        menuItemEl.className = 'context-menu-item';
-        if (item.disabled) {
-            menuItemEl.classList.add('is-disabled');
-        }
-
-        const iconHtml = item.icon
-            ? (typeof item.icon === 'string' && item.icon.trim().startsWith('<')
-                ? item.icon
-                : `<i class="${item.icon}"></i>`)
-            : '';
-        const label = item.name || '';
-        const description = item.description || '';
-
-        if (iconHtml) {
-            const iconWrap = doc.createElement('span');
-            iconWrap.className = 'context-menu-item-icon';
-            iconWrap.innerHTML = iconHtml;
-            menuItemEl.appendChild(iconWrap);
-        }
-
-        const content = doc.createElement('span');
-        content.className = 'context-menu-item-content';
-        const labelEl = doc.createElement('span');
-        labelEl.className = 'context-menu-item-label';
-        labelEl.textContent = label;
-        content.appendChild(labelEl);
-        if (description) {
-            const descEl = doc.createElement('span');
-            descEl.className = 'context-menu-item-description';
-            descEl.textContent = description;
-            content.appendChild(descEl);
-        }
-        menuItemEl.appendChild(content);
-
-        if (item.submenu && Array.isArray(item.submenu) && item.submenu.length) {
-            menuItemEl.classList.add('has-submenu');
-            const arrow = doc.createElement('span');
-            arrow.className = 'context-menu-submenu-arrow';
-            arrow.textContent = '›';
-            menuItemEl.appendChild(arrow);
-
-            menuItemEl.addEventListener('mouseenter', () => {
-                this._closeSubmenu(rootMenu);
-                const submenu = this._buildSubmenu(menuItemEl, item.submenu, rootId);
-                rootMenu._activeSubmenu = submenu;
-            });
-        } else if (!item.disabled) {
-            menuItemEl.addEventListener('click', async () => {
-                if (typeof item.callback === 'function') {
-                    try {
-                        await item.callback();
-                    } catch (err) {
-                        console.error('BLACKSMITH | CONTEXT MENU Item error', err);
-                    }
-                }
-                UIContextMenu.close(rootId);
-            });
-        }
-
-        zoneEl.appendChild(menuItemEl);
-    }
-
-    static _buildSubmenu(anchorEl, items, rootId) {
-        const doc = anchorEl.ownerDocument || document;
-        const submenu = doc.createElement('div');
-        submenu.className = 'context-menu context-menu-submenu';
-        submenu.style.visibility = 'hidden';
-        submenu.style.left = '0px';
-        submenu.style.top = '0px';
-
-        const zone = doc.createElement('div');
-        zone.className = 'context-menu-zone context-menu-zone-core';
-        items.forEach((item) => {
-            this._appendItem(zone, item, submenu, rootId, doc);
-        });
-        submenu.appendChild(zone);
-        doc.body.appendChild(submenu);
-
-        const rect = anchorEl.getBoundingClientRect();
-        const x = rect.right + 6;
-        const y = rect.top;
-        this._positionMenu(submenu, x, y);
-
-        let closeTimeout = null;
-        const SUBMENU_LEAVE_DELAY_MS = 200;
-
-        const scheduleClose = () => {
-            if (closeTimeout) return;
-            closeTimeout = setTimeout(() => {
-                closeTimeout = null;
-                if (!submenu.isConnected) return;
-                submenu.remove();
-                anchorEl.removeEventListener('mouseleave', closeOnLeave);
-                submenu.removeEventListener('mouseleave', closeOnLeave);
-                submenu.removeEventListener('mouseenter', cancelClose);
-                anchorEl.removeEventListener('mouseenter', cancelClose);
-            }, SUBMENU_LEAVE_DELAY_MS);
-        };
-
-        const cancelClose = () => {
-            if (closeTimeout) {
-                clearTimeout(closeTimeout);
-                closeTimeout = null;
-            }
-        };
-
-        const closeOnLeave = (e) => {
-            if (!submenu.isConnected) return;
-            const target = e.relatedTarget;
-            if (target && submenu.contains(target)) return;
-            if (target && anchorEl.contains(target)) return;
-            scheduleClose();
-        };
-
-        anchorEl.addEventListener('mouseleave', closeOnLeave);
-        submenu.addEventListener('mouseleave', closeOnLeave);
-        submenu.addEventListener('mouseenter', cancelClose);
-        anchorEl.addEventListener('mouseenter', cancelClose);
-
-        return submenu;
-    }
-
-    static _closeSubmenu(rootMenu) {
-        const submenu = rootMenu?._activeSubmenu;
-        if (submenu && submenu.isConnected) {
-            submenu.remove();
-        }
-        if (rootMenu) {
-            rootMenu._activeSubmenu = null;
-        }
-    }
-
-    static _positionMenu(menu, x, y) {
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const padding = 8;
-
-        const menuRect = menu.getBoundingClientRect();
-        let finalX = x;
-        let finalY = y;
-
-        if (x + menuRect.width + padding > viewportWidth) {
-            finalX = viewportWidth - menuRect.width - padding;
-        }
-        if (finalX < padding) {
-            finalX = padding;
-        }
-        if (y + menuRect.height + padding > viewportHeight) {
-            finalY = viewportHeight - menuRect.height - padding;
-        }
-        if (finalY < padding) {
-            finalY = padding;
-        }
-
-        menu.style.left = `${finalX}px`;
-        menu.style.top = `${finalY}px`;
-        menu.style.visibility = 'visible';
-    }
+function api() {
+    return game.modules.get('coffee-pub-blacksmith')?.api?.uiContextMenu ?? null;
 }
+
+export const UIContextMenu = {
+    show(options) {
+        const menu = api();
+        if (!menu) {
+            console.warn(`${MODULE.TITLE} | Blacksmith uiContextMenu unavailable; no menu shown.`);
+            return null;
+        }
+        return menu.show(options);
+    },
+
+    close(id) {
+        return api()?.close(id) ?? null;
+    },
+
+    closeAll() {
+        return api()?.closeAll() ?? null;
+    }
+};

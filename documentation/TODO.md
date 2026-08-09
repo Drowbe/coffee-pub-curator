@@ -91,6 +91,33 @@ copy per caller. A sweep of Curator on 2026-08-08 found three more instances of 
 - `_convertTokenToLoot` marked a body ready after loot generation had awaited, without re-checking.
 - `_processBury` deleted a token after a GM approval dialog that stays open for as long as the GM leaves it.
 
+## Do not fork Blacksmith code
+
+Two forks found and deleted 2026-08-08, both reported by Blacksmith, both carrying bugs the hub had already
+fixed. This is the same shape as Regent's forked window base, which they already track.
+
+- **`ui-context-menu.js`** — 276 lines, same filename and class name as Blacksmith's, used by the token
+  image replacement and tile image windows. Missing four fixes: dismissal bound in the bubble phase (a
+  consumer calling `stopPropagation` trapped the menu open), Escape closing the application instead of the
+  menu, a 150ms arming delay that swallowed genuine outside clicks, and no height cap so a long menu ran off
+  screen unreachable. A diff confirmed the fork contained **nothing** the shared version lacked — the only
+  lines unique to it were the four defects.
+- **`manager-hooks.js`** — 520 lines, 86% identical to Blacksmith's. Missing the `renderChatMessage` →
+  `renderChatMessageHTML` remap, general `pre*` cancellation (only `preUpdateToken` worked), and context on
+  the callback record, which meant every Curator hook reported as context "default" in Blacksmith's stats
+  tooling.
+
+Both are now thin accessors that forward to the shared implementation and cannot drift. The files were kept
+rather than removed outright so the filename someone would search for explains why the fork is gone.
+
+**The rule.** A copy taken before a fix keeps the problem the hub has solved and can never pick up anything
+that lands later. You find those bugs yourself, eventually, one confusing report at a time. If Curator needs
+behaviour a shared component lacks, send it to Blacksmith as a change to theirs — do not fork.
+
+**How to spot one.** Compare filenames against `coffee-pub-blacksmith/scripts/`; a shared name is the tell.
+`const.js` and `settings.js` share names legitimately, since their content is per-module. Anything else
+warrants a diff.
+
 ## Shop Tokens (idea, not scheduled)
 
 Mark a token as a **shop** ahead of time and reuse the corpse-looting machinery with different rules. Recorded
