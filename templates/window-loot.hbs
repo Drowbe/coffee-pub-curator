@@ -1,4 +1,16 @@
 <div class="curator-loot-content">
+    {{#if busyLabel}}
+        {{!-- A zero-height sticky rail, so the panel floats over the dimmed list and
+              stays put however far it is scrolled. Loot All is one batch call rather
+              than a row at a time, so there is no per-item progress to report — only
+              an honest "this is running". --}}
+        <div class="curator-loot-working" role="status" aria-live="polite">
+            <div class="curator-loot-working-panel">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>{{busyLabel}}&hellip;</span>
+            </div>
+        </div>
+    {{/if}}
     {{#if missing}}
         <div class="curator-loot-empty">This corpse is no longer available.</div>
     {{else}}
@@ -6,16 +18,6 @@
               sections, because stacking them would need the first one's height
               hard-coded as the second one's offset. --}}
         <div class="curator-loot-pinned">
-        {{#if busyLabel}}
-            {{!-- Inside the pinned wrapper, not sticky on its own: two elements both
-                  pinned to top 0 would sit on top of each other. Loot All is one
-                  batch call rather than a row at a time, so there is no per-item
-                  progress to report — only an honest "this is running". --}}
-            <div class="curator-loot-working" role="status" aria-live="polite">
-                <i class="fa-solid fa-circle-notch fa-spin"></i>
-                <span>{{busyLabel}}&hellip;</span>
-            </div>
-        {{/if}}
         <section class="curator-loot-section curator-loot-subject">
             <div class="curator-loot-subject-image">
                 <img src="{{portraitImg}}" alt="{{tokenName}}">

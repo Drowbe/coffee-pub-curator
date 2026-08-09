@@ -114,12 +114,17 @@
 
 /* In-flight feedback only. The concurrency guarantee is the GM's. */
 .curator-loot-busy .curator-loot-content { pointer-events: none; }
-.curator-loot-busy .curator-loot-section { opacity: .5; }
+.curator-loot-busy .curator-loot-content > *:not(.curator-loot-working) { opacity: .4; }
 
-/* Rides the pinned wrapper, so it stays visible however far the list is scrolled
-   without competing for top: 0 with the header it sits above. */
-.curator-loot-working { display: flex; gap: 8px; align-items: center; justify-content: center; margin: -8px -8px 0; padding: 7px 10px; background: var(--blacksmith-tool-accent, #2f241a); color: var(--blacksmith-tool-background, #fff); font-size: .74rem; letter-spacing: .03em; }
-.curator-loot-busy .curator-loot-working { opacity: 1; }
+/* A zero-height sticky rail carrying an absolutely placed panel: it floats over the
+   dimmed list and does not scroll away, without competing for top: 0 with the pinned
+   header.
+
+   Colours come from the surface and text tokens. The previous version used
+   --blacksmith-tool-background as a `color`, and that token is a gradient — invalid
+   for colour, so it fell back to dark text on a dark bar and read as a black void. */
+.curator-loot-working { position: sticky; top: 0; z-index: 6; height: 0; overflow: visible; }
+.curator-loot-working-panel { position: absolute; top: 96px; left: 50%; display: flex; gap: 10px; align-items: center; padding: 11px 18px; border: 1px solid var(--blacksmith-tool-border, rgba(0,0,0,.3)); border-radius: 8px; background: var(--blacksmith-tool-surface-raised, #fff); box-shadow: 0 6px 18px rgba(0,0,0,.35); color: var(--blacksmith-tool-text, inherit); font-size: .8rem; white-space: nowrap; transform: translateX(-50%); }
 
 @media (max-width: 470px) {
     .curator-loot-row-actions > button span { display: none; }
@@ -152,3 +157,7 @@
 .curator-loot-qty-input { width: 100%; min-width: 0; height: 19px; padding: 0 2px; border: 1px solid var(--blacksmith-tool-field-focus-border, rgba(193,87,1,.75)); border-radius: 3px; background: var(--blacksmith-tool-field-background, #fff); color: var(--blacksmith-tool-field-text, inherit); font-size: .8rem; font-variant-numeric: tabular-nums; text-align: center; }
 .curator-loot-qty-input::-webkit-outer-spin-button,
 .curator-loot-qty-input::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+
+/* Remove control in the quantity slot of a packed container. */
+.curator-loot-remove { display: grid; width: 22px; height: 22px; margin: 0 auto; padding: 0; place-items: center; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--blacksmith-tool-text-muted, inherit); cursor: pointer; }
+.curator-loot-remove:hover { border-color: #a4432f; background: rgba(164, 67, 47, .16); color: #a4432f; }

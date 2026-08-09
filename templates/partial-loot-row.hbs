@@ -18,7 +18,14 @@
             <span class="curator-loot-taken"><i class="fa-solid fa-check"></i> Looted by {{by}}</span>
         </div>
     {{else}}
-        {{#if canEditQuantity}}
+        {{#if canRemoveContainer}}
+            <div class="curator-loot-amount">
+                <button type="button" class="curator-loot-remove" data-action="removeContainer" data-item-id="{{id}}"
+                        data-tooltip="Remove this container">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        {{else if canEditQuantity}}
             <div class="curator-loot-amount curator-loot-amount-editable" data-edit-qty="{{id}}"
                  data-tooltip="Double-click to change; 0 removes it">
                 <small>QTY</small><strong>{{quantity}}</strong>

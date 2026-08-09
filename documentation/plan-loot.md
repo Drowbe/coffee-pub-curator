@@ -414,6 +414,15 @@ This is the GM curating what is on the body, not a loot action, so it writes to 
 going through the GM socket handler players use. It is gated on `game.user.isGM` and only offered where the
 Item actually carries a numeric quantity.
 
+**Never on a packed container.** Zeroing one deletes it and orphans its contents, which go on pointing at a
+parent id that is no longer on the body — the same corruption `transferItem` refuses. The control is hidden
+*and* re-checked on commit, because contents can change between the render and the keystroke.
+
+A packed container has no quantity worth editing, so that slot carries a **remove** control instead. It calls
+dnd5e's own `Item5e#deleteDialog()`, which asks whether the contents go with the bag and handles the
+recursion. Curator must not reimplement that: it would be a second answer to a question the system already
+asks, and the wrong answer orphans everything inside.
+
 Neither the quantity prompt nor the actor picker passes `modal`. `api.dialog` used to default to
 `modal: true`, which called `<dialog>.showModal()` and froze the loot window behind it; the default is now
 `false`. Bury's confirmation **does** stay modal, because `confirm` defaults to `modal: destructive` and
@@ -515,9 +524,14 @@ guarantee.
 
 ### Progress
 
-Loot All is the case that needs it: a socket round trip to the GM, then up to four batch passes. A banner
-rides the pinned header naming what is running — "Looting everything", "Splitting the coin", "Waiting for the
-GM" — and the sections dim beneath it. Single-row actions additionally spin on their own row.
+Loot All is the case that needs it: a socket round trip to the GM, then up to four batch passes. A spinner
+panel floats over the dimmed list naming what is running — "Looting everything", "Splitting the coin",
+"Waiting for the GM". Single-row actions additionally spin on their own row.
+
+The panel hangs off a zero-height sticky rail so it stays put however far the list is scrolled without
+competing for `top: 0` with the pinned header. Its colours come from the surface and text tokens: a first
+attempt used `--blacksmith-tool-background` as a `color`, and that token is a **gradient**, which is invalid
+for colour — it fell back to dark text on a dark bar and rendered as a black void. Never use it as a colour.
 
 **There is no per-item progress, and there should not be.** `transferItems` is one call for the whole batch,
 at most two writes per Actor, so nothing observable happens between the first row and the last. Reporting

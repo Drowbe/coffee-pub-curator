@@ -9,8 +9,8 @@ Working checklist for the corpse-looting feature. Tick as you go; note failures 
 ## Setup
 
 - [x] World **restarted** (not just refreshed) since `module.json` gained `"socket": true`.
-- [ ] Blacksmith on a build with `api.tokens`, `api.inventory`, and `transferItems`.
-- [ ] A primary party is set for the world (`game.actors.party`), or Send-to-Party is expected to be off.
+- [x] Blacksmith on a build with `api.tokens`, `api.inventory`, and `transferItems`.
+- [x] A primary party is set for the world (`game.actors.party`), or Send-to-Party is expected to be off.
 - [x] A non-GM player login available, owning **two** characters if possible.
 - [x] `tokenConvertDeadToLoot` on.
 
@@ -45,9 +45,10 @@ game.modules.get('coffee-pub-curator').api.loot
 - [x] Resize the window; corpse card and "Looting as" row stay pinned while rows scroll under them.
 - [x] Titlebar (GM): **Character Sheet** opens the sheet.
 - [x] Titlebar (GM): **Prototype Token** opens the prototype config.
-- [ ] GM double-clicks a quantity → edits in place; Enter commits, Escape reverts, clicking away commits.
-- [ ] Setting a quantity to 0 → confirms, then removes the row.
-- [ ] A player sees no editable quantities.
+- [x] GM double-clicks a quantity → edits in place; Enter commits, Escape reverts, clicking away commits.
+- [x] Setting a quantity to 0 → confirms, then removes the row.
+- [x] A **packed** bag has no editable quantity; empty it and the quantity becomes editable.
+- [x] A player sees no editable quantities.
 - [x] Footer reads `[ Done ]` left, `[ Loot to Party ] [ Loot All ]` right, sized to content.
 - [x] Window stays draggable while a dialog is open.
 
@@ -87,16 +88,18 @@ game.modules.get('coffee-pub-curator').api.loot
 ## 6. Loot All
 
 - [x] Loot All as a **player** completes (this is the one never confirmed working).
-- [ ] Loot All shows a "Looting everything…" banner while it runs, and the banner stays visible when the
-      list is scrolled.
+- [x] Loot All shows a floating spinner reading "Looting everything…" over the dimmed list, readable, and
+  ```
+  still visible when the list is scrolled.
+  ```
 - [x] Loot All over a corpse holding a **packed bag** → everything else moves, bag reported left behind.
   ```
   *Blacksmith flags this as the most likely to look fine while being wrong.*
   ```
 - [x] Corpse with two identical stacks → they arrive as **one** stack.
-- [ ] Packed bags are **visible**, with the bag and its contents inside one dotted box.
-- [ ] Empty a bag row by row → its controls reappear and the bag can be taken.
-- [ ] **Loot All takes the bags too** — contents first, then the emptied bags, in one action.
+- [x] Packed bags are **visible**, with the bag and its contents inside one dotted box.
+- [x] Empty a bag row by row → its controls reappear and the bag can be taken.
+- [x] **Loot All takes the bags too** — contents first, then the emptied bags, in one action.
 - [x] Loot to Party moves everything to the party actor.
 
 ---
@@ -121,8 +124,8 @@ game.modules.get('coffee-pub-curator').api.loot
 - [x] `lootBuryApproval` off → burying a full body happens with no prompt.
 - [x] `lootBuryWhenEmpty` on → taking the last coin removes the token and closes the windows.
 - [x] `tokenConvertAfterCombat` on → body does **not** convert mid-fight; converts when combat ends.
-- [ ] Same, but revive the creature before combat ends → never converts.
-- [ ] Same, but reload the browser mid-combat → body is not lost, still converts at the end.
+- [x] Same, but revive the creature before combat ends → never converts.
+- [x] Same, but reload the browser mid-combat → body is not lost, still converts at the end.
 
 ---
 
@@ -144,11 +147,11 @@ game.modules.get('coffee-pub-curator').api.loot
 
 Their consolidated list — these five specifically:
 
-- [ ] Loot All leaves a packed bag behind while taking everything else *(§6)*
-- [ ] Duplicate rows coalesce into one stack *(§6)*
-- [ ] Quantity slider does not freeze the window *(§2, §3)*
-- [ ] Two-button footer lays out correctly *(§2)*
-- [ ] **No** `dnd5eencumbered0` **console errors** looting several items onto a near-encumbered character
+- [x] Loot All leaves a packed bag behind while taking everything else *(§6)*
+- [x] Duplicate rows coalesce into one stack *(§6)*
+- [x] Quantity slider does not freeze the window *(§2, §3)*
+- [x] Two-button footer lays out correctly *(§2)*
+- [x] **No** `dnd5eencumbered0` **console errors** looting several items onto a near-encumbered character
 
 The last one is where a failure is most interesting to them now: both known causes are fixed, so a
 reappearance means something unknown is writing twice to an Actor.

@@ -73,7 +73,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         takeAll: (_event, _target, win) => win.run(() => win.takeAll()),
         allToParty: (_event, _target, win) => win.run(() => win.allToParty()),
         bury: (_event, _target, win) => win.run(() => win.bury()),
-        changeRecipient: (_event, _target, win) => win.changeRecipient()
+        changeRecipient: (_event, _target, win) => win.changeRecipient(),
+        removeContainer: (_event, target, win) => win.removeContainer(target.dataset.itemId)
     };
 
     constructor(tokenDocument, options = {}) {
@@ -179,12 +180,38 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         input.addEventListener('blur', () => void finish(true));
     }
 
+    /**
+     * Remove a packed container through dnd5e's own delete dialog, which asks whether
+     * the contents go with it and handles the recursion. Reimplementing that would
+     * mean a second answer to a question the system already asks — and getting it
+     * wrong orphans every item inside.
+     */
+    async removeContainer(itemId) {
+        if (!game.user.isGM) return;
+        const token = await this._resolveToken();
+        const item = token?.actor?.items?.get(itemId);
+        if (!item) return;
+        try {
+            await item.deleteDialog();
+        } catch (error) {
+            console.error(`${MODULE.TITLE} | Could not remove ${item.name}:`, error);
+        }
+        await this.render(false);
+    }
+
     async _applyQuantity(itemId, quantity) {
         if (!game.user.isGM) return;
         const token = await this._resolveToken();
         const item = token?.actor?.items?.get(itemId);
         if (!item) return;
         if (Number(item.system?.quantity ?? 0) === quantity) return;
+
+        // The hidden control is the courtesy; this is the guard. Contents may have
+        // changed since the row rendered.
+        if (item.type === 'container' && token.actor.items.some((child) => child.system?.container === item.id)) {
+            notify.warn(`Empty ${item.name} before changing it.`);
+            return;
+        }
 
         try {
             if (quantity > 0) {
@@ -723,8 +750,13 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             const decorate = (item) => ({
                 ...item,
                 busy: item.id === busyRow,
-                // GM-only, and only where there is a number to change.
-                canEditQuantity: game.user.isGM && !item.looted && Number.isFinite(item.quantity),
+                // GM-only, only where there is a number to change, and never on a
+                // packed container: zeroing one deletes it and orphans its contents,
+                // which keep pointing at an id that is no longer on the body.
+                canEditQuantity: game.user.isGM && !item.looted && !item.packed && Number.isFinite(item.quantity),
+                // A packed bag has no quantity worth editing, so the slot carries a
+                // remove control instead.
+                canRemoveContainer: game.user.isGM && !item.looted && item.packed,
                 canTake: Boolean(recipient) && !item.packed && !item.looted,
                 showGive: canGive && !item.packed && !item.looted,
                 showParty: canParty && !item.packed && !item.looted
