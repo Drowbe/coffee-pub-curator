@@ -134,15 +134,15 @@ game.modules.get('coffee-pub-curator').api.loot
 
 New in 13.3.0 and not previously exercised. These are the paths that decide whether a body can be farmed.
 
-- [ ] Loot a body completely → it stops offering Take/Give/Party and Loot All, but **still opens** and shows
+- [x] Loot a body completely → it stops offering Take/Give/Party and Loot All, but **still opens** and shows
       the "Looted by" record.
-- [ ] Kill an NPC, loot it clean, revive it, kill it again → **no new loot**, no chat card, no loot sound.
-- [ ] That re-killed empty body is **not offered at all** — double-click does nothing, because the ledger
+- [x] Kill an NPC, loot it clean, revive it, kill it again → **no new loot**, no chat card, no loot sound.
+- [x] That re-killed empty body is **not offered at all** — double-click does nothing, because the ledger
       went with the revival and there is nothing to show.
-- [ ] Kill an NPC, take *some* of it, revive, kill again → the remainder is still there and lootable, with no
+- [x] Kill an NPC, take *some* of it, revive, kill again → the remainder is still there and lootable, with no
       fresh generation on top.
-- [ ] An NPC that generates no loot at all settles as empty rather than opening an empty window.
-- [ ] With `lootBuryWhenEmpty` on, none of the above matters because the body is removed — confirm it still
+- [x] An NPC that generates no loot at all settles as empty rather than opening an empty window.
+- [x] With `lootBuryWhenEmpty` on, none of the above matters because the body is removed — confirm it still
       announces to everyone.
 
 ## 9. Two clients
