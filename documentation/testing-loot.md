@@ -32,7 +32,6 @@ game.modules.get('coffee-pub-curator').api.loot
 - [x] NPC dies → converts after the delay → loot chat card posts.
 - [x] Double-click the corpse as GM → loot window opens.
 - [x] Double-click as a **player with no permission on the corpse** → window opens, Actor sheet does **not**.
-- [x] Loot button on the chat card opens the window for a player.
 - [x] Double-click an ordinary NPC the player lacks permission on → **nothing happens, no sheet**.
   ```
   *A sheet opening here is a security regression — stop and report to Blacksmith.*
@@ -108,8 +107,7 @@ game.modules.get('coffee-pub-curator').api.loot
 
 ## 8. Settings
 
-- [ ] `lootProximity` at 30 → double-clicking a far corpse **does not open the window**, names the distance.
-- [ ] Move next to it → window opens and looting works.
+- [x] `lootProximity` at 30 → looting from across the map refused with the distance named; works up close.
 - [x] `lootProximity` at 0 → no distance check.
 - [x] `lootAllowInCombat` off → the window **does not open** for a player, with a message; GM unaffected.
 - [x] `lootSendToParty` off → party controls disappear.
@@ -124,11 +122,15 @@ game.modules.get('coffee-pub-curator').api.loot
 
 ## 9. Two clients
 
-- [ ] Two players take the same last item → one wins, the other is told, totals unchanged.
-- [ ] Both windows refresh after either take, without reopening.
-- [ ] Both see the same "Looted by" name.
-- [ ] A third player opening the window later sees the same looted rows.
-- [ ] Take the **second** of three rows, then the **first** → all three stay in original order, two struck through.
+- [x] Two players take the same last item → one wins, the other is told, totals unchanged.
+- [x] Both windows refresh after either take, without reopening.
+- [x] Each sees the other's portrait left of "Looting as", with a divider between.
+- [x] One closes their window → their portrait disappears from the other's.
+- [x] One changes who they are looting as → the portrait the other sees updates.
+- [x] One reloads or disconnects without closing → their portrait still disappears.
+- [x] Both see the same "Looted by" name.
+- [x] A third player opening the window later sees the same looted rows.
+- [x] Take the **second** of three rows, then the **first** → all three stay in original order, two struck through.
 
 ---
 
@@ -157,6 +159,7 @@ Not bugs; do not chase these.
 - A window opened **after** an item was taken still shows the looted row (it reads the Token's ledger).
 - Currency has no "looted by" — a denomination is a balance several people can draw down.
 - A resized window resets to 520x560 next time it opens; position is not remembered.
+- The loot chat card is an announcement only. Its Loot button was removed; double-click is the way in.
 - A container holding items cannot be taken as one; empty it and the bag becomes takeable. This is
 `api.inventory` v1 — a `transferContainer()` is planned. See `plan-loot.md`.
 - Hovering a corpse shows the ordinary token pointer. Foundry sets that on every token, so a lootable body

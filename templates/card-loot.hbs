@@ -1,9 +1,10 @@
 {{!--
-    Curator loot card.
+    Curator loot announcement.
 
-    This is an access surface, not only an announcement: the button is the one loot
-    entry point with no canvas permission gate, so it works for every player and for
-    installs whose Blacksmith predates the token interaction registry.
+    Announcement only. The Loot button that used to live here was the Phase 1 entry
+    point, from before Blacksmith's token interaction registry existed; double-click
+    now covers it properly and honours proximity and combat, which a chat button
+    could only report after the fact.
 
     Blacksmith's card classes are reused deliberately so this matches every other
     Coffee Pub chat card. There is no styling API for chat cards.
@@ -15,10 +16,5 @@
     </div>
     <div class="section-content">
         <p>{{tokenName}} has been defeated and dropped their belongings!</p>
-        {{#if tokenUuid}}
-            <button type="button" class="curator-loot-card-button" data-curator-loot-open="{{tokenUuid}}">
-                <i class="fa-solid fa-hand-holding-heart"></i> Loot {{tokenName}}
-            </button>
-        {{/if}}
     </div>
 </div>

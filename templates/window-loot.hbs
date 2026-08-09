@@ -23,6 +23,17 @@
         </section>
 
         <section class="curator-loot-section curator-loot-actor">
+            {{#if looters.length}}
+                {{!-- Everyone else with this body open right now. --}}
+                <div class="curator-loot-looters">
+                    {{#each looters}}
+                        <div class="curator-loot-looter" data-tooltip="{{name}} is looting this body">
+                            <img src="{{img}}" alt="{{name}}">
+                        </div>
+                    {{/each}}
+                </div>
+                <div class="curator-loot-looters-divider" aria-hidden="true"></div>
+            {{/if}}
             {{#if hasRecipient}}
                 <div class="curator-loot-actor-image"><img src="{{recipientImg}}" alt=""></div>
                 <div class="curator-loot-actor-copy">

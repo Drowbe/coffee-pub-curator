@@ -47,7 +47,7 @@
     "tokenLootSound-Label": "Loot Conversion Sound",
     "tokenLootSound-Hint": "",
     "tokenLootChatMessage-Label": "Loot Chat Message",
-    "tokenLootChatMessage-Hint": "Post a loot card to chat when a creature drops its belongings. The card carries the Loot button, which is the only way to open a corpse without canvas permission on its token, so turning this off removes that access path.",
+    "tokenLootChatMessage-Hint": "Announce in chat when a creature drops its belongings.",
     "headingH3LootLooting-Label": "Looting",
     "headingH3LootLooting-Hint": "How players interact with a prepared corpse.",
     "lootBuryApproval-Label": "GM Approves Burying a Full Body",

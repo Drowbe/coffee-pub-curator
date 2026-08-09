@@ -96,7 +96,17 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const win = new this(tokenDocument);
         this._windows.set(tokenDocument.uuid, win);
         await win.render(true);
+        LootManager.announcePresence(tokenDocument.uuid);
         return win;
+    }
+
+    static isOpenFor(tokenUuid) {
+        return this._windows.has(tokenUuid);
+    }
+
+    /** The character the local user is looting as, for presence broadcasts. */
+    static recipientFor(tokenUuid) {
+        return this._windows.get(tokenUuid)?.recipient ?? null;
     }
 
     static closeForToken(tokenUuid) {
@@ -133,6 +143,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (!uuid) return;
         this._recipientUuid = uuid;
         _lastRecipientUuid = uuid;
+        LootManager.announcePresence(this.tokenUuid);
         void this.render(false);
     }
 
@@ -205,6 +216,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const pending = blacksmith.dialog.wait({
             title,
             content: wrapper,
+            classes: ['curator-dialog'],
             // Secondary action left, primary right — the same order as the window footer.
             buttons: [
                 { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
@@ -238,7 +250,6 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             title: 'Looting As',
             actors: options,
             selectedUuid: this.recipient?.uuid,
-            confirmLabel: 'Use This Character',
             confirmIcon: 'fa-solid fa-user-check'
         });
         if (picked) this.setRecipient(picked);
@@ -270,6 +281,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         const pending = blacksmith.dialog.wait({
             title: `Take ${label}`,
             content: wrapper,
+            classes: ['curator-dialog'],
             // Secondary action left, primary right — the same order as the window footer.
             buttons: [
                 { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
@@ -433,8 +445,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             notify.info('The GM declined to bury this body.');
             return;
         }
-        if (result?.ok) notify.info('The body has been buried.');
-        else this._report(result, '');
+        // Success is announced to everyone by the GM, so saying it again here would
+        // show the requester two messages for one action.
+        if (!result?.ok) this._report(result, '');
     }
 
     /**
@@ -608,6 +621,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             canGive: LootManager.sendToPlayerEnabled,
             recipientName: recipient?.name ?? null,
             recipientImg: recipient?.img ?? 'icons/svg/mystery-man.svg',
+            looters: LootManager.getLooters(this.tokenUuid),
             hasRecipientChoice: options.length > 1,
             hasRecipient: Boolean(recipient)
         });
@@ -674,6 +688,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
 
     _onClose(options) {
         this.constructor._windows.delete(this.tokenUuid);
+        LootManager.clearPresence(this.tokenUuid);
         super._onClose?.(options);
     }
 }

@@ -7,13 +7,12 @@ import { transferItem, transferItems, transferCurrency, isPhysical, denomination
 // Shared teardown handle for every claim and hook this manager registers.
 const CONTEXT = 'curator-loot';
 
-// The loot card marks its button with the corpse Token UUID.
-const CARD_BUTTON_ATTR = 'data-curator-loot-open';
-
 const CHANNEL = `module.${MODULE.ID}`;
 const REQUEST = 'lootRequest';
 const RESPONSE = 'lootResponse';
 const REFRESH = 'lootRefresh';
+const PRESENCE = 'lootPresence';
+const NOTICE = 'lootNotice';
 
 // A player request that never reaches an answering GM must fail, not hang.
 const REQUEST_TIMEOUT_MS = 20000;
@@ -24,14 +23,16 @@ export class LootManager {
 
     static _interactionId = null;
     static _pending = new Map();
+    // tokenUuid -> Map(userId -> { name, img }). Who has a loot window open right now.
+    static _presence = new Map();
     // Ledger writes are read-modify-write, and requests are handled concurrently,
     // so they are chained rather than racing each other.
     static _ledgerWrites = Promise.resolve();
 
     static initialize() {
         this._registerTokenInteraction();
-        this._registerCardHandler();
         this._registerSocket();
+        this._registerPresenceCleanup();
     }
 
     static teardown() {
@@ -104,48 +105,6 @@ export class LootManager {
             });
         } catch (error) {
             console.error(`${MODULE.TITLE} | Failed to claim token double-click:`, error);
-        }
-    }
-
-    static _registerCardHandler() {
-        HookManager.registerHook({
-            name: 'renderChatMessageHTML',
-            description: 'Curator: wire the loot card open button',
-            context: CONTEXT,
-            key: 'curator-loot-card',
-            priority: 3,
-            callback: (_message, html) => this._wireCard(html)
-        });
-    }
-
-    static _wireCard(html) {
-        const root = html?.[0] ?? html;
-        if (typeof root?.querySelectorAll !== 'function') return;
-
-        for (const button of root.querySelectorAll(`[${CARD_BUTTON_ATTR}]`)) {
-            if (button.dataset.curatorLootBound === 'true') continue;
-            button.dataset.curatorLootBound = 'true';
-            button.addEventListener('click', (event) => {
-                event.preventDefault();
-                void this._openFromCard(button.getAttribute(CARD_BUTTON_ATTR));
-            });
-        }
-    }
-
-    static async _openFromCard(tokenUuid) {
-        try {
-            const tokenDocument = tokenUuid ? await fromUuid(tokenUuid) : null;
-            if (!tokenDocument) {
-                notify.warn('That corpse is no longer on the scene.');
-                return;
-            }
-            if (!this.isLootable(tokenDocument)) {
-                notify.warn(`${tokenDocument.name} has nothing left to loot.`);
-                return;
-            }
-            await this.open(tokenDocument);
-        } catch (error) {
-            this._reportOpenFailure(error);
         }
     }
 
@@ -326,6 +285,17 @@ export class LootManager {
     // ===== SOCKET =================================================
     // ==============================================================
 
+    static _registerPresenceCleanup() {
+        HookManager.registerHook({
+            name: 'userConnected',
+            description: 'Curator: drop loot presence for a departing user',
+            context: CONTEXT,
+            key: 'curator-loot-presence',
+            priority: 3,
+            callback: (user, connected) => { if (!connected) this._dropUser(user.id); }
+        });
+    }
+
     static _registerSocket() {
         game.socket.on(CHANNEL, (data) => {
             if (data?.action === REQUEST) {
@@ -345,11 +315,84 @@ export class LootManager {
                 this._pending.get(data.requestId)?.(data.result);
                 return;
             }
+            if (data?.action === NOTICE) {
+                notify.info(data.message);
+                return;
+            }
+            if (data?.action === PRESENCE) {
+                this._onPresence(data);
+                return;
+            }
             if (data?.action === REFRESH) {
                 if (data.closed) LootWindow.closeForToken(data.tokenUuid);
                 else LootWindow.refreshForToken(data.tokenUuid);
             }
         });
+    }
+
+    // ==============================================================
+    // ===== PRESENCE ===============================================
+    // ==============================================================
+    // Peer to peer rather than GM-brokered: this is display only, nothing
+    // authoritative hangs off it, and routing it through the GM would make an
+    // absent GM look like an empty room.
+
+    static getLooters(tokenUuid, { excludeSelf = true } = {}) {
+        const room = this._presence.get(tokenUuid);
+        if (!room) return [];
+        return [...room.entries()]
+            .filter(([userId]) => !excludeSelf || userId !== game.user.id)
+            .map(([userId, entry]) => ({ userId, ...entry }));
+    }
+
+    /** What this client looks like to everyone else in the room. */
+    static _selfPresence(tokenUuid) {
+        const actor = LootWindow.recipientFor(tokenUuid);
+        return {
+            name: actor?.name ?? game.user.name,
+            img: actor?.img ?? game.user.avatar ?? 'icons/svg/mystery-man.svg'
+        };
+    }
+
+    static announcePresence(tokenUuid) {
+        this._setPresence(tokenUuid, game.user.id, this._selfPresence(tokenUuid));
+        game.socket.emit(CHANNEL, { action: PRESENCE, state: 'open', tokenUuid, userId: game.user.id, ...this._selfPresence(tokenUuid) });
+        // Ask anyone already here to announce, so a late arrival sees the room.
+        game.socket.emit(CHANNEL, { action: PRESENCE, state: 'ping', tokenUuid, userId: game.user.id });
+    }
+
+    static clearPresence(tokenUuid) {
+        this._presence.get(tokenUuid)?.delete(game.user.id);
+        game.socket.emit(CHANNEL, { action: PRESENCE, state: 'close', tokenUuid, userId: game.user.id });
+    }
+
+    static _setPresence(tokenUuid, userId, entry) {
+        if (!this._presence.has(tokenUuid)) this._presence.set(tokenUuid, new Map());
+        this._presence.get(tokenUuid).set(userId, entry);
+    }
+
+    static _onPresence(data) {
+        const { state, tokenUuid, userId } = data ?? {};
+        if (!tokenUuid || !userId || userId === game.user.id) return;
+
+        if (state === 'close') {
+            this._presence.get(tokenUuid)?.delete(userId);
+        } else if (state === 'ping') {
+            // Only answer if this client is actually in that room.
+            if (!LootWindow.isOpenFor(tokenUuid)) return;
+            game.socket.emit(CHANNEL, { action: PRESENCE, state: 'open', tokenUuid, userId: game.user.id, ...this._selfPresence(tokenUuid) });
+            return;
+        } else {
+            this._setPresence(tokenUuid, userId, { name: data.name, img: data.img });
+        }
+        LootWindow.refreshForToken(tokenUuid);
+    }
+
+    /** A client that vanishes never sends `close`, so drop it when it disconnects. */
+    static _dropUser(userId) {
+        for (const [tokenUuid, room] of this._presence) {
+            if (room.delete(userId)) LootWindow.refreshForToken(tokenUuid);
+        }
     }
 
     /** Exactly one GM answers, so two connected GMs cannot both mutate. */
@@ -452,9 +495,11 @@ export class LootManager {
     static async _buryIfEmptied(tokenDocument) {
         if (this.setting('lootBuryWhenEmpty', false) !== true) return;
         if (!this._remainingOn(tokenDocument.actor).empty) return;
+        const name = tokenDocument.name;
         LootWindow.closeForToken(tokenDocument.uuid);
         game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
         await tokenDocument.delete();
+        this.broadcastNotice(`${name} was picked clean and buried.`);
     }
 
     /** Token centre in pixels, so a large creature is measured from its middle. */
@@ -685,9 +730,11 @@ export class LootManager {
         // An empty body is buried without asking. A body that still holds something
         // is destroyed by burying it, so that is the case the GM signs off on.
         if (empty || this.setting('lootBuryApproval', true) !== true) {
+            const quick = this._askerFor(user, payload.recipientUuid);
             LootWindow.closeForToken(tokenDocument.uuid);
             game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
             await tokenDocument.delete();
+            this.broadcastNotice(`${quick.name} buried ${tokenDocument.name}.`);
             return { ok: true };
         }
 
@@ -714,6 +761,7 @@ export class LootManager {
             const outcome = await dialog.wait({
                 title: 'Bury Request',
                 content: body,
+                classes: ['curator-dialog'],
                 modal: true,
                 buttons: [
                     { action: 'cancel', label: 'Decline', icon: 'fa-solid fa-xmark' },
@@ -734,7 +782,18 @@ export class LootManager {
         LootWindow.closeForToken(tokenDocument.uuid);
         game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
         await tokenDocument.delete();
+        this.broadcastNotice(`${asker.name} buried ${tokenDocument.name}.`);
         return { ok: true };
+    }
+
+    /**
+     * A body leaving the canvas is everyone's business, not just the requester's —
+     * anyone with the window open sees it close and deserves to know why.
+     */
+    static broadcastNotice(message) {
+        if (!message) return;
+        game.socket.emit(CHANNEL, { action: NOTICE, message });
+        notify.info(message);
     }
 
     static _broadcastRefresh(tokenUuid) {

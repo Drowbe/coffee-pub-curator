@@ -186,15 +186,16 @@ A canvas token context menu is therefore *stricter* than double-click, not a wor
 revision of this section called the context menu a zero-dependency fallback; that was wrong and is
 corrected here.
 
-#### Phase 1 entry point: the corpse chat card
+#### The corpse chat card is an announcement, not an entry point
 
-Curator already posts a loot chat message on death (`tokenLootChatMessage`). Add the loot entry point there.
-Chat cards carry no canvas permission gate, every player can see and click one, and it needs nothing from
-Blacksmith. The card carries the Token UUID; the button calls `LootManager.open`, which re-resolves and
-re-validates. This is what unblocks Phases 2 through 4.
+It briefly carried a Loot button, as the Phase 1 entry point from before Blacksmith's interaction registry
+existed. **That button has been removed.** Double-click now covers the case properly, and a chat button was
+actively worse once proximity and combat gating arrived: it can only report a refusal after the click, so a
+player too far from the body gets a button that looks broken. Two ways in, one of which fails for reasons
+the other has already accounted for, is worse than one.
 
-Consequence for the setting: with the card as the interaction surface, `tokenLootChatMessage` can no longer
-simply suppress it. Split announcement from access, or make the card unconditional when looting is enabled.
+Removing it also un-couples `tokenLootChatMessage`. While the card was the access path, turning the
+announcement off removed the only way in for some players; it is once again a plain announcement toggle.
 
 #### Canvas gestures: `blacksmith.tokens.registerInteraction` — shipped
 
@@ -295,7 +296,16 @@ Both actor pickers — Looting As and Give To — use `blacksmith.entityList` in
 select and not `dialog.choose`. Rows carry the portrait and the name only: the dialog title already says what
 is being chosen, so a prompt line and a per-row type label both just repeat it. The window shows the current
 recipient on its own row — small circular portrait, "Looting as", the name, and a Change button — so it reads
-like the item and currency rows rather than as a caption on the corpse card. The one-character case shows the
+like the item and currency rows rather than as a caption on the corpse card. Anyone else with the same body
+open appears to the left of that, separated by a divider, so it is obvious when two people are working the
+same corpse. Corpse, recipient, and looter portraits share one treatment and differ only in size — the rule
+is written once so restyling any of them moves all three together.
+
+Presence is peer to peer over Curator's socket, not GM-brokered: it is display only, nothing authoritative
+hangs off it, and routing it through the GM would make an absent GM look like an empty room. A window
+announces on open, pings so anyone already there re-announces, and announces again when the acting character
+changes. Departure is covered twice — an explicit close message, and a `userConnected` hook that drops a
+client which vanished without sending one. The one-character case shows the
 row without a Change button and costs no clicks.
 
 Row action buttons are icon-only with tooltips. Take, Give, and Party sit together in a cluster, and one
@@ -425,6 +435,16 @@ into silence — a dead button with no error.
 `.blacksmith-window-btn-primary` carried `width: 300px` until 2026-08-08, which stretched the primary action
 across a flex footer. Fixed in the shared class; Curator's local override has been removed. Do not
 reintroduce a width reset — if a footer button looks wrong, it is a shared-class problem.
+
+### Announcing a burial
+
+A body leaving the canvas goes to **every** client, not just the requester's. Anyone with the window open
+watches it close, and an unexplained disappearance is worse than a notice. All three paths announce: an
+approved bury, a bury with approval turned off, and the automatic `lootBuryWhenEmpty` sweep — the last most
+of all, since nobody clicked anything.
+
+The GM broadcasts it after the delete succeeds, so the message only ever follows a burial that happened. The
+requester's window deliberately stays quiet on success; it would otherwise show two messages for one action.
 
 ### Sizing and pinning
 
@@ -656,11 +676,10 @@ first deliverable. Neither blocks Phase 1.
 - [x] Remove all Item Piles integration (pulled forward from Phase 5; see section 14).
 - [x] Render current allowed items and currency without mutation.
 - [x] Start `architecture-loot.md` with only implemented state ownership and lifecycle behavior.
-- [x] **Add the loot button to the corpse chat card.** Curator now renders its own `card-loot.hbs` rather
-      than Blacksmith's shared loot-drop block, because the card is an access surface and not only an
-      announcement. Canvas gestures are all permission-gated and are not an alternative; see section 6.
-- [x] Resolve what `tokenLootChatMessage` controls once the card carries the entry point. It still gates
-      the card; the setting hint now states that turning it off removes the permission-free access path.
+- [x] Curator renders its own `card-loot.hbs` rather than Blacksmith's shared loot-drop block, so it owns
+      its own message. Announcement only — the Loot button it briefly carried has been removed; see
+      section 6.
+- [x] `tokenLootChatMessage` is a plain announcement toggle again.
 - [ ] Decide and record the repeat-death behavior from section 12.
 
 ### Phase 1b — Canvas double-click
@@ -785,7 +804,7 @@ Curator-side additions:
   failure across Blacksmith's two evaluation calls and report it rather than working around it.
 - Released-Blacksmith install without the registry: registration is skipped silently and the chat card still
   works.
-- Chat-card entry point works for a player who cannot interact with the token at all.
+- Double-click is the only entry point; the chat card announces and nothing more.
 
 ### Permissions and recipients
 
