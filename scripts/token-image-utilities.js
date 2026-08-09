@@ -292,21 +292,25 @@ export class TokenImageUtilities {
                 return;
             }
 
-            await LootManager.markReady(token.document, generationId);
-            
-           
+            const settled = await LootManager.markReady(token.document, generationId);
+
+            // Nothing new dropped on a re-death: generation is once per token, so the
+            // body is only offering leftovers. Announcing it again would send players
+            // back to something they already emptied, and combat healing makes a
+            // creature dying twice ordinary rather than rare.
+            if (lootAlreadyAdded || settled !== LootManager.STATES.READY) {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ${token.name} settled as ${settled || 'stale'}; no new loot announced`, "", true, false);
+                return;
+            }
+
             // Play sound
             const sound = game.settings.get(MODULE.ID, 'tokenLootSound');
             if (sound && sound !== 'none' && sound !== 'sound-none') {
                 await BlacksmithUtils.playSound(sound, 0.5, false, true);
             }
-            
-            // Send chat message if enabled. The card is Curator's own template rather
-            // than Blacksmith's shared loot-drop block because it now carries the loot
-            // button — the only entry point with no canvas permission gate, and the
-            // fallback wherever Blacksmith predates the token interaction registry.
-            // Disabling this setting therefore removes that access path; see
-            // documentation/plan-loot.md section 6.
+
+            // Curator's own card rather than Blacksmith's shared loot-drop block, so
+            // Curator owns its own message. Announcement only.
             if (game.settings.get(MODULE.ID, 'tokenLootChatMessage')) {
                 const messageHtml = await foundry.applications.handlebars.renderTemplate(
                     'modules/coffee-pub-curator/templates/card-loot.hbs',

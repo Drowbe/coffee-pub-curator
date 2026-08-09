@@ -55,7 +55,7 @@ Hooks.once('ready', async function () {
 
     // Exposed before the GM gate below: the token interaction claim has to be
     // verified from a non-GM client, because a GM passes every permission predicate
-    // and proves nothing about the bypass. See documentation/plan-loot.md section 16.
+    // and proves nothing about the bypass. See documentation/plans/plan-loot.md section 16.
     const curatorModule = game.modules.get(MODULE.ID);
     if (curatorModule) {
         curatorModule.api = { ...(curatorModule.api ?? {}), loot: LootManager };

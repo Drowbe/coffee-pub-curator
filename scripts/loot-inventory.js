@@ -4,7 +4,7 @@
 // every document mutation. Nothing here may grow logic — if a call needs
 // wrapping, it belongs in manager-loot.js.
 //
-// This replaces loot-transfer.js, the temporary adapter that documentation/plan-loot.md
+// This replaces loot-transfer.js, the temporary adapter that documentation/plans/plan-loot.md
 // section 4 allowed while api.inventory was in development. That file is deleted.
 
 import { MODULE } from './const.js';

@@ -745,8 +745,11 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             // the row partial is used at two different context depths, so `../`
             // lookups would mean different things in each.
             const busyRow = this._busy?.row ?? null;
-            const canGive = LootManager.sendToPlayerEnabled;
-            const canParty = Boolean(party) && LootManager.sendToPartyEnabled;
+            // An emptied body still opens for its ledger, but nothing can be taken
+            // from it, so no row offers an action.
+            const takeable = LootManager.isLootable(token);
+            const canGive = takeable && LootManager.sendToPlayerEnabled;
+            const canParty = takeable && Boolean(party) && LootManager.sendToPartyEnabled;
             const decorate = (item) => ({
                 ...item,
                 busy: item.id === busyRow,
@@ -757,7 +760,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                 // A packed bag has no quantity worth editing, so the slot carries a
                 // remove control instead.
                 canRemoveContainer: game.user.isGM && !item.looted && item.packed,
-                canTake: Boolean(recipient) && !item.packed && !item.looted,
+                canTake: takeable && Boolean(recipient) && !item.packed && !item.looted,
                 showGive: canGive && !item.packed && !item.looted,
                 showParty: canParty && !item.packed && !item.looted
             });
@@ -784,7 +787,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         }
 
         const available = items.filter((item) => !item.looted);
-        const canLootAll = !missing && hasBatchTransfer() && (available.length > 0 || currencies.length > 0);
+        const canLootAll = !missing && LootManager.isLootable(token) && hasBatchTransfer()
+            && (available.length > 0 || currencies.length > 0);
 
         const bodyContent = await foundry.applications.handlebars.renderTemplate(TEMPLATE, {
             missing,

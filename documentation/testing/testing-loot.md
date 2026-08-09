@@ -2,7 +2,8 @@
 
 Working checklist for the corpse-looting feature. Tick as you go; note failures inline.
 
-`plan-loot.md` section 16 is the reference matrix — this is the practical order to work through it.
+`../plans/plan-loot.md` section 16 is the reference matrix; `../architecture/architecture-loot.md`
+describes what the system actually does. This file is the practical order to work through it.
 
 ---
 
@@ -170,7 +171,7 @@ Not bugs; do not chase these.
 - A resized window resets to 520x560 next time it opens; position is not remembered.
 - The loot chat card is an announcement only. Its Loot button was removed; double-click is the way in.
 - A container holding items cannot be taken as one; empty it and the bag becomes takeable. This is
-`api.inventory` v1 — a `transferContainer()` is planned. See `plan-loot.md`.
+`api.inventory` v1 — a `transferContainer()` is planned. See `../plans/plan-loot.md`.
 - Hovering a corpse shows the ordinary token pointer. Foundry sets that on every token, so a lootable body
 looks no different; a distinct cursor would have to come from Blacksmith's claim registry.
 - Burying a body mid-combat currently loses its XP. Blacksmith is fixing this at the source; Curator adds

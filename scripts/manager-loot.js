@@ -71,7 +71,7 @@ export class LootManager {
      * Foundry emits no token double-click hook, and the permission predicate runs
      * before the handler, so a corpse is unreachable for a player without LIMITED on
      * the Actor unless the predicate itself is relaxed. Only Blacksmith can do that.
-     * See documentation/plan-loot.md section 6.
+     * See documentation/plans/plan-loot.md section 6.
      */
     static _registerTokenInteraction() {
         const tokens = this._tokensApi();
@@ -96,7 +96,7 @@ export class LootManager {
                 // between them, so anything transient here produces a dead gesture.
                 // Keep it a plain flag read: eligibility, distance, and UUID resolution
                 // belong in open() and in the GM handler.
-                matches: (tokenDocument) => this.isLootable(tokenDocument),
+                matches: (tokenDocument) => this.canOpen(tokenDocument),
                 bypassPermission: true,
                 // A throwing handler is a dead gesture by design — Blacksmith will not
                 // fall through to Foundry once permission has been relaxed, because that
@@ -143,7 +143,7 @@ export class LootManager {
     }
 
     static open(tokenDocument) {
-        if (!this.isLootable(tokenDocument)) return null;
+        if (!this.canOpen(tokenDocument)) return null;
 
         const access = this.checkAccess(tokenDocument);
         if (!access.ok) {
@@ -164,8 +164,23 @@ export class LootManager {
         return tokenDocument?.getFlag(MODULE.ID, this.FLAG) ?? null;
     }
 
+    /** Can things still be taken from it. */
     static isLootable(tokenDocument) {
         return this.getState(tokenDocument)?.state === this.STATES.READY;
+    }
+
+    /**
+     * Can the window be opened at all.
+     *
+     * An emptied body still opens while it has a ledger, because the record of who
+     * took what is the reason anyone reopens a picked-clean corpse. One with nothing
+     * left *and* nothing to show — a body re-killed after a previous life was looted,
+     * whose ledger went with the revival — is not offered.
+     */
+    static canOpen(tokenDocument) {
+        const state = this.getState(tokenDocument);
+        if (state?.state === this.STATES.READY) return true;
+        return state?.state === this.STATES.EMPTY && this.getTaken(tokenDocument).length > 0;
     }
 
     static async markPreparing(tokenDocument) {
@@ -181,14 +196,33 @@ export class LootManager {
         return generationId;
     }
 
+    /**
+     * Settle a prepared corpse into `ready` or `empty`.
+     *
+     * Generation happens once per token, ever — a revived creature does not grow a
+     * new sword to replace the one taken from it, and clearing the marker on revival
+     * would make kill-loot-heal-kill an infinite loot faucet, which ordinary combat
+     * healing reaches without anyone trying.
+     *
+     * @returns {string|false} the state settled on, or false if this generation is stale
+     */
     static async markReady(tokenDocument, generationId) {
         const state = this.getState(tokenDocument);
         if (!state || state.generationId !== generationId) return false;
+        const settled = this._remainingOn(tokenDocument.actor).empty ? this.STATES.EMPTY : this.STATES.READY;
         await tokenDocument.setFlag(MODULE.ID, this.FLAG, {
             ...state,
-            state: this.STATES.READY,
+            state: settled,
             preparedAt: Date.now()
         });
+        return settled;
+    }
+
+    /** Nothing left to take. The ledger stays, so the record survives. */
+    static async markEmpty(tokenDocument) {
+        const state = this.getState(tokenDocument);
+        if (!state || state.state === this.STATES.EMPTY) return false;
+        await tokenDocument.setFlag(MODULE.ID, this.FLAG, { ...state, state: this.STATES.EMPTY });
         return true;
     }
 
@@ -480,6 +514,9 @@ export class LootManager {
         }
 
         if (result.ok) {
+            // A picked-clean body stops being lootable but keeps its ledger, so it
+            // still opens as a record of who took what.
+            if (this._remainingOn(corpse).empty) await this.markEmpty(tokenDocument);
             this._broadcastRefresh(tokenDocument.uuid);
             await this._buryIfEmptied(tokenDocument);
         }

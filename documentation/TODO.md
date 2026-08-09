@@ -1,5 +1,12 @@
 # TODO
 
+Shipped work lives in `CHANGELOG.md`. This file is for what is still open, what must not be repeated, and
+what has been considered but not scheduled.
+
+**Where things go:** `documentation/architecture/` describes implemented systems, `documentation/plans/`
+records intent and reasoning, `documentation/testing/` holds verification checklists. Anything shipped
+belongs in the changelog; anything unresolved belongs here.
+
 ## Curator API (via Blacksmith)
 
 - [ ] **Blacksmith:** Implement module API registration so optional modules (Curator, Scribe, etc.) can register an API object and have it exposed as `BlacksmithAPI.curator`, etc. Same timing as hooks/menubar. See spec in chat (requirements for Blacksmith developer).
@@ -118,12 +125,23 @@ behaviour a shared component lacks, send it to Blacksmith as a change to theirs 
 `const.js` and `settings.js` share names legitimately, since their content is per-module. Anything else
 warrants a diff.
 
+## Open — corpse looting
+
+Shipped in 13.3.0. What is left is comfort, not capability.
+
+- **`transferContainer()` from Blacksmith.** A packed bag cannot move as one document, so a player empties it
+  row by row and then takes the bag. Loot All handles it in multiple passes, but per-row it is tedious with
+  two bags on one body. Blacksmith names it as the intended future method; not requested yet.
+- **`clickRight2` as a secondary gesture.** Available in Blacksmith's claim registry. No use case yet, and it
+  should not be requested without one.
+- **Loot interaction sound.** `plans/plan-loot.md` section 13 lists it; never built. Nobody has asked.
+
 ## Shop Tokens (idea, not scheduled)
 
 Mark a token as a **shop** ahead of time and reuse the corpse-looting machinery with different rules. Recorded
 2026-08-08 as a direction to evaluate, not an accepted feature.
 
-Note this deliberately revisits an explicit exclusion. `plan-loot.md` section 2 rules out "merchants, stores,
+Note this deliberately revisits an explicit exclusion. `plans/plan-loot.md` section 2 rules out "merchants, stores,
 buying, selling, pricing, or restocking" — that was a scoping decision to keep corpse looting shippable, not
 a judgement that shops are wrong. Revisiting it needs a fresh decision, not an assumption that the exclusion
 lapsed.

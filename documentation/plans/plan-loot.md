@@ -1,11 +1,13 @@
 # Curator Looting Plan
 
-**Status:** Phase 1 in progress. Item Piles integration is already fully removed (see section 14).
-Blacksmith has **shipped** `api.tokens.registerInteraction` to `master`, untagged, ahead of `api.inventory`
-(contract in section 6). Curator owes them the unprivileged-client verification pass; nothing of Curator's
-is waiting on Blacksmith except item transfer.
+**Status:** Complete and verified, shipped in 13.3.0. Every phase below is done and the section 16 matrix
+passed — see `../testing/testing-loot.md`.
+
+**This document records intent and the reasoning behind decisions.** For how the system actually behaves,
+read `../architecture/architecture-loot.md`; it describes the implementation and wins any disagreement with
+this file.
 **Target:** Focused corpse looting owned by Curator
-**Architecture record:** Create `architecture-loot.md` as verified behavior lands. Do not copy this plan into the architecture document unchanged.
+**Architecture record:** `../architecture/architecture-loot.md`. It is written from the code, not copied from this plan.
 
 ## 1. Objective
 
@@ -723,11 +725,10 @@ first deliverable. Neither blocks Phase 1.
       `grantCurrency` with structured error codes, per-Actor locking, and rollback.
 - [x] Submit the token-interaction API request. Approved.
 - [x] Blacksmith ships `api.tokens.registerInteraction` (master 4ab16566, untagged). Contract in section 6.
-- [ ] **Run the unprivileged-client verification pass and report back.** Owed to Blacksmith, and gating
-      their release of the feature. It cannot be run from a GM account, because a GM passes every predicate.
-      See the interaction block in section 16.
-- [ ] Blacksmith ships `api.inventory`, `grantItem` first. Curator has no transfer path until this lands.
-- [ ] Blacksmith tests the primitives before Curator consumes them.
+- [x] Run the unprivileged-client verification pass and report back. Confirmed: the bypass works and stays
+      scoped to Curator's claim.
+- [x] Blacksmith ships `api.inventory`, then `transferItems`. Curator uses all four primitives.
+- [x] Blacksmith tests the primitives before Curator consumes them.
 
 ### Phase 1 — State and read-only window
 
@@ -741,7 +742,7 @@ first deliverable. Neither blocks Phase 1.
       its own message. Announcement only — the Loot button it briefly carried has been removed; see
       section 6.
 - [x] `tokenLootChatMessage` is a plain announcement toggle again.
-- [ ] Decide and record the repeat-death behavior from section 12.
+- [x] Decide and record the repeat-death behaviour from section 12. Once per token, ever.
 
 ### Phase 1b — Canvas double-click
 
@@ -756,7 +757,7 @@ replacing a surface.
       synchronously **and** attaches `.catch()`, since `open` is async.
 - [x] Expose `LootManager` on `module.api.loot` for every user, not only the GM, so the section 16 checks
       are runnable from a player console.
-- [ ] **Run the section 16 interaction block against a non-GM login and report results to Blacksmith.**
+- [x] Run the section 16 interaction block against a non-GM login and report results to Blacksmith.
 
 ### Phase 2 — Single-item transfer
 
@@ -769,9 +770,8 @@ replacing a surface.
 - [x] Transfer single Items and partial stacks through `blacksmith.inventory.transferItem`.
 - [x] Structured failure feedback keyed on the primitive's error codes, including the three that need more
       than a sentence — see below.
-- [ ] Verify two clients attempting the same Item. **Blacksmith cannot cover this**: their lock is
-      per-client by design and consumers route through one GM handler, so the cross-client race is Curator's
-      to verify.
+- [x] Verify two clients attempting the same Item — the case Blacksmith's harness cannot reach, since their
+      lock is per-client and consumers route through one GM handler.
 
 ### Phase 3 — Currency, Take All, and generation migration
 
@@ -780,7 +780,7 @@ replacing a surface.
 - [x] Distribute currency evenly across the party, remainder left on the body.
 - [x] Give To, Party, and All to Party.
 - [x] Bury, scoped to Curator corpses and gated on GM approval.
-- [ ] Test partial-failure behavior against a real half-failure.
+- [x] Test partial-failure behaviour, including a packed bag inside a Loot All batch.
 - [x] Migrate loot generation in `loot-utilities.js`. `_addRandomCoins` uses `grantCurrency` with deltas,
       retiring the absolute-total write that raced.
 - [x] `_rollLootTable` accumulates every result across every roll and makes **one** `grantItems` call.
@@ -810,7 +810,7 @@ replacing a surface.
 
 ## 16. Verification Matrix
 
-The working checklist lives in `testing-loot.md`, ordered for actually running through. This section stays
+The working checklist lives in `../testing/testing-loot.md`, ordered for actually running through. This section stays
 the reference: what must hold and why, independent of the order anyone tests it in.
 
 ### Generation and state
@@ -1060,15 +1060,25 @@ The plan records intent and unresolved choices. The architecture document record
 
 Still open:
 
-- Default interaction distance.
-- Default empty-corpse behavior.
-- Whether quantity-one Items transfer immediately or require confirmation.
-- Whether an active GM is mandatory for GM-originated local interaction as well as player interaction.
-- Whether an empty corpse may still open for inspection.
-- Repeat-death loot behavior (section 12). Must be closed in Phase 1.
 - Whether `clickRight2` is worth claiming as a secondary gesture. Do not request it without a use case.
+- Whether `transferContainer()` is worth requesting from Blacksmith. Multi-pass Loot All handles containers,
+  so this is comfort rather than capability — but "take six things, then the bag, twice" is real tedium.
 
 Closed:
+
+- **Repeat-death loot.** Generation is once per token, ever. A revived creature does not grow a replacement
+  for what was taken, and clearing the marker on revival would make kill → loot → heal → kill an infinite
+  loot faucet — which ordinary combat healing reaches without anyone trying to exploit it. A re-killed body
+  offers whatever is left and announces nothing, because nothing new dropped.
+- **Empty-corpse behaviour.** An emptied body stays on the canvas and stops being lootable. It still opens
+  while it has a ledger, because the record of who took what is the reason to reopen a picked-clean corpse.
+  Empty with no ledger is not offered. `lootBuryWhenEmpty` optionally removes the token instead.
+- **Whether an empty corpse opens for inspection.** Yes, when there is something to read. Section 5.
+- **Default interaction distance.** Zero — no requirement. A refusal nobody configured is confusing, and the
+  setting is there for GMs who want it.
+- **Quantity-one Items.** Transfer on click, no confirmation. The prompt appears only above one.
+- **Active GM requirement.** Mandatory for players, who cannot write to a corpse they do not own. A GM acting
+  locally short-circuits the socket and needs nobody.
 
 - **Token gesture.** Canvas double-click via `blacksmith.tokens.registerInteraction` with
   `gesture: 'clickLeft2'`; shipped, not proposed. The corpse chat card stays as the permission-free surface
