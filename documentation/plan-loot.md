@@ -460,6 +460,17 @@ padding so nothing shows above it once the list is scrolled.
 Position and size are not remembered between openings (`rememberPosition: false`), so the window always
 opens near where it is raised. Revisit if a resized window resetting each time proves annoying in play.
 
+### Loot All and packed containers
+
+Loot All runs **several passes**, not one. Blacksmith validates a batch against the state at the start of
+the call, so a bag emptied by that very batch is still packed as far as that call is concerned and stays
+behind — which is what a single-pass Loot All did, leaving a row of empty sacks. Each pass takes everything
+that is not currently a packed container, and the next pass picks up the bags the previous one emptied.
+
+The loop is bounded at four passes and stops as soon as a pass moves nothing, so a permanently failing row
+cannot spin. Nested bags therefore resolve, and a genuinely stuck one is reported as left behind rather than
+retried forever.
+
 ### Why a packed container cannot be taken
 
 This is `api.inventory`'s v1 boundary, not a Curator choice, and it is worth recording so nobody tries to
@@ -488,7 +499,22 @@ Most codes describe a state that will not change, so they get one sentence and n
 `ok: true, merged: false` is **success**, not partial failure — the item arrived as its own row instead of
 joining a stack. Only an explicit `partial` flag on a batch result means something was left behind.
 
-Disable actions while that window has a request in flight. This is user feedback, not the concurrency guarantee.
+Disable actions while that window has a request in flight. This is user feedback, not the concurrency
+guarantee.
+
+### Progress
+
+Loot All is the case that needs it: a socket round trip to the GM, then up to four batch passes. A banner
+rides the pinned header naming what is running — "Looting everything", "Splitting the coin", "Waiting for the
+GM" — and the sections dim beneath it. Single-row actions additionally spin on their own row.
+
+**There is no per-item progress, and there should not be.** `transferItems` is one call for the whole batch,
+at most two writes per Actor, so nothing observable happens between the first row and the last. Reporting
+row-by-row progress would mean looping `transferItem`, which is the thing Blacksmith asked consumers not to
+do. An honest "this is running" beats a fake progress bar.
+
+The busy state is set around the **request only**, not around the whole action. A quantity prompt or a
+recipient picker comes first, and showing a spinner while the user is still deciding would be a lie.
 
 ## 9. Authorization and Concurrency
 
@@ -520,11 +546,21 @@ What Curator owns here is which Items are *offered*:
 - Allowed D&D 5e types are `weapon`, `equipment`, `consumable`, `tool`, `loot`, and `container`. This matches
   the primitive's `ITEM_NOT_TRANSFERABLE` whitelist. Natural weapons, monster features, classes,
   subclasses, spells, and effects must never appear merely because they are embedded Items on the NPC.
-- The corpse is presented flattened: container contents are listed as individual rows.
+- A container and its contents render **inside one dotted box**. The bag keeps the ordinary row surface and
+  its contents sit plain inside the box, so the surface difference alone carries the hierarchy — no indent,
+  no connectors, no divider. Indentation with connector dashes was tried first and read as broken rows
+  rather than as containment; a divider under the bag was tried second and was redundant once the surfaces
+  differed. Presentation only:
+  every row keeps its own controls and the API is still never asked to move a packed bag. A looted content
+  row stays in its group, which is why the ledger records `containerId`.
+- The row markup is a partial (`partial-loot-row.hbs`) used at two different context depths. Every flag it
+  needs is resolved in `getData` rather than looked up with `../`, which would mean different things in each
+  place.
 - **A packed container is shown, not hidden.** It renders with its content count and no Take controls,
   reading "Empty it first". An earlier version omitted it entirely, which made the body read as though the
   bag was never on it while Loot All correctly left it behind — the display and the behavior disagreed.
-  Emptying it row by row makes the bag takeable, since it is then an empty container.
+  Emptying it makes the bag takeable, since it is then an empty container, and its controls reappear on the
+  next render with no special case.
 - Stacking on arrival defaults to `merge`. Curator passes no `stack` override and no `ignoreFlags`; it
   writes no transient flags to Items.
 

@@ -15,7 +15,9 @@
 .curator-loot-section > h3 i { width: 18px; text-align: center; }
 .curator-loot-count { min-width: 20px; padding: 1px 6px; border: 1px solid var(--blacksmith-tool-divider); border-radius: 999px; background: var(--blacksmith-tool-surface-sunken); color: var(--blacksmith-tool-text-muted); font-size: .68rem; text-align: center; }
 
-.curator-loot-subject { display: flex; align-items: center; gap: 11px; padding: 10px; background: linear-gradient(135deg, var(--blacksmith-tool-surface-raised), var(--blacksmith-tool-surface-sunken)); }
+/* A faint red wash mixed into the surfaces rather than laid over them, so the card
+   still follows the Light, Dark, and Glass tool themes instead of painting its own. */
+.curator-loot-subject { display: flex; align-items: center; gap: 11px; padding: 10px; border-color: color-mix(in srgb, #8c2f22 22%, var(--blacksmith-tool-divider)); background: linear-gradient(135deg, color-mix(in srgb, #8c2f22 10%, var(--blacksmith-tool-surface-raised)), color-mix(in srgb, #8c2f22 5%, var(--blacksmith-tool-surface-sunken))); }
 .curator-loot-subject-image,
 .curator-loot-actor-image,
 .curator-loot-looter { overflow: hidden; border: 1px solid var(--blacksmith-tool-border); border-radius: 6px; box-shadow: 0 2px 7px rgba(0,0,0,.22); }
@@ -31,7 +33,7 @@
 .curator-loot-description { margin-top: 4px; color: var(--blacksmith-tool-text-muted); font-size: .72rem; }
 
 .curator-loot-item-list { display: flex; flex-direction: column; gap: 4px; }
-.curator-loot-item { display: grid; grid-template-columns: 38px minmax(0,1fr) 42px auto; gap: 8px; align-items: center; min-width: 0; padding: 5px; border: 1px solid transparent; border-radius: 5px; background: var(--blacksmith-tool-surface-sunken); }
+.curator-loot-item { position: relative; display: grid; grid-template-columns: 38px minmax(0,1fr) 42px auto; gap: 8px; align-items: center; min-width: 0; padding: 5px; border: 1px solid transparent; border-radius: 5px; background: var(--blacksmith-tool-surface-sunken); }
 .curator-loot-item:hover { border-color: var(--blacksmith-tool-divider); background: var(--blacksmith-tool-surface-hover); }
 .curator-loot-item > img { display: block; width: 38px !important; height: 38px !important; max-width: 38px !important; object-fit: cover; border: 1px solid var(--blacksmith-tool-divider); border-radius: 4px; }
 .curator-loot-item-copy { min-width: 0; }
@@ -80,12 +82,24 @@
 .curator-loot-bury { min-height: 28px; margin: 0; padding: 3px 10px; font-size: .7rem; white-space: nowrap; }
 .curator-loot-bury:hover { border-color: #a4432f; color: #a4432f; }
 
-/* A container that still holds something cannot move as one document. */
-.curator-loot-item-packed { border-color: var(--blacksmith-tool-divider, rgba(0,0,0,.2)); border-style: dashed; }
-.curator-loot-blocked { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: var(--blacksmith-tool-text-muted, inherit); font-size: .62rem; letter-spacing: .03em; white-space: nowrap; }
+/* A bag and its contents share one dotted box. Indenting the contents and drawing
+   a connector to each read as broken rows rather than as containment. */
+   .curator-loot-group { display: flex; flex-direction: column; gap: 4px; padding: 0px; border: 2px dashed var(--blacksmith-tool-divider, rgba(0,0,0,.3)); border-radius: 6px; }
+   /* The bag keeps the ordinary row surface; its contents sit plain inside the box.
+      The surface difference carries the hierarchy, so no divider is needed. */
+   .curator-loot-group > .curator-loot-item { background: transparent; margin: 0px -2px 0px -2px; }
+   .curator-loot-group > .curator-loot-item:hover { border-color: transparent; background: var(--blacksmith-tool-surface-hover);}
+   
+   
+   .curator-loot-group > .curator-loot-item:first-child { background: var(--blacksmith-tool-surface-sunken); border-radius: 6px 6px 0px 0px;}
+   .curator-loot-group > .curator-loot-item:first-child:hover { border-color: transparent; background: var(--blacksmith-tool-surface-hover); }
+   
+   .curator-loot-blocked { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: var(--blacksmith-tool-text-muted, inherit); font-size: .62rem; letter-spacing: .03em; white-space: nowrap; }
 
 /* The recipient is its own row so it reads like an item or currency row. */
-.curator-loot-actor { display: flex; gap: 9px; align-items: center; padding: 7px 8px; }
+/* Green against the corpse card's red: the pair reads as who is taking from whom.
+   Same mixing approach, so both follow the tool theme rather than painting over it. */
+.curator-loot-actor { display: flex; gap: 9px; align-items: center; padding: 7px 8px; border-color: color-mix(in srgb, #2f6b33 22%, var(--blacksmith-tool-divider)); background: linear-gradient(135deg, color-mix(in srgb, #2f6b33 10%, var(--blacksmith-tool-surface-raised)), color-mix(in srgb, #2f6b33 5%, var(--blacksmith-tool-surface-sunken))); }
 .curator-loot-actor > .curator-loot-actor-copy { flex: 1 1 auto; }
 
 /* Who else has this body open right now. */
@@ -99,7 +113,13 @@
 
 
 /* In-flight feedback only. The concurrency guarantee is the GM's. */
-.curator-loot-busy .curator-loot-content { pointer-events: none; opacity: .55; }
+.curator-loot-busy .curator-loot-content { pointer-events: none; }
+.curator-loot-busy .curator-loot-section { opacity: .5; }
+
+/* Rides the pinned wrapper, so it stays visible however far the list is scrolled
+   without competing for top: 0 with the header it sits above. */
+.curator-loot-working { display: flex; gap: 8px; align-items: center; justify-content: center; margin: -8px -8px 0; padding: 7px 10px; background: var(--blacksmith-tool-accent, #2f241a); color: var(--blacksmith-tool-background, #fff); font-size: .74rem; letter-spacing: .03em; }
+.curator-loot-busy .curator-loot-working { opacity: 1; }
 
 @media (max-width: 470px) {
     .curator-loot-row-actions > button span { display: none; }

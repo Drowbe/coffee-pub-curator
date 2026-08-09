@@ -6,6 +6,16 @@
               sections, because stacking them would need the first one's height
               hard-coded as the second one's offset. --}}
         <div class="curator-loot-pinned">
+        {{#if busyLabel}}
+            {{!-- Inside the pinned wrapper, not sticky on its own: two elements both
+                  pinned to top 0 would sit on top of each other. Loot All is one
+                  batch call rather than a row at a time, so there is no per-item
+                  progress to report — only an honest "this is running". --}}
+            <div class="curator-loot-working" role="status" aria-live="polite">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>{{busyLabel}}&hellip;</span>
+            </div>
+        {{/if}}
         <section class="curator-loot-section curator-loot-subject">
             <div class="curator-loot-subject-image">
                 <img src="{{portraitImg}}" alt="{{tokenName}}">
@@ -61,48 +71,18 @@
             {{#if hasItems}}
                 <div class="curator-loot-item-list">
                     {{#each items}}
-                        <div class="curator-loot-item{{#if looted}} curator-loot-item-looted{{/if}}{{#if packed}} curator-loot-item-packed{{/if}}" data-item-id="{{id}}">
-                            <img src="{{img}}" alt="">
-                            <div class="curator-loot-item-copy">
-                                <strong>{{name}}</strong>
-                                <span>{{#if packed}}{{contentLabel}}{{else}}{{typeLabel}}{{/if}}</span>
+                        {{#if hasChildren}}
+                            {{!-- Container and its contents share one dotted box. An
+                                  indent with connector dashes read as broken rows. --}}
+                            <div class="curator-loot-group">
+                                {{> "modules/coffee-pub-curator/templates/partial-loot-row.hbs" this}}
+                                {{#each children}}
+                                    {{> "modules/coffee-pub-curator/templates/partial-loot-row.hbs" this}}
+                                {{/each}}
                             </div>
-                            {{#if looted}}
-                                {{!-- The row stays so the body reads as a record of what was on it. --}}
-                                <div class="curator-loot-amount"><small>&nbsp;</small><strong>—</strong></div>
-                                <div class="curator-loot-row-actions">
-                                    <span class="curator-loot-taken"><i class="fa-solid fa-check"></i> Looted by {{by}}</span>
-                                </div>
-                            {{else}}
-                                <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
-                                {{#if packed}}
-                                    <div class="curator-loot-row-actions">
-                                        <span class="curator-loot-blocked" data-tooltip="Take what is inside first; the bag can be taken once it is empty">
-                                            <i class="fa-solid fa-lock"></i> Empty it first
-                                        </span>
-                                    </div>
-                                {{else}}
-                                <div class="curator-loot-row-actions">
-                                    <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="take" data-item-id="{{id}}"
-                                            {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take this">
-                                        <i class="fa-solid fa-hand"></i>
-                                    </button>
-                                    {{#if ../canGive}}
-                                        <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="give" data-item-id="{{id}}"
-                                                data-tooltip="Give to another party member">
-                                            <i class="fa-solid fa-hand-holding-heart"></i>
-                                        </button>
-                                    {{/if}}
-                                    {{#if ../hasParty}}
-                                        <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="party" data-item-id="{{id}}"
-                                                data-tooltip="Send to the party inventory">
-                                            <i class="fa-solid fa-users"></i>
-                                        </button>
-                                    {{/if}}
-                                </div>
-                                {{/if}}
-                            {{/if}}
-                        </div>
+                        {{else}}
+                            {{> "modules/coffee-pub-curator/templates/partial-loot-row.hbs" this}}
+                        {{/if}}
                     {{/each}}
                 </div>
             {{else}}<div class="curator-loot-empty">No lootable items remain.</div>{{/if}}

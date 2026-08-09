@@ -9,6 +9,7 @@ import { ImageCacheManager } from './manager-image-cache.js';
 import { LootUtilities } from './loot-utilities.js';
 import { LootManager } from './manager-loot.js';
 import { HookManager } from './manager-hooks.js';
+import { isTokenAlive } from './document-liveness.js';
 
 /**
  * Token Image Utilities
@@ -285,6 +286,12 @@ export class TokenImageUtilities {
 
             // Epic loot roll is handled by addLootToActor when called above (first time); no second call here.
 
+            // Loot generation awaits; the body may be gone by now.
+            if (!isTokenAlive(token.document)) {
+                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: ${token.name} was removed before loot was ready`, "", true, false);
+                return;
+            }
+
             await LootManager.markReady(token.document, generationId);
             
            
@@ -416,18 +423,19 @@ export class TokenImageUtilities {
                         const timeoutId = setTimeout(async () => {
                             // Find the SPECIFIC token by ID, not just any token with the same actor
                             const lootToken = canvas.tokens.placeables.find(t => t.id === tokenId);
-                            if (lootToken) {
-                                const tokenHP = lootToken.actor.system.attributes.hp.value;
+                            TokenImageUtilities._lootConversionTimeouts.delete(tokenId);
 
-                                if (tokenHP <= 0) {
-                                    await TokenImageUtilities._convertTokenToLoot(lootToken);
-                                }
+                            // Everything below uses the re-found token, never the
+                            // reference captured before the delay: the body may have
+                            // been removed while the timer ran.
+                            if (!lootToken || !isTokenAlive(lootToken.document)) return;
+
+                            if (Number(lootToken.actor?.system?.attributes?.hp?.value ?? 1) <= 0) {
+                                await TokenImageUtilities._convertTokenToLoot(lootToken);
                             }
 
-                            await TokenImageUtilities.updateTokenImage(token.document, 'loot');
-
-                            // Clean up the timeout ID after execution
-                            TokenImageUtilities._lootConversionTimeouts.delete(tokenId);
+                            if (!isTokenAlive(lootToken.document)) return;
+                            await TokenImageUtilities.updateTokenImage(lootToken.document, 'loot');
                         }, delay);
 
                         // Store the timeout ID for cleanup

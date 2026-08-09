@@ -84,13 +84,16 @@ game.modules.get('coffee-pub-curator').api.loot
 ## 6. Loot All
 
 - [x] Loot All as a **player** completes (this is the one never confirmed working).
+- [ ] Loot All shows a "Looting everything…" banner while it runs, and the banner stays visible when the
+      list is scrolled.
 - [x] Loot All over a corpse holding a **packed bag** → everything else moves, bag reported left behind.
   ```
   *Blacksmith flags this as the most likely to look fine while being wrong.*
   ```
 - [x] Corpse with two identical stacks → they arrive as **one** stack.
-- [ ] Packed bags are **visible** in the list, showing their content count and "Empty it first".
-- [ ] Empty a bag row by row → the bag becomes takeable.
+- [ ] Packed bags are **visible**, with the bag and its contents inside one dotted box.
+- [ ] Empty a bag row by row → its controls reappear and the bag can be taken.
+- [ ] **Loot All takes the bags too** — contents first, then the emptied bags, in one action.
 - [x] Loot to Party moves everything to the party actor.
 
 ---

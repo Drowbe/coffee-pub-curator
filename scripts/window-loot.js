@@ -8,6 +8,8 @@ import { isPhysical, denominations, hasBatchTransfer } from './loot-inventory.js
 import { LootManager } from './manager-loot.js';
 
 const TEMPLATE = 'modules/coffee-pub-curator/templates/window-loot.hbs';
+const ROW_PARTIAL = 'modules/coffee-pub-curator/templates/partial-loot-row.hbs';
+let _partialsReady = null;
 const CURRENCY_LABELS = { cp: 'Copper', sp: 'Silver', ep: 'Electrum', gp: 'Gold', pp: 'Platinum' };
 
 // Remembered across windows so a player with two characters is not asked twice.
@@ -172,14 +174,23 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         }
     }
 
-    async _send(op, payload) {
+    async _send(op, payload, busy = {}) {
         const token = await this._resolveToken();
         const state = LootManager.getState(token);
-        return LootManager.request(op, {
-            tokenUuid: this.tokenUuid,
-            generationId: state?.generationId ?? null,
-            ...payload
-        });
+
+        this._busy = { row: busy.row ?? null, label: busy.label ?? 'Working' };
+        await this.render(false);
+
+        try {
+            return await LootManager.request(op, {
+                tokenUuid: this.tokenUuid,
+                generationId: state?.generationId ?? null,
+                ...payload
+            });
+        } finally {
+            // run() re-renders once the action settles.
+            this._busy = null;
+        }
     }
 
     /**
@@ -331,7 +342,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (!context) return;
         const amount = await this._askQuantity(context.item.name, context.quantity);
         if (!amount) return;
-        this._report(await this._send('item', { itemId, quantity: amount, recipientUuid: recipient.uuid }),
+        this._report(
+            await this._send('item', { itemId, quantity: amount, recipientUuid: recipient.uuid },
+                { row: itemId, label: `Taking ${context.item.name}` }),
             `${recipient.name} took ${amount > 1 ? `${amount} ` : ''}${context.item.name}.`);
     }
 
@@ -357,7 +370,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (!amount) return;
 
         const recipient = choices.find((actor) => actor.uuid === recipientUuid);
-        this._report(await this._send('item', { itemId, quantity: amount, recipientUuid }),
+        this._report(
+            await this._send('item', { itemId, quantity: amount, recipientUuid },
+                { row: itemId, label: `Giving ${context.item.name}` }),
             `${context.item.name} given to ${recipient?.name ?? 'the party'}.`);
     }
 
@@ -371,7 +386,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (!context) return;
         const amount = await this._askQuantity(context.item.name, context.quantity);
         if (!amount) return;
-        this._report(await this._send('item', { itemId, quantity: amount, recipientUuid: party.uuid }),
+        this._report(
+            await this._send('item', { itemId, quantity: amount, recipientUuid: party.uuid },
+                { row: itemId, label: `Sending ${context.item.name}` }),
             `${context.item.name} sent to ${party.name}.`);
     }
 
@@ -386,7 +403,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (held < 1) return;
         const amount = await this._askQuantity(CURRENCY_LABELS[denom] ?? denom, held);
         if (!amount) return;
-        this._report(await this._send('currency', { currency: { [denom]: amount }, recipientUuid: recipient.uuid }),
+        this._report(
+            await this._send('currency', { currency: { [denom]: amount }, recipientUuid: recipient.uuid },
+                { label: `Taking ${amount} ${denom.toUpperCase()}` }),
             `${recipient.name} took ${amount} ${denom.toUpperCase()}.`);
     }
 
@@ -401,12 +420,14 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         if (held < 1) return;
         const amount = await this._askQuantity(CURRENCY_LABELS[denom] ?? denom, held);
         if (!amount) return;
-        this._report(await this._send('currency', { currency: { [denom]: amount }, recipientUuid: party.uuid }),
+        this._report(
+            await this._send('currency', { currency: { [denom]: amount }, recipientUuid: party.uuid },
+                { label: `Sending ${amount} ${denom.toUpperCase()}` }),
             `${amount} ${denom.toUpperCase()} sent to ${party.name}.`);
     }
 
     async distributeCurrency() {
-        const result = await this._send('distribute', {});
+        const result = await this._send('distribute', {}, { label: 'Splitting the coin' });
         if (result?.code === 'NOT_ENOUGH_TO_SPLIT') {
             notify.warn(`There is not enough here to split ${result.members} ways.`);
             return;
@@ -423,7 +444,8 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             notify.warn('You have no character able to receive loot.');
             return;
         }
-        this._report(await this._send('takeAll', { recipientUuid: recipient.uuid }),
+        this._report(
+            await this._send('takeAll', { recipientUuid: recipient.uuid }, { label: 'Looting everything' }),
             `${recipient.name} took everything.`);
     }
 
@@ -433,14 +455,16 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             notify.warn('No primary party is set for this world.');
             return;
         }
-        this._report(await this._send('takeAll', { recipientUuid: party.uuid }),
+        this._report(
+            await this._send('takeAll', { recipientUuid: party.uuid }, { label: `Sending everything to ${party.name}` }),
             `Everything sent to ${party.name}.`);
     }
 
     async bury() {
         // The character being looted as travels with the request so the GM's prompt
         // can show who is actually asking.
-        const result = await this._send('bury', { recipientUuid: this.recipient?.uuid ?? null });
+        const result = await this._send('bury', { recipientUuid: this.recipient?.uuid ?? null },
+            { label: 'Waiting for the GM' });
         if (result?.code === 'BURY_DECLINED') {
             notify.info('The GM declined to bury this body.');
             return;
@@ -537,9 +561,20 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     // ==============================================================
 
     async getData() {
+        // Registered once; the row markup is shared by the standalone and grouped
+        // call sites, so it cannot drift between them.
+        _partialsReady ??= foundry.applications.handlebars.loadTemplates([ROW_PARTIAL]);
+        await _partialsReady;
+
         const token = await this._resolveToken();
         const actor = token?.actor;
         const missing = !token || !actor;
+
+        // Declared before the row build below uses them: `const` is hoisted but not
+        // initialised, so referencing them earlier is a ReferenceError, not undefined.
+        const party = LootManager.getPartyActor();
+        const options = this.recipients;
+        const recipient = this.recipient;
 
         let items = [];
         let currencies = [];
@@ -575,7 +610,12 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
 
             // Looted rows come from the Token's ledger, not from this window's memory,
             // so they are the same on every client and survive reopening the window.
-            const taken = LootManager.getTaken(token).map((entry) => ({ ...entry, id: entry.itemId, looted: true }));
+            const taken = LootManager.getTaken(token).map((entry) => ({
+                ...entry,
+                id: entry.itemId,
+                containerId: entry.containerId ?? null,
+                looted: true
+            }));
             items = [...items.map((item) => ({ ...item, looted: false })), ...taken];
 
             // A looted row holds its original place rather than sliding to the bottom.
@@ -590,6 +630,33 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                 items.sort((a, b) => rank(a.id) - rank(b.id));
             }
 
+            // Every flag a row needs is resolved here rather than in the template:
+            // the row partial is used at two different context depths, so `../`
+            // lookups would mean different things in each.
+            const busyRow = this._busy?.row ?? null;
+            const canGive = LootManager.sendToPlayerEnabled;
+            const canParty = Boolean(party) && LootManager.sendToPartyEnabled;
+            const decorate = (item) => ({
+                ...item,
+                busy: item.id === busyRow,
+                canTake: Boolean(recipient) && !item.packed && !item.looted,
+                showGive: canGive && !item.packed && !item.looted,
+                showParty: canParty && !item.packed && !item.looted
+            });
+
+            // A container carries its contents rather than the list being flattened,
+            // so the two render inside one box. Presentation only — every row keeps
+            // its own controls and the API is still never asked to move a packed bag.
+            const byId = new Map(items.map((item) => [item.id, item]));
+            items = items
+                .filter((item) => !(item.containerId && byId.has(item.containerId)))
+                .map((item) => {
+                    const children = item.type === 'container'
+                        ? items.filter((child) => child.containerId === item.id).map(decorate)
+                        : [];
+                    return { ...decorate(item), children, hasChildren: children.length > 0 };
+                });
+
             currencies = denominations().map((key) => ({
                 key,
                 label: CURRENCY_LABELS[key],
@@ -597,10 +664,6 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                 abbreviation: key.toUpperCase()
             })).filter((entry) => entry.value > 0);
         }
-
-        const party = LootManager.getPartyActor();
-        const options = this.recipients;
-        const recipient = this.recipient;
 
         const available = items.filter((item) => !item.looted);
         const canLootAll = !missing && hasBatchTransfer() && (available.length > 0 || currencies.length > 0);
@@ -617,6 +680,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             hasCurrency: currencies.length > 0,
             isGM: game.user.isGM,
             partyName: party?.name ?? null,
+            busyLabel: this._busy?.label ?? null,
             hasParty: Boolean(party) && LootManager.sendToPartyEnabled,
             canGive: LootManager.sendToPlayerEnabled,
             recipientName: recipient?.name ?? null,

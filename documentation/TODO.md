@@ -56,8 +56,8 @@ nothing, so there is no ordering hazard today.
 
 ## Async writes must re-check the document still exists
 
-Fixed 2026-08-08 in `token-image-replacement.js`, reported by Blacksmith whose harness creates and deletes
-tokens fast enough to expose it. Recorded because the shape will recur.
+Reported by Blacksmith 2026-08-08; four instances found and fixed in Curator the same day. Recorded as a
+pattern because it has now bitten two modules, in code neither team was thinking about at the time.
 
 `_onTokenCreated` runs a settle delay and a matching pass before it writes. A token deleted inside that
 window leaves every later write aimed at a document that is gone —
@@ -73,7 +73,23 @@ Two rules for anything on this path:
   token's embedded document and fails the same way. Checking the Actor is not enough; check its token.
 
 A try/catch around each write is the backstop, not the fix — swallowing the error would still mean doing
-pointless work and logging noise.
+pointless work and logging noise. A caught version is not a fixed version: Blacksmith's own instance
+(`token-movement.js:1090`, a follower moved step by step against a reference captured before the pathfinding
+await) fails loudly rather than silently, and still keeps moving a token that no longer exists while
+reporting "error moving X" instead of "X is gone".
+
+**Why it stayed hidden.** Blacksmith's harness creates and deletes a token within a few hundred milliseconds
+— a timing no human produces by hand. A suite that churns documents quickly will surface await-races that
+ordinary play conceals for months. Treat "only reproducible under the harness" as a reason to fix, not a
+reason to discount.
+
+The checks live in `document-liveness.js` as `isTokenAlive` / `isActorAlive`, one definition rather than a
+copy per caller. A sweep of Curator on 2026-08-08 found three more instances of the same shape, all fixed:
+
+- The delayed loot conversion re-found its token after the timer, then wrote the loot image using the
+  reference captured *before* the delay. The re-find was there; the write ignored it.
+- `_convertTokenToLoot` marked a body ready after loot generation had awaited, without re-checking.
+- `_processBury` deleted a token after a GM approval dialog that stays open for as long as the GM leaves it.
 
 ## Shop Tokens (idea, not scheduled)
 

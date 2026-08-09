@@ -5,6 +5,7 @@
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { notify } from './notifications.js';
+import { isTokenAlive, isActorAlive } from './document-liveness.js';
 import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
 import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
@@ -3981,7 +3982,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
 
         // Apply TMFX drop shadow if enabled. Both passes above await, so re-check
         // rather than trusting a placeable reference captured before them.
-        if (!TokenImageReplacementWindow._tokenStillExists(tokenDocument)) return;
+        if (!isTokenAlive(tokenDocument)) return;
         const placeable = tokenDocument.object;
         if (placeable && !placeable.destroyed) TokenImageReplacementWindow._applyDropShadowToPlaceables([placeable]);
     }
@@ -4070,26 +4071,6 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
     /**
      * Process token image replacement for a dropped token
      */
-    /**
-     * Whether a token is still in its scene.
-     *
-     * Image replacement is asynchronous — a settle delay plus a matching pass — so a
-     * token created and deleted inside that window leaves every later write aimed at
-     * a document that no longer exists. Foundry reports that as "id does not exist in
-     * the EmbeddedCollection".
-     */
-    static _tokenStillExists(tokenDocument) {
-        if (!tokenDocument) return false;
-        return Boolean(tokenDocument.parent?.tokens?.get(tokenDocument.id));
-    }
-
-    /** An unlinked token's Actor is synthetic and dies with its token. */
-    static _actorStillExists(actor) {
-        if (!actor) return false;
-        if (actor.isToken) return TokenImageReplacementWindow._tokenStillExists(actor.token);
-        return Boolean(game.actors.get(actor.id));
-    }
-
     static async _processTokenImageReplacement(tokenDocument) {
         // Check if this actor should be updated based on type and settings
         const actor = tokenDocument.actor;
@@ -4124,7 +4105,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         
         // Re-check after the settle delay and the matching pass: the token may have
         // been deleted while both were running.
-        if (!TokenImageReplacementWindow._tokenStillExists(tokenDocument)) {
+        if (!isTokenAlive(tokenDocument)) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Replacement: Skipping - token was removed while matching", "", true, false);
             return;
         }
@@ -4216,7 +4197,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             };
             // Guarded: this runs after the token pass has already awaited, so the
             // Actor may be a synthetic one whose token has since been deleted.
-            if (!TokenImageReplacementWindow._actorStillExists(actor)) {
+            if (!isActorAlive(actor)) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - actor was removed", "", true, false);
                 return;
             }
@@ -4245,7 +4226,7 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         // Get the matching image (with variability if enabled)
         const matchingImage = TokenImageReplacementWindow._selectMatchingImage(matches, ImageCacheManager.MODES.PORTRAIT);
         
-        if (!TokenImageReplacementWindow._actorStillExists(actor)) {
+        if (!isActorAlive(actor)) {
             BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Skipping - actor was removed while matching", "", true, false);
             return;
         }

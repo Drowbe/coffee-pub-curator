@@ -3,6 +3,7 @@ import { HookManager } from './manager-hooks.js';
 import { LootWindow } from './window-loot.js';
 import { notify } from './notifications.js';
 import { transferItem, transferItems, transferCurrency, isPhysical, denominations } from './loot-inventory.js';
+import { isTokenAlive } from './document-liveness.js';
 
 // Shared teardown handle for every claim and hook this manager registers.
 const CONTEXT = 'curator-loot';
@@ -240,6 +241,8 @@ export class LootManager {
             img: item.img,
             type: item.type,
             typeLabel: item.type?.charAt(0).toUpperCase() + item.type?.slice(1),
+            // Recorded so a looted row stays nested under the bag it came out of.
+            containerId: item.system?.container ?? null,
             by: takerName
         };
     }
@@ -495,6 +498,8 @@ export class LootManager {
     static async _buryIfEmptied(tokenDocument) {
         if (this.setting('lootBuryWhenEmpty', false) !== true) return;
         if (!this._remainingOn(tokenDocument.actor).empty) return;
+        // Reached after the transfer awaits; the body may already be gone.
+        if (!isTokenAlive(tokenDocument)) return;
         const name = tokenDocument.name;
         LootWindow.closeForToken(tokenDocument.uuid);
         game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
@@ -617,32 +622,54 @@ export class LootManager {
         const check = this._validateRecipient(payload.recipientUuid, user, corpse);
         if (!check.ok) return check;
 
-        // Names are captured before the transfer; a moved row is gone afterwards.
-        const sources = corpse.items.filter((item) => isPhysical(item.type));
-        const labels = new Map(sources.map((item) => [item.id, item.name]));
         const taker = fromUuidSync(check.actorUuid)?.name ?? 'Someone';
-        const snapshots = new Map(sources.map((item) => [item.id, this._snapshot(item, taker)]));
-        const order = sources.map((item) => item.id);
         const lines = [];
+        const taken = [];
+        let order = null;
 
-        if (sources.length) {
+        // Several passes, because a packed container is validated against the state
+        // at the start of a call: a bag emptied by this very batch is still "packed"
+        // to that call and stays behind. Emptying it first, then taking it, is what a
+        // player would do by hand. Bounded, and it stops as soon as a pass moves
+        // nothing, so a permanently stuck row cannot loop.
+        for (let pass = 0; pass < 4; pass++) {
+            const remaining = corpse.items.filter((item) => isPhysical(item.type));
+            if (!remaining.length) break;
+
+            order ??= remaining.map((item) => item.id);
+
+            const packed = new Set(
+                remaining
+                    .filter((item) => remaining.some((child) => child.system?.container === item.id))
+                    .map((item) => item.id)
+            );
+            const movable = remaining.filter((item) => !packed.has(item.id));
+            if (!movable.length) break;
+
+            const labels = new Map(movable.map((item) => [item.id, item.name]));
+            const snapshots = new Map(movable.map((item) => [item.id, this._snapshot(item, taker)]));
+
             const batch = await transferItems({
                 sourceActorUuid: corpse.uuid,
                 targetActorUuid: check.actorUuid,
-                items: sources.map((item) => ({ itemId: item.id }))
+                items: movable.map((item) => ({ itemId: item.id }))
             });
             // A whole-call rejection has no per-item detail to report.
-            if (!Array.isArray(batch?.results)) return batch;
-            const taken = [];
+            if (!Array.isArray(batch?.results)) return pass === 0 ? batch : batch ?? { ok: false, code: 'HANDLER_ERROR' };
+
+            let moved = 0;
             batch.results.forEach((entry, index) => {
-                const itemId = entry?.itemId ?? sources[index]?.id;
+                const itemId = entry?.itemId ?? movable[index]?.id;
                 lines.push({ label: labels.get(itemId) ?? 'Item', ...entry });
-                if (entry?.ok && entry.sourceDeleted && snapshots.has(itemId)) {
-                    taken.push(snapshots.get(itemId));
-                }
+                if (!entry?.ok) return;
+                moved += 1;
+                if (entry.sourceDeleted && snapshots.has(itemId)) taken.push(snapshots.get(itemId));
             });
-            await this.recordTaken(tokenDocument, taken, order);
+
+            if (!moved) break;
         }
+
+        if (taken.length) await this.recordTaken(tokenDocument, taken, order ?? []);
 
         const currency = {};
         for (const denom of denominations()) {
@@ -778,6 +805,10 @@ export class LootManager {
         }
 
         if (!approved) return { ok: false, code: 'BURY_DECLINED' };
+
+        // The prompt is open for as long as the GM leaves it open. The body may have
+        // been removed by something else in the meantime.
+        if (!isTokenAlive(tokenDocument)) return { ok: false, code: 'TOKEN_NOT_FOUND' };
 
         LootWindow.closeForToken(tokenDocument.uuid);
         game.socket.emit(CHANNEL, { action: REFRESH, tokenUuid: tokenDocument.uuid, closed: true });
