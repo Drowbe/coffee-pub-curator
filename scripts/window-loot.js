@@ -541,8 +541,24 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                 quantity: Number(item.system?.quantity ?? 1),
                 containerId: item.system?.container ?? null
             }));
-            const containersWithContents = new Set(items.map((item) => item.containerId).filter(Boolean));
-            items = items.filter((item) => item.type !== 'container' || !containersWithContents.has(item.id));
+            // A packed container is shown, not hidden. It cannot be transferred — the
+            // primitive returns CONTAINER_HAS_CONTENTS — but hiding it made the body
+            // read as though the bag was never there, while Loot All correctly left it
+            // behind. Contents stay listed as their own takeable rows.
+            const contentCounts = new Map();
+            for (const item of items) {
+                if (!item.containerId) continue;
+                contentCounts.set(item.containerId, (contentCounts.get(item.containerId) ?? 0) + 1);
+            }
+            items = items.map((item) => {
+                const contentCount = contentCounts.get(item.id) ?? 0;
+                return {
+                    ...item,
+                    contentCount,
+                    packed: contentCount > 0,
+                    contentLabel: `Holds ${contentCount} item${contentCount === 1 ? '' : 's'}`
+                };
+            });
 
             // Looted rows come from the Token's ledger, not from this window's memory,
             // so they are the same on every client and survive reopening the window.

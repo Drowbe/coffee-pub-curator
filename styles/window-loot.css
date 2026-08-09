@@ -79,8 +79,13 @@
 
 /* The subject card owns Bury, so the grid gains a third column for it. */
 .curator-loot-subject { display: grid; grid-template-columns: 58px minmax(0,1fr) auto; align-items: center; }
-.curator-loot-bury { display: flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 10px; border: 1px solid var(--blacksmith-tool-divider, rgba(0,0,0,.3)); border-radius: 5px; background: transparent; color: var(--blacksmith-tool-text-muted, inherit); font-size: .7rem; white-space: nowrap; cursor: pointer; }
-.curator-loot-bury:hover { border-color: #a4432f; background: rgba(164, 67, 47, .16); color: #a4432f; }
+/* Shares the standard secondary button; only the danger hover is Curator's. */
+.curator-loot-bury { min-height: 28px; margin: 0; padding: 3px 10px; font-size: .7rem; white-space: nowrap; }
+.curator-loot-bury:hover { border-color: #a4432f; color: #a4432f; }
+
+/* A container that still holds something cannot move as one document. */
+.curator-loot-item-packed { border-color: var(--blacksmith-tool-divider, rgba(0,0,0,.2)); border-style: dashed; }
+.curator-loot-blocked { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: var(--blacksmith-tool-text-muted, inherit); font-size: .62rem; letter-spacing: .03em; white-space: nowrap; }
 
 /* The recipient is its own row so it reads like an item or currency row. */
 .curator-loot-actor { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 9px; align-items: center; padding: 7px 8px; }

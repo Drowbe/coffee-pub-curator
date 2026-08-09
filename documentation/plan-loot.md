@@ -440,6 +440,18 @@ padding so nothing shows above it once the list is scrolled.
 Position and size are not remembered between openings (`rememberPosition: false`), so the window always
 opens near where it is raised. Revisit if a resized window resetting each time proves annoying in play.
 
+### Why a packed container cannot be taken
+
+This is `api.inventory`'s v1 boundary, not a Curator choice, and it is worth recording so nobody tries to
+route around it. dnd5e stores containment on the **child** as `system.container`, holding the parent's id.
+Moving the bag alone would leave its contents on the corpse pointing at an id that no longer exists there.
+Moving bag and contents together needs `Item5e.createWithContents` with `keepId: true`, and breaks the
+contract the primitive rests on: the return shape is singular, quantity splitting is meaningless, and
+rollback becomes N deletes plus N restores plus reporting which of those also failed.
+
+Blacksmith deferred it to a future `transferContainer()` rather than a flag on `transferItem`. Until that
+exists, the workaround is the one the UI states: take the contents, then take the empty bag.
+
 ### Rendering failures
 
 Most codes describe a state that will not change, so they get one sentence and no retry. Three do not:
@@ -488,9 +500,11 @@ What Curator owns here is which Items are *offered*:
 - Allowed D&D 5e types are `weapon`, `equipment`, `consumable`, `tool`, `loot`, and `container`. This matches
   the primitive's `ITEM_NOT_TRANSFERABLE` whitelist. Natural weapons, monster features, classes,
   subclasses, spells, and effects must never appear merely because they are embedded Items on the NPC.
-- The corpse is presented flattened: container contents are listed as individual rows and a container that
-  still holds contents is not offered. The primitive rejects it with `CONTAINER_HAS_CONTENTS`, and
-  flattening is better looting UX independently.
+- The corpse is presented flattened: container contents are listed as individual rows.
+- **A packed container is shown, not hidden.** It renders with its content count and no Take controls,
+  reading "Empty it first". An earlier version omitted it entirely, which made the body read as though the
+  bag was never on it while Loot All correctly left it behind — the display and the behavior disagreed.
+  Emptying it row by row makes the bag takeable, since it is then an empty container.
 - Stacking on arrival defaults to `merge`. Curator passes no `stack` override and no `ignoreFlags`; it
   writes no transient flags to Items.
 
@@ -582,9 +596,16 @@ memory, so a reload mid-combat does not lose it. `deleteCombat` sweeps the scene
 still at zero HP, and converts. Revival before the encounter ends clears the flag, so a creature brought
 back is never converted.
 
-Proximity measures from the corpse to the nearest token the requesting user owns, via
-`canvas.grid.measurePath`, at request time — not at window-open time, because either token may have moved.
-The GM is exempt from both combat and proximity.
+Proximity measures centre-to-centre from the corpse to the nearest token the requesting user owns, at
+request time — not at window-open time, because either token may have moved. The GM is exempt from both
+combat and proximity.
+
+It measures against the **corpse's own scene grid**, not `canvas.grid`. The check runs on the GM, who may be
+viewing a different scene than the player doing the looting, and `canvas.grid` would then be the wrong grid.
+
+Both gates also run client-side in `LootManager.open`, so a refusal arrives as a message instead of a window
+that opens and then fails on every action. `checkAccess` is shared by both paths so they cannot drift; the
+GM-side call is the guard, the client-side call is the explanation.
 
 Do not recreate Item Piles' per-token configuration interface. Curator flags describe runtime state; world settings describe policy.
 

@@ -169,8 +169,30 @@ export class LootManager {
         notify.error('Could not open the loot window.');
     }
 
+    /**
+     * Both gates are re-checked on the GM before anything moves. These are here so a
+     * refusal arrives as a message at the door rather than as a window that opens and
+     * then fails on every action — they are the explanation, not the guard.
+     */
+    static checkAccess(tokenDocument, user = game.user) {
+        if (user.isGM) return { ok: true };
+        if (game.combat?.started && this.setting('lootAllowInCombat', false) !== true) {
+            return { ok: false, code: 'COMBAT_ACTIVE' };
+        }
+        return this._proximityCheck(tokenDocument, user);
+    }
+
     static open(tokenDocument) {
         if (!this.isLootable(tokenDocument)) return null;
+
+        const access = this.checkAccess(tokenDocument);
+        if (!access.ok) {
+            notify.warn(access.code === 'COMBAT_ACTIVE'
+                ? 'You cannot loot while combat is under way.'
+                : `${tokenDocument.name} is too far away — you need to be within ${access.limit} feet.`);
+            return null;
+        }
+
         return LootWindow.open(tokenDocument);
     }
 
@@ -399,13 +421,8 @@ export class LootManager {
         const corpse = tokenDocument.actor;
         if (!corpse) return { ok: false, code: 'SOURCE_ACTOR_NOT_FOUND' };
 
-        if (!user.isGM) {
-            if (game.combat?.started && this.setting('lootAllowInCombat', false) !== true) {
-                return { ok: false, code: 'COMBAT_ACTIVE' };
-            }
-            const reach = this._proximityCheck(tokenDocument, user);
-            if (!reach.ok) return reach;
-        }
+        const access = this.checkAccess(tokenDocument, user);
+        if (!access.ok) return access;
 
         let result;
         switch (op) {
@@ -440,23 +457,40 @@ export class LootManager {
         await tokenDocument.delete();
     }
 
+    /** Token centre in pixels, so a large creature is measured from its middle. */
+    static _centre(tokenDocument, gridSize) {
+        return {
+            x: tokenDocument.x + ((tokenDocument.width ?? 1) * gridSize) / 2,
+            y: tokenDocument.y + ((tokenDocument.height ?? 1) * gridSize) / 2
+        };
+    }
+
     /**
-     * Distance is recalculated here from current token positions. A client cannot be
-     * trusted to measure its own range, and the corpse or the character may have
-     * moved since the window opened.
+     * Distance is recalculated from current token positions every time. A client
+     * cannot be trusted to measure its own range, and either token may have moved
+     * since the window opened.
+     *
+     * Measured against the corpse's **own** scene rather than `canvas.grid`: this runs
+     * on the GM, who may be viewing a different scene than the player looting, and
+     * canvas.grid would then be the wrong grid entirely.
      */
     static _proximityCheck(tokenDocument, user) {
         const limit = Number(this.setting('lootProximity', 0)) || 0;
         if (limit <= 0) return { ok: true };
 
         const scene = tokenDocument.parent;
+        const gridSize = Number(scene?.grid?.size) || 100;
+        const gridDistance = Number(scene?.grid?.distance) || 5;
+
         const owned = scene?.tokens?.filter((token) => token.actor?.testUserPermission(user, 'OWNER')) ?? [];
         if (!owned.length) return { ok: false, code: 'TOO_FAR', limit };
 
-        const origin = { x: tokenDocument.x, y: tokenDocument.y };
+        const origin = this._centre(tokenDocument, gridSize);
         for (const token of owned) {
-            const distance = canvas.grid.measurePath([origin, { x: token.x, y: token.y }])?.distance;
-            if (Number.isFinite(distance) && distance <= limit) return { ok: true };
+            const point = this._centre(token, gridSize);
+            const pixels = Math.hypot(origin.x - point.x, origin.y - point.y);
+            const distance = (pixels / gridSize) * gridDistance;
+            if (distance <= limit) return { ok: true };
         }
         return { ok: false, code: 'TOO_FAR', limit };
     }

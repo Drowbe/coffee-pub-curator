@@ -16,7 +16,8 @@
                 <div class="curator-loot-description">{{itemCount}} item rows · {{currencyCount}} currencies</div>
             </div>
             {{!-- Bury is open to everyone; a GM always confirms before the token goes. --}}
-            <button type="button" class="curator-loot-bury" data-action="bury" data-tooltip="Bury this body and remove the token">
+            <button type="button" class="blacksmith-window-btn-secondary curator-loot-bury" data-action="bury"
+                    data-tooltip="Bury this body and remove the token">
                 <i class="fa-solid fa-shovel"></i> Bury
             </button>
         </section>
@@ -49,9 +50,12 @@
             {{#if hasItems}}
                 <div class="curator-loot-item-list">
                     {{#each items}}
-                        <div class="curator-loot-item{{#if looted}} curator-loot-item-looted{{/if}}" data-item-id="{{id}}">
+                        <div class="curator-loot-item{{#if looted}} curator-loot-item-looted{{/if}}{{#if packed}} curator-loot-item-packed{{/if}}" data-item-id="{{id}}">
                             <img src="{{img}}" alt="">
-                            <div class="curator-loot-item-copy"><strong>{{name}}</strong><span>{{typeLabel}}</span></div>
+                            <div class="curator-loot-item-copy">
+                                <strong>{{name}}</strong>
+                                <span>{{#if packed}}{{contentLabel}}{{else}}{{typeLabel}}{{/if}}</span>
+                            </div>
                             {{#if looted}}
                                 {{!-- The row stays so the body reads as a record of what was on it. --}}
                                 <div class="curator-loot-amount"><small>&nbsp;</small><strong>—</strong></div>
@@ -60,6 +64,13 @@
                                 </div>
                             {{else}}
                                 <div class="curator-loot-amount" title="Available quantity"><small>QTY</small><strong>{{quantity}}</strong></div>
+                                {{#if packed}}
+                                    <div class="curator-loot-row-actions">
+                                        <span class="curator-loot-blocked" data-tooltip="Take what is inside first; the bag can be taken once it is empty">
+                                            <i class="fa-solid fa-lock"></i> Empty it first
+                                        </span>
+                                    </div>
+                                {{else}}
                                 <div class="curator-loot-row-actions">
                                     <button type="button" class="blacksmith-window-btn-secondary curator-loot-icon-btn" data-action="take" data-item-id="{{id}}"
                                             {{#unless ../hasRecipient}}disabled{{/unless}} data-tooltip="Take this">
@@ -78,6 +89,7 @@
                                         </button>
                                     {{/if}}
                                 </div>
+                                {{/if}}
                             {{/if}}
                         </div>
                     {{/each}}
