@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [13.3.1]
+
+### Changed
+- **Loot announcement migrated to Blacksmith's chat cards API** (`scripts/token-image-utilities.js`): the card was hand-rendered HTML from a local Handlebars template reusing Blacksmith's card classes. It now composes parts — `header`, `prose`, `rows` — and Blacksmith renders and posts it, so Curator writes no card markup. The composition is stored on the message alongside the baked HTML, which means improvements to a part reach cards that have already been posted. `coffeepub-hide-header` is gone from the call site because the card renderer emits that marker itself.
+- **The token name is passed as an inert literal** (`scripts/token-image-utilities.js`): token names are renamable in play and so are untrusted input. Both the sentence and the row label now pass the name as `{ literal }`, which is escaped and neither read for marks nor enriched — a token renamed `Bugbear *Chief*` shows its asterisks instead of italicising the rest of the sentence, and one containing `@UUID[...]` or `[[/r 99d6]]` is no longer obeyed by the enricher. The sentence carries `mark: 'strong'` so the name is emphasised and inert at once, rather than interpolated inside `**` where an asterisk in the name would interleave the tags.
+- **The card shows the actor portrait and opens the loot window** (`scripts/token-image-utilities.js`, `scripts/manager-loot.js`): the announcement now carries a row for the body. It shows the actor's portrait rather than the token image, and the row itself is the click target — supplying a `uuid` would have built a document link to the Token, which opens the actor sheet rather than the body. Clicking it runs the same `LootManager.open` path as double-clicking the corpse, so proximity and combat are gated and reported identically. The handler is registered on every client in `LootManager.initialize`, beside the double-click claim, because a chat message is data and a handler cannot travel with the card.
+- **A stale corpse row now explains itself** (`scripts/manager-loot.js`): the double-click gesture is gated by a `matches` predicate, but a card sits in the log permanently and outlives the body it announces. Clicking a row whose token has been deleted, or whose corpse has been emptied with no ledger to show, previously would have done nothing at all; it now reports that the body is gone or that there is nothing left to take.
+
+### Fixed
+- **The loot card ignored the world's card theme** (`templates/card-loot.hbs`): the template hardcoded `theme-default`, pinning the announcement to the Tan theme while every other Coffee Pub card followed the world's **Default Card Theme** setting. The composition omits `theme`, so the card now resolves the world default at post time like the rest of the suite.
+
+### Removed
+- **`templates/card-loot.hbs`**: replaced by the parts composition described above. The template was never registered for preloading and nothing else referenced it. Its `curator-loot-card` class went with it — the class had no rules in any Curator stylesheet or anywhere else, and had been inert since it was written, so no styling was lost. Its comment claiming "There is no styling API for chat cards" is retired with the file; the parts system is that API. `templates/partial-loot-row.hbs` is untouched — that is loot window UI and unrelated.
+
 ## [13.3.0] - 2026-08-08
 
 ### Added
