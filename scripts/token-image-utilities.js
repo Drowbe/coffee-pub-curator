@@ -312,14 +312,35 @@ export class TokenImageUtilities {
             // Curator's own card rather than Blacksmith's shared loot-drop block, so
             // Curator owns its own message. Announcement only.
             if (game.settings.get(MODULE.ID, 'tokenLootChatMessage')) {
-                const messageHtml = await foundry.applications.handlebars.renderTemplate(
-                    'modules/coffee-pub-curator/templates/card-loot.hbs',
-                    { tokenName: token.name, tokenUuid: token.document.uuid }
-                );
-
-                await ChatMessage.create({
-                    content: messageHtml,
-                    speaker: ChatMessage.getSpeaker()
+                // The token name is a literal: names are renamable in play, so
+                // "Bugbear *Chief*" must show its asterisks rather than italicise
+                // the rest of the sentence, and an @UUID in a name must not be
+                // obeyed by the enricher. `mark` keeps the bold regardless.
+                const chatCards = game.modules.get('coffee-pub-blacksmith')?.api?.chatCards;
+                await chatCards.post({
+                    moduleId: MODULE.ID,
+                    type: 'loot-drop',
+                    parts: [
+                        { part: 'header', icon: 'fa-solid fa-coins', title: 'Loot Dropped!' },
+                        { part: 'prose', blocks: [{ type: 'paragraph', text: [
+                            { literal: token.name, mark: 'strong' },
+                            ' has been defeated and dropped their belongings!'
+                        ] }] },
+                        // No `uuid`: that builds a document link to the token, which
+                        // opens the actor sheet rather than the body. `clickable` makes
+                        // the whole row the way in to the loot window instead. Without a
+                        // uuid the label is ordinary consumer text, so the name needs its
+                        // literal here as much as the sentence above does.
+                        { part: 'rows', items: [{
+                            img: token.actor?.img ?? token.document.texture.src,
+                            label: { literal: token.name },
+                            moduleId: MODULE.ID,
+                            action: 'open-loot',
+                            value: token.document.uuid,
+                            clickable: true,
+                            tooltip: 'Open the loot window'
+                        }] }
+                    ]
                 });
             }
         } catch (error) {

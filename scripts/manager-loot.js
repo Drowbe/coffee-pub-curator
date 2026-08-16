@@ -18,6 +18,9 @@ const NOTICE = 'lootNotice';
 // A player request that never reaches an answering GM must fail, not hang.
 const REQUEST_TIMEOUT_MS = 20000;
 
+// The loot card's row action, matching what token-image-utilities.js composes.
+const CARD_ACTION = 'open-loot';
+
 export class LootManager {
     static FLAG = 'loot';
     static STATES = Object.freeze({ PREPARING: 'preparing', READY: 'ready', EMPTY: 'empty' });
@@ -32,11 +35,15 @@ export class LootManager {
 
     static initialize() {
         this._registerTokenInteraction();
+        this._registerCardAction();
         this._registerSocket();
         this._registerPresenceCleanup();
     }
 
     static teardown() {
+        const chatCards = game.modules.get('coffee-pub-blacksmith')?.api?.chatCards;
+        chatCards?.unregisterAction?.(MODULE.ID, CARD_ACTION);
+
         const tokens = this._tokensApi();
         if (this._interactionId && typeof tokens?.disposeByContext === 'function') {
             tokens.disposeByContext(CONTEXT);
@@ -64,6 +71,37 @@ export class LootManager {
     // ==============================================================
     // ===== INTERACTION ============================================
     // ==============================================================
+
+    /**
+     * The corpse row on the loot card, as a second door into the same window.
+     *
+     * Registered on every client and not only the GM: a chat message is data, so a
+     * handler cannot travel with the card — each client resolves its own at render
+     * time, which is why this belongs here rather than beside the post.
+     *
+     * Unlike the double-click claim there is no `matches` predicate to gate the
+     * gesture, so this checks what that predicate would have. A card outlives the
+     * body it announces: the row is still sitting in the log after the corpse is
+     * emptied, buried or deleted, which makes a stale click ordinary rather than
+     * exceptional, and it has to say so instead of doing nothing.
+     */
+    static _registerCardAction() {
+        const chatCards = game.modules.get('coffee-pub-blacksmith')?.api?.chatCards;
+        if (typeof chatCards?.registerAction !== 'function') return;
+
+        chatCards.registerAction(MODULE.ID, CARD_ACTION, async ({ value }) => {
+            const tokenDocument = value ? await fromUuid(value) : null;
+            if (!tokenDocument) {
+                notify.warn('That body is no longer here.');
+                return;
+            }
+            if (!this.canOpen(tokenDocument)) {
+                notify.warn(`There is nothing left to take from ${tokenDocument.name}.`);
+                return;
+            }
+            this.openSafely(tokenDocument);
+        });
+    }
 
     /**
      * Claim double-click on lootable corpses through Blacksmith.

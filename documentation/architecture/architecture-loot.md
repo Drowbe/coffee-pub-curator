@@ -24,10 +24,9 @@ corpse clickable (`api.tokens`), the window shell, the entity list, the quantity
 | `loot-inventory.js` | Thin accessor for `blacksmith.inventory`. No logic. |
 | `loot-utilities.js` | Loot generation — rolls tables, adds coin |
 | `document-liveness.js` | `isTokenAlive` / `isActorAlive`, for writes that happen after an await |
-| `token-image-utilities.js` | Death and revival detection, conversion timing, image state |
+| `token-image-utilities.js` | Death and revival detection, conversion timing, image state, the chat announcement (via Blacksmith's chat cards API) |
 | `templates/window-loot.hbs` | Window body |
 | `templates/partial-loot-row.hbs` | One row, used standalone and inside a container group |
-| `templates/card-loot.hbs` | The chat announcement |
 | `styles/window-loot.css` | Window and dialog styling |
 
 ## State
