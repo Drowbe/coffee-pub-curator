@@ -158,7 +158,17 @@ Shipped in 13.3.0. What is left is comfort, not capability.
   should not be requested without one.
 - **Loot interaction sound.** `plans/plan-loot.md` section 13 lists it; never built. Nobody has asked.
 
-## Shop Tokens (idea, not scheduled)
+## Shop Tokens — moved out
+
+Superseded 2026-08-09. Shops are their own module, `coffee-pub-merchant`, with the plan at
+`coffee-pub-merchant/documentation/plans/plan-merchant.md`. The reasoning below is kept because it explains
+why it is not Curator's, and because the transferable-versus-not analysis still holds.
+
+Two things from it changed once the plan was written: stock is infinite in v1, which makes buying a
+`grantItem` rather than a `transferItem` and removes the whole concurrency problem; and merchant state lives
+on the **Actor**, not the Token, because a shop is a persistent entity rather than an event.
+
+## Shop Tokens (original note, kept for reasoning)
 
 Mark a token as a **shop** ahead of time and reuse the corpse-looting machinery with different rules. Recorded
 2026-08-08 as a direction to evaluate, not an accepted feature.
