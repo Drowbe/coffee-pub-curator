@@ -147,6 +147,13 @@ behaviour a shared component lacks, send it to Blacksmith as a change to theirs 
 `const.js` and `settings.js` share names legitimately, since their content is per-module. Anything else
 warrants a diff.
 
+**The adjacent failure: inventing a duplicate rather than copying one.** Merchant built its own compendium
+search window and deleted it the same day, because Blacksmith already had one. Nothing was forked — a
+duplicate was simply invented, after reading `api-compendiums.md`, finding `search()`, and treating a
+documented *primitive* as evidence that no *feature* was built on it. Before writing any window, check
+`blacksmith.openWindow` for a registered id, `api-window.md` for the registry, and the Blacksmith toolbar and
+menubar for something that already opens what you are about to build.
+
 ## Open — corpse looting
 
 Shipped in 13.3.0. What is left is comfort, not capability.
