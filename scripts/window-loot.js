@@ -282,6 +282,50 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     }
 
     /**
+     * Read a control's value out of the dialog rather than out of the control.
+     *
+     * `getSelection`, `getSelectedIds`, `getValue` and `getKeep` all report the value
+     * the control was *created with* when `attach` did not find its input. That is a
+     * plausible answer the caller cannot tell from a real one, and which of the two
+     * shapes it takes is decided by our own config rather than by anything visible
+     * here:
+     *
+     * - A list created **with** a selection lies. `_pickActor` seeds the current
+     *   recipient, so a user switches to somebody else and is handed back the one they
+     *   started on.
+     * - A list created **empty** goes quiet. Nothing selected, the operation does not
+     *   happen, and nothing says why.
+     *
+     * The careful version — seeding a sensible default — is the one that produces the
+     * dangerous failure, which is backwards and worth knowing.
+     *
+     * Reading the DOM is right either way, because only *binding* can fail: the ticked
+     * boxes and the slider position are the truth whether or not anything is listening
+     * to them.
+     *
+     * **Interim.** Blacksmith is shipping `readIdsFrom(root)` and `readFrom(root)`,
+     * which are these with the input name they already know. Replace these with those
+     * and delete the helpers — a defensive read left beside a correct one is how the
+     * next person concludes the correct one cannot be trusted.
+     */
+    _readSelectedIds(list, dialog, inputName) {
+        const root = dialog?.element;
+        if (root) {
+            const checked = root.querySelectorAll(`input[name="${CSS.escape(inputName)}"]:checked`);
+            if (checked.length) return [...checked].map((input) => String(input.value));
+        }
+        return list?.getSelectedIds?.() ?? [];
+    }
+
+    /** The give-side quantity, read from the slider itself. See `_readSelectedIds`. */
+    _readQuantity(control, dialog, inputName) {
+        const input = dialog?.element?.querySelector?.(`input[name="${CSS.escape(inputName)}"]`);
+        const fromDom = Math.trunc(Number(input?.value));
+        if (Number.isFinite(fromDom)) return fromDom;
+        return control?.getValue?.() ?? null;
+    }
+
+    /**
      * Pick an Actor through Blacksmith's entity list rather than a select or a
      * button row: it renders portraits, a type line, and disabled reasons, and it
      * is the control the plan named for recipient selection.
@@ -322,7 +366,9 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     label: confirmLabel,
                     icon: confirmIcon,
                     default: true,
-                    callback: () => { chosen = list.getSelectedIds()?.[0] ?? null; }
+                    callback: (_event, _button, dialog) => {
+                        chosen = this._readSelectedIds(list, dialog, 'curator-loot-actor')[0] ?? null;
+                    }
                 }
             ],
             closeValue: null,
@@ -376,8 +422,17 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     label: 'Take',
                     icon: 'fa-solid fa-hand',
                     default: true,
-                    // getValue() is integer-clamped and DOM-independent.
-                    callback: () => { chosen = control.getValue(); }
+                    // Read from the slider, not from the controller. The comment that
+                    // used to sit here -- "getValue() is integer-clamped and
+                    // DOM-independent" -- was taken from `api-quantity-split.md`, which
+                    // actively recommended it on exactly those grounds. Blacksmith has
+                    // since corrected that: `getValue()` returns state a listener
+                    // maintains, so an unbound control reports the value it was created
+                    // with. Here that is `max`, so a failed bind would have looted
+                    // everything regardless of what was asked for.
+                    callback: (_event, _button, dialog) => {
+                        chosen = this._readQuantity(control, dialog, 'curator-loot-quantity');
+                    }
                 }
             ],
             closeValue: null,

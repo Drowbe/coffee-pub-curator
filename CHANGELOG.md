@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+
+### Fixed
+- **A failed control bind could loot everything, or the wrong character** (`scripts/window-loot.js`). Blacksmith's `getValue()`, `getKeep()`, `getSelection()` and `getSelectedIds()` all report the value the control was *created with* when `attach()` did not find its input — a plausible answer the caller cannot tell from a real one. Both of Curator's uses were exposed, and which shape the failure takes is decided by our own config rather than by anything visible at the call site:
+
+  - The **quantity split** is created with `value: max`, so an unbound read returns *max*. "Take 1 of 20" would have taken all 20, silently.
+  - The **actor picker** seeds the current recipient, so switching to somebody else would have handed back the one you started on.
+
+  The careful version — seeding a sensible default — is the one that produces the dangerous failure, which is backwards and worth saying out loud. Both now read the slider position and the ticked boxes out of the dialog, which is correct either way because only *binding* can fail.
+
+  The comment on the quantity read said *"getValue() is integer-clamped and DOM-independent"*. That was taken from `api-quantity-split.md`, which actively recommended it on exactly those grounds; Blacksmith has since corrected the doc. Worth recording that the documentation did not merely fail to prevent this, it caused it.
+
+  Interim: `readFrom(root)`, `readKeepFrom(root)` and `readIdsFrom(root)` are coming, and these helpers are marked to be **replaced** by them rather than kept alongside — a defensive read left beside a correct one is how the next person concludes the correct one cannot be trusted.
+
 ## [13.3.2]
 
 ### Changed
