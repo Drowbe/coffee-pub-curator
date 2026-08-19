@@ -127,13 +127,10 @@ export class LootManager {
                 module: MODULE.ID,
                 gesture: 'clickLeft2',
                 priority: 2,
-                // MUST stay synchronous and MUST return the same answer twice in a row.
-                // Foundry's permission predicate is synchronous and a promise is truthy,
-                // so an async matcher would grant every double-click unconditionally.
-                // Blacksmith evaluates permission and dispatch separately and re-checks
-                // between them, so anything transient here produces a dead gesture.
-                // Keep it a plain flag read: eligibility, distance, and UUID resolution
-                // belong in open() and in the GM handler.
+                // The rules `matches` has to obey are Blacksmith's and are in
+                // api-tokens.md. What is Curator's: keep it a plain flag read, because
+                // eligibility, distance and UUID resolution belong in open() and in the
+                // GM handler, and anything transient here produces a dead gesture.
                 matches: (tokenDocument) => this.canOpen(tokenDocument),
                 bypassPermission: true,
                 // A throwing handler is a dead gesture by design — Blacksmith will not

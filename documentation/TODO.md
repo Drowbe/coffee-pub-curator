@@ -223,3 +223,13 @@ transfer becomes a Blacksmith primitive before anyone attempts the workflow on t
 
 - Decide how Curator should handle asset defaults that currently point into Blacksmith paths. Confirm whether those assets should stay shared, be duplicated into Curator, or be redirected through a Blacksmith-provided asset API/constant layer.
 - Migrate the neutral chat-card theme from internal `default` / `theme-default` naming to `tan` / `theme-tan` for consistency with the other color themes. This needs a deliberate migration plan because saved world settings, existing templates/selectors, and dependent Coffee Pub modules may still rely on the current IDs/classes.
+## Needs a table before release
+
+- **The dialog control workaround came out on 2026-08-18.** `blacksmith.dialog.wait()` now binds controls
+  itself, so the quantity split and the actor picker hand theirs over instead of frame-polling for it.
+  Untested in Foundry. Two checks, both quick and both real regressions if they fail:
+  - Take a partial stack: drag the slider, confirm, and check the number that arrives is the one shown. The
+    old fallback would silently return the *initial* value when binding failed, which looks like a working
+    dialog returning a plausible answer.
+  - Loot as a different character: open the picker, choose the second character, confirm, and check the item
+    lands on that one rather than the first.

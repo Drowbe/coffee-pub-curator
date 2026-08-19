@@ -19,29 +19,6 @@ function _blacksmith() {
     return game.modules.get('coffee-pub-blacksmith')?.api ?? null;
 }
 
-/**
- * Attach an embedded Blacksmith control once its markup is actually in the
- * document.
- *
- * Attaching to a detached wrapper before handing it to dialog.wait() does not
- * work, whatever the move-not-copy semantics suggest — the control ends up
- * unbound, and that failure is silent: the inputs still render and still report
- * a value, so a slider looks alive while its captions never move and an entity
- * list hands back the initial selection rather than the user's. dialog.wait()
- * exposes no render hook, so poll a few frames for the input instead.
- */
-async function _attachWhenRendered(control, inputName, frames = 20) {
-    for (let i = 0; i < frames; i++) {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        const live = document.querySelector(`[name="${inputName}"]`);
-        if (!live) continue;
-        control.attach(live.closest('.application') ?? live.closest('form') ?? document.body);
-        return true;
-    }
-    console.warn(`${MODULE.TITLE} | Control "${inputName}" never rendered; falling back to form values.`);
-    return false;
-}
-
 export class LootWindow extends BlacksmithToolWindowBaseV2 {
     static _windows = new Map();
 
@@ -329,16 +306,14 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             selected: selectedUuid ?? actors[0].uuid
         });
 
-        const inputName = 'curator-loot-actor';
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = `<div class="blacksmith-field">${list.html}</div>`;
-
         let chosen = null;
-        let bound = false;
-        const pending = blacksmith.dialog.wait({
+        const outcome = await blacksmith.dialog.wait({
             title,
-            content: wrapper,
+            content: `<div class="blacksmith-field">${list.html}</div>`,
             classes: ['curator-dialog'],
+            // Bound after render by the dialog itself. Controls are not destroyed on
+            // close, so the callback can still read the selection out of one.
+            controls: list,
             // Secondary action left, primary right — the same order as the window footer.
             buttons: [
                 { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
@@ -347,19 +322,12 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     label: confirmLabel,
                     icon: confirmIcon,
                     default: true,
-                    callback: (form) => {
-                        chosen = bound
-                            ? list.getSelectedIds()?.[0] ?? null
-                            : form?.elements?.[inputName]?.value ?? null;
-                    }
+                    callback: () => { chosen = list.getSelectedIds()?.[0] ?? null; }
                 }
             ],
             closeValue: null,
             cancelValue: null
         });
-
-        bound = await _attachWhenRendered(list, inputName);
-        const outcome = await pending;
         list.destroy();
 
         return outcome?.value === 'select' ? chosen : null;
@@ -385,25 +353,21 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             return max;
         }
 
-        const inputName = 'curator-loot-quantity';
         const control = blacksmith.quantitySplit.create({
             max,
             value: max,
-            inputName,
+            inputName: 'curator-loot-quantity',
             giveLabel: 'Take',
             keepLabel: 'Leave',
             amountLabel: `How many ${label}?`
         });
 
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = `<div class="blacksmith-field">${control.html}</div>`;
-
         let chosen = null;
-        let bound = false;
-        const pending = blacksmith.dialog.wait({
+        const outcome = await blacksmith.dialog.wait({
             title: `Take ${label}`,
-            content: wrapper,
+            content: `<div class="blacksmith-field">${control.html}</div>`,
             classes: ['curator-dialog'],
+            controls: control,
             // Secondary action left, primary right — the same order as the window footer.
             buttons: [
                 { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' },
@@ -412,19 +376,13 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
                     label: 'Take',
                     icon: 'fa-solid fa-hand',
                     default: true,
-                    // getValue() is integer-clamped and DOM-independent, but it is only
-                    // correct once the control is bound; read the form otherwise.
-                    callback: (form) => {
-                        chosen = bound ? control.getValue() : Number(form?.elements?.[inputName]?.value ?? max);
-                    }
+                    // getValue() is integer-clamped and DOM-independent.
+                    callback: () => { chosen = control.getValue(); }
                 }
             ],
             closeValue: null,
             cancelValue: null
         });
-
-        bound = await _attachWhenRendered(control, inputName);
-        const outcome = await pending;
         control.destroy();
 
         if (outcome?.value !== 'take') return null;

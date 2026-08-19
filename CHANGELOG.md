@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+
+### Changed
+- **The dialog control workaround is gone** (`scripts/window-loot.js`): `blacksmith.dialog.wait()` now takes
+  a `controls` option and binds anything exposing `attach(root)` after every render, so the quantity split
+  and the actor picker hand the control over and stop there. Curator carried a frame-polling workaround that
+  waited for the input to appear in the document and attached it by hand — along with a fallback that read
+  raw form values whenever that failed.
+
+  Worth recording *why* it existed, because the cause was not a missing feature. Blacksmith's documentation
+  said passing an `HTMLElement` as `content` preserved its identity and listeners. It does not: DialogV2
+  reads `options.content.innerHTML`, keeps the string, and builds the dialog by assigning `innerHTML` to a
+  fresh form, so the node handed over is never inserted and any control attached to it is bound to an
+  orphan. Curator and Merchant independently wrote the same workaround against a claim neither checked.
+  `dialog.wait()` also had an `onRender(element, dialog)` hook the whole time, simply undocumented.
+
+  The fallback going away is the real improvement. It silently produced a *plausible* answer — an entity
+  list's initial selection rather than the user's choice — which is the failure mode that does not look like
+  one.
+- **The token interaction claim no longer restates Blacksmith's rules** (`scripts/manager-loot.js`): the
+  comments explaining that `matches` must be synchronous and stable, and why `bypassPermission` is needed,
+  are in `api-tokens.md` and were duplicated at the call site. A doc copied into a call site drifts exactly
+  like code copied into one.
+
 ## [13.3.1]
 
 ### Changed
