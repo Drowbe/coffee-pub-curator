@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [13.3.3]
 
 ### Fixed
 - **A failed control bind could loot everything, or the wrong character** (`scripts/window-loot.js`). Blacksmith's `getValue()`, `getKeep()`, `getSelection()` and `getSelectedIds()` all report the value the control was *created with* when `attach()` did not find its input — a plausible answer the caller cannot tell from a real one. Both of Curator's uses were exposed, and which shape the failure takes is decided by our own config rather than by anything visible at the call site:
