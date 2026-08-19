@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The comment on the quantity read said *"getValue() is integer-clamped and DOM-independent"*. That was taken from `api-quantity-split.md`, which actively recommended it on exactly those grounds; Blacksmith has since corrected the doc. Worth recording that the documentation did not merely fail to prevent this, it caused it.
 
-  Interim: `readFrom(root)`, `readKeepFrom(root)` and `readIdsFrom(root)` are coming, and these helpers are marked to be **replaced** by them rather than kept alongside — a defensive read left beside a correct one is how the next person concludes the correct one cannot be trusted.
+  Now reads through Blacksmith's `readFrom(root)` and `readIdsFrom(root)`, which shipped in `703ffc7a`. The interim DOM reads were **replaced** rather than kept alongside them — a defensive read left beside a correct one is how the next person concludes the correct one cannot be trusted.
 
 ## [13.3.2]
 
