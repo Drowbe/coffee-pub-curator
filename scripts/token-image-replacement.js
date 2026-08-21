@@ -6,7 +6,7 @@ import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { notify } from './notifications.js';
 import { isTokenAlive, isActorAlive } from './document-liveness.js';
-import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
+import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { HookManager } from './manager-hooks.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { ImageMatching } from './manager-image-matching.js';

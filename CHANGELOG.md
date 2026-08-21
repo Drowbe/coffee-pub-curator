@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Blacksmith's window base classes are imported from the bridge**, not from `scripts/`. Three files reached into `/modules/coffee-pub-blacksmith/scripts/window-base.js` and `window-tool-base.js`; those paths are not Blacksmith's stable contract and can move underneath us. `api/blacksmith-api.js` re-exports both bases for exactly this purpose.
+
+  It has to stay an *import* rather than a read from `module.api`, and the reason is worth writing down: `extends` is evaluated when the file is evaluated, and `game` does not exist yet — a top-level `game.modules.get(...)` throws, and ES modules cache a failed evaluation, so the throw disables the module for the whole session instead of being retried. The bridge is a real ES module and resolves at evaluation time.
+
 - **The loot window registry is Blacksmith's** (`scripts/window-loot.js`): `_windows` and the hand-rolled `open` are gone in favour of `BlacksmithToolWindowBaseV2.openFor`. The map they replace had a real bug in it — the entry was written before the first render and removed only in `_onClose`, so a window whose first render *threw* stayed registered, and every later open took the "already open, focus it" branch on an instance that had never opened. That body was unlootable until the page was reloaded, which is exactly why it never reproduced: a static map dies with the page, so the evidence went with it. `openFor` deletes the entry when a render throws, and its registries are per subclass, so a Loot window and a Shop window on one token no longer contend.
 
 ### Fixed

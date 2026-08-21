@@ -5,7 +5,7 @@
 import { MODULE } from './const.js';
 import '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { notify } from './notifications.js';
-import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-base.js';
+import { BlacksmithWindowBaseV2 } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { ImageCacheManager } from './manager-image-cache.js';
 import { UIContextMenu } from './ui-context-menu.js';
 import { isEmbeddedAlive } from './document-liveness.js';

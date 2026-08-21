@@ -1,4 +1,13 @@
-import { BlacksmithToolWindowBaseV2 } from '/modules/coffee-pub-blacksmith/scripts/window-tool-base.js';
+// The bridge, not `scripts/`. `scripts/` paths are not Blacksmith's stable contract
+// and can move under us; `api/blacksmith-api.js` re-exports both window bases for
+// exactly this reason.
+//
+// It also has to be an import rather than a read from `module.api`. `extends` is
+// evaluated when this file is evaluated, and `game` does not exist yet — a top-level
+// `game.modules.get(...)` throws, and ES modules cache a failed evaluation, so the
+// throw disables the module for the whole session instead of being retried. The
+// bridge is a real ES module, so it resolves at evaluation time.
+import { BlacksmithToolWindowBaseV2 } from '/modules/coffee-pub-blacksmith/api/blacksmith-api.js';
 import { MODULE } from './const.js';
 import { notify } from './notifications.js';
 import { isPhysical, denominations, hasBatchTransfer } from './loot-inventory.js';
