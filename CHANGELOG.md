@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [Unreleased]
+
+### Changed
+- **The loot window registry is Blacksmith's** (`scripts/window-loot.js`): `_windows` and the hand-rolled `open` are gone in favour of `BlacksmithToolWindowBaseV2.openFor`. The map they replace had a real bug in it — the entry was written before the first render and removed only in `_onClose`, so a window whose first render *threw* stayed registered, and every later open took the "already open, focus it" branch on an instance that had never opened. That body was unlootable until the page was reloaded, which is exactly why it never reproduced: a static map dies with the page, so the evidence went with it. `openFor` deletes the entry when a render throws, and its registries are per subclass, so a Loot window and a Shop window on one token no longer contend.
+
+### Fixed
+- **Applying a dead-token image to a token that had already gone.** The path ran several awaits — storing the current image — before writing, and re-checked nothing after any of them. It now checks between each write, and the catch distinguishes "the token was deleted" from a genuine failure rather than reporting both as errors. Reported by a Blacksmith harness run that creates and deletes tokens faster than a human can, which is the only way this surfaces.
+
+- **A racing portrait write reported as an error.** This one was already guarded, and the guard was correct — it just cannot help. It proves the Actor was alive at the moment it ran; the write is deleted *during* its own await, which no synchronous check before it can cover. The try/catch is the backstop the guard cannot be, so the only useful question left is whether the write failed because the thing went away — which is the state we wanted — or for some other reason. Those are now reported as two different things.
+
 ## [13.3.3]
 
 ### Fixed

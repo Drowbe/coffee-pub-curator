@@ -4211,7 +4211,21 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
             try {
                 await actor.setFlag(MODULE.ID, 'originalPortrait', originalPortrait);
             } catch (error) {
-                BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Could not store original portrait: ${error.message}`, "", true, false);
+                // The check above is correct and does not help here. It proves the
+                // Actor was alive at the moment it ran; this write is deleted *during*
+                // its own await, which no synchronous guard before it can cover. The
+                // try/catch is the backstop the guard cannot be.
+                //
+                // So the only question left is whether the write failed because the
+                // thing went away -- which is fine, and the state we wanted -- or for
+                // some other reason, which is not. Reported as two different things,
+                // because a harness creating and deleting tokens in milliseconds hits
+                // the first constantly and it is not news.
+                if (!isActorAlive(actor)) {
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Portrait Image Replacement: Actor was removed while storing its portrait", "", true, false);
+                } else {
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Portrait Image Replacement: Could not store original portrait: ${error.message}`, "", true, false);
+                }
                 return;
             }
         }

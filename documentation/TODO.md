@@ -139,6 +139,13 @@ fixed. This is the same shape as Regent's forked window base, which they already
 Both are now thin accessors that forward to the shared implementation and cannot drift. The files were kept
 rather than removed outright so the filename someone would search for explains why the fork is gone.
 
+**One thing the fork was accidentally right about, for when it matters.** Blacksmith's `pre*` cancellation
+is opt-in: a handler that returns `false` only cancels if its registration declares `canCancel: true`. The
+fork restricted cancellation to `preUpdateToken` and nothing else, which was a whitelist rather than a flag,
+but it was the same instinct — and the restriction went with the fork. **Curator registers no `pre*` hook
+today**, so nothing is currently affected; if you add one and expect returning `false` to stop the update,
+declare the flag or it will silently do nothing.
+
 **The rule.** A copy taken before a fix keeps the problem the hub has solved and can never pick up anything
 that lands later. You find those bugs yourself, eventually, one confusing report at a time. If Curator needs
 behaviour a shared component lacks, send it to Blacksmith as a change to theirs — do not fork.

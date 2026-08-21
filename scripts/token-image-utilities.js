@@ -201,9 +201,20 @@ export class TokenImageUtilities {
             const deadTokenPath = TokenImageUtilities.getDeadTokenImagePath(isPlayerCharacter);
             
             if (deadTokenPath) {
+                // Several awaits have already run above -- the stored-image writes -- and
+                // a token can die in any of them. Re-checked here rather than trusting
+                // the check at the top of the function, which proved something about a
+                // different moment.
+                if (!isTokenAlive(tokenDocument)) {
+                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Skipping dead token image - token was removed", "", true, false);
+                    return;
+                }
                 try {
                     await tokenDocument.update({ 'texture.src': deadTokenPath });
+                    // And again between each write, for the same reason.
+                    if (!isTokenAlive(tokenDocument)) return;
                     await tokenDocument.setFlag(MODULE.ID, 'isDeadTokenApplied', true);
+                    if (!isTokenAlive(tokenDocument)) return;
                     await tokenDocument.setFlag(MODULE.ID, 'imageState', 'dead');
                    
                     // Play death sound based on character type
@@ -213,7 +224,15 @@ export class TokenImageUtilities {
                         await BlacksmithUtils.playSound(sound, 0.7, false, true);
                     }
                 } catch (error) {
-                    BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying dead token: ${error.message}`, "", false, false);
+                    // A token deleted *inside* one of those awaits lands here however
+                    // many checks precede it: a synchronous check cannot cover the
+                    // asynchronous gap after it. That is the outcome we wanted -- do
+                    // not dress it up as a failure.
+                    if (!isTokenAlive(tokenDocument)) {
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, "Token Image Utilities: Token was removed while applying its dead image", "", true, false);
+                    } else {
+                        BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `Token Image Utilities: Error applying dead token: ${error.message}`, "", false, false);
+                    }
                 }
             }
         }

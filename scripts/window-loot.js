@@ -20,7 +20,6 @@ function _blacksmith() {
 }
 
 export class LootWindow extends BlacksmithToolWindowBaseV2 {
-    static _windows = new Map();
 
     static DEFAULT_OPTIONS = foundry.utils.mergeObject(
         foundry.utils.mergeObject({}, super.DEFAULT_OPTIONS ?? {}),
@@ -70,34 +69,42 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
         this.busy = false;
     }
 
+    /**
+     * Open the window for a body, or bring the open one forward.
+     *
+     * The registry is `BlacksmithToolWindowBaseV2`'s now. The hand-rolled one this
+     * replaces had a real bug in it: the entry was written before the first render and
+     * removed only in `_onClose`, so a window whose first render *threw* stayed
+     * registered — and every later open took the "already open, focus it" branch on an
+     * instance that had never opened. That body became unlootable until the page was
+     * reloaded, which is exactly why it never reproduced: a static map dies with the
+     * page, so the evidence went with it. `openFor` deletes the entry when a render
+     * throws.
+     *
+     * The registries are per subclass, so a Loot window and a Shop window on one token
+     * no longer contend for the same key.
+     *
+     * This wrapper stays for the presence announcement, which is Curator's and not the
+     * base's: everything else here is now one line of delegation.
+     */
     static async open(tokenDocument) {
-        const existing = this._windows.get(tokenDocument.uuid);
-        if (existing) return existing.render(true);
-        const win = new this(tokenDocument);
-        this._windows.set(tokenDocument.uuid, win);
-        await win.render(true);
-        LootManager.announcePresence(tokenDocument.uuid);
+        const win = await this.openFor(tokenDocument);
+        if (win) LootManager.announcePresence(tokenDocument.uuid);
         return win;
-    }
-
-    static isOpenFor(tokenUuid) {
-        return this._windows.has(tokenUuid);
     }
 
     /** The character the local user is looting as, for presence broadcasts. */
     static recipientFor(tokenUuid) {
-        return this._windows.get(tokenUuid)?.recipient ?? null;
+        return this.openWindowFor(tokenUuid)?.recipient ?? null;
     }
 
     static closeForToken(tokenUuid) {
-        const win = this._windows.get(tokenUuid);
-        if (win) void win.close();
+        void this.closeFor(tokenUuid);
     }
 
     /** Every open window on this client re-reads current Actor data. */
     static refreshForToken(tokenUuid) {
-        const win = this._windows.get(tokenUuid);
-        if (win) void win.render(false);
+        void this.openWindowFor(tokenUuid)?.render(false);
     }
 
     async _resolveToken() {
@@ -258,7 +265,7 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
             this.busy = false;
             this.element?.classList.remove('curator-loot-busy');
             // Bury closes the window, and rendering a closed Application throws.
-            if (this.constructor._windows.get(this.tokenUuid) === this) await this.render(false);
+            if (this.constructor.openWindowFor(this.tokenUuid) === this) await this.render(false);
         }
     }
 
@@ -863,7 +870,6 @@ export class LootWindow extends BlacksmithToolWindowBaseV2 {
     }
 
     _onClose(options) {
-        this.constructor._windows.delete(this.tokenUuid);
         LootManager.clearPresence(this.tokenUuid);
         super._onClose?.(options);
     }
