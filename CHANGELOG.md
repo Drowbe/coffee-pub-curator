@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [Unreleased]
+## [13.3.4]
 
 ### Changed
 - **Blacksmith's window base classes are imported from the bridge**, not from `scripts/`. Three files reached into `/modules/coffee-pub-blacksmith/scripts/window-base.js` and `window-tool-base.js`; those paths are not Blacksmith's stable contract and can move underneath us. `api/blacksmith-api.js` re-exports both bases for exactly this purpose.
