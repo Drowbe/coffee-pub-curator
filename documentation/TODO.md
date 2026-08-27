@@ -172,6 +172,18 @@ Shipped in 13.3.0. What is left is comfort, not capability.
   should not be requested without one.
 - **Loot interaction sound.** `plans/plan-loot.md` section 13 lists it; never built. Nobody has asked.
 
+## Turn an image into a token with linked lights and sounds (opened 2026-08-27)
+
+Investigate how Curator can cover the *outcome* Token Attacher is used for, without replicating that
+module. Token Attacher bundles images, walls, lights, sounds, and so on into a token — a portable
+campsite or a wagon. The outcome wanted here is narrower: **turn an image into a token that carries
+linked lights and sounds**.
+
+Part of the investigation is Foundry's built-in **vehicle** support, and whether that is the right
+home for the wagon case. Whatever comes of it has to work on Foundry v13 and v14 (`maximum: 14`).
+
+This is an investigation, not an accepted design. Do not start by cloning Token Attacher's model.
+
 ## Shop Tokens — moved out
 
 Superseded 2026-08-09. Shops are their own module, `coffee-pub-merchant`, with the plan at
