@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [14.0.0]
 
 ### Changed
 - **Verified on Foundry v14.** `compatibility` moves to `verified: "14"` while **`minimum` stays at `13`** — v13 support is held until v13 breaks, not dropped. The README carries both badges: v13 yellow for supported, v14 green for verified.
