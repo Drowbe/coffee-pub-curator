@@ -1,6 +1,7 @@
 # Coffee Pub Curator
 
-![Foundry v13](https://img.shields.io/badge/foundry-v13-green)
+![Foundry v13](https://img.shields.io/badge/foundry-v13-yellow)
+![Foundry v14](https://img.shields.io/badge/foundry-v14-green)
 ![MIT License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Disclaimer
@@ -64,8 +65,9 @@ World settings cover loot proximity, whether looting is allowed during combat, w
 
 ## Requirements
 
-- [Coffee Pub Blacksmith](https://github.com/Drowbe/coffee-pub-blacksmith): provides the core API, shared window and dialog components, inventory primitives, socket infrastructure, and settings menus. Curator does not function without it.
+- [Coffee Pub Blacksmith](https://github.com/Drowbe/coffee-pub-blacksmith) **14.1.0 or newer**: provides the core API, shared window and dialog components, inventory primitives, socket infrastructure, and settings menus. Curator does not function without it.
 - **D&D 5e.** Loot generation and looting read `system.quantity`, `system.currency`, and dnd5e's container model.
+- **Foundry v13 or v14.** Verified on v14; v13 is still supported and will be until it breaks.
 
 No other modules are required or recommended.
 

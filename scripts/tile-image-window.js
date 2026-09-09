@@ -1368,10 +1368,13 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
     }
 
     async _onDeleteCache() {
-        const confirmed = await Dialog.confirm({
-            title: 'Delete Tile Image Cache',
+        // DialogV2, as the rest of this file already uses. The v1 `Dialog` this
+        // replaces is legacy ApplicationV1: deprecated in v13 and not something to
+        // carry into v14.
+        const confirmed = await foundry.applications.api.DialogV2.confirm({
+            window: { title: 'Delete Tile Image Cache' },
             content: '<p>Delete the tile image cache? You will need to scan again to browse images.</p>',
-            yes: () => true, no: () => false, defaultYes: false
+            rejectClose: false
         });
         if (!confirmed) return;
         await ImageCacheManager.deleteCache(TILE_MODE);

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Changed
+- **Verified on Foundry v14.** `compatibility` moves to `verified: "14"` while **`minimum` stays at `13`** — v13 support is held until v13 breaks, not dropped. The README carries both badges: v13 yellow for supported, v14 green for verified.
+- **Blacksmith is pinned at 14.1.0 or newer.** That is the release carrying the v14 work Curator relies on, including `HookManager.LEGACY_HOOKS`, which remaps retired hook names and warns rather than registering a name that will never fire. Blacksmith 14.1.0 itself declares `minimum: "13"`, so a v13 world runs both and the pin costs v13 users nothing.
+- **The last three v1 `Dialog` calls are `DialogV2`** (`manager-image-cache.js`, `tile-image-window.js`, `token-image-replacement.js`). Two were confirms hand-rolled as a Promise around a v1 dialog — `DialogV2.confirm` is that method — and one was a three-way choose. This is deprecation hygiene rather than a v14 requirement: `Dialog` is **present and working on 14.367**, and the files already used `DialogV2` elsewhere, so the migration removes an inconsistency rather than a break.
+
+### Verified, not changed
+Measured against the client bundle of Foundry 14.367 on this machine. There is no v13 install here to compare against, so these say **"present on 14.367"** rather than "unchanged since v13":
+
+- **No removed globals.** Nothing in `scripts/` uses a bare `mergeObject`, `duplicate`, `randomID`, `debounce`, `isNewerVersion`, `AudioHelper`, `Sound`, or any dice term. The 16 `foundry.utils.*` calls are namespaced, and the namespace survives.
+- **Both `CONST` properties Curator reads still exist**, along with the exact members it uses: `TABLE_RESULT_TYPES.TEXT` / `.DOCUMENT` and `OCCLUSION_MODES.NONE` / `.FADE`. Checked because a property can vanish from a global that survives — `CONST.CHAT_MESSAGE_TYPES` did exactly that, and confirming its absence is what proved the check works.
+- **No dead hook registrations.** A hook named after a renamed Application class registers fine and never fires, silently; Curator names no such hook.
+- **No stylesheet reaches into core DOM**, which is the other silent v14 failure.
+- **The token interaction claim still has its footing:** `_canView`, `_createInteractionManager` and `clickLeft2` are all present in the 14.367 bundle.
+
+
 
 ## [13.3.4]
 

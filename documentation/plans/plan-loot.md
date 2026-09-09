@@ -274,6 +274,11 @@ the stability and synchronicity rules above already cover.
 **Mechanism, recorded because it bounds our risk.** Blacksmith patches one token instance's one gesture key
 rather than wrapping `Token`'s predicates at class level. An unmatched token is untouched rather than
 merely permitted-as-before, so the `bypassPermission` scoping is structural rather than disciplined.
+**Re-checked on Foundry 14.367 (2026-09-09):** `_canView`, `_createInteractionManager` and `clickLeft2` are
+all still present in the client bundle, so the interaction claim rests on the same footing it did. Counted in
+the bundle rather than probed in a running game, and there is no v13 install on this machine to compare
+against — so this says "present on 14.367", not "unchanged since v13".
+
 Blacksmith also confirmed `Token#_canView` has exactly one consumer in the entire v13 client — the
 `clickLeft2` entry in the permissions map. Record that as a fact about v13 today, not a guarantee to build
 on; re-verify it against v14.

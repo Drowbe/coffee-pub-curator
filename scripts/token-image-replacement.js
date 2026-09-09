@@ -1373,26 +1373,16 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         const cache = ImageCacheManager.getCache(this.mode);
         const fileCount = cache.files.size;
         
-        // Show confirmation dialog using ApplicationV2-compatible approach
-        const confirmed = await new Promise((resolve) => {
-            new Dialog({
-                title: `Delete ${modeLabel} Cache`,
-                content: `<p>Are you sure you want to delete the entire ${modeLabel.toLowerCase()} image cache?</p><p>This will remove ${fileCount} cached ${modeLabel.toLowerCase()} images.</p><p><strong>This action cannot be undone.</strong></p>`,
-                buttons: {
-                    yes: {
-                        icon: '<i class="fas fa-check"></i>',
-                        label: 'Delete',
-                        callback: () => resolve(true)
-                    },
-                    no: {
-                        icon: '<i class="fas fa-times"></i>',
-                        label: 'Cancel',
-                        callback: () => resolve(false)
-                    }
-                },
-                default: 'no',
-                close: () => resolve(false)
-            }).render(true);
+        // Two buttons and a boolean is a confirm, so it is one now. The hand-rolled
+        // Promise around a v1 `Dialog` predates `DialogV2.confirm` and was doing that
+        // method's job by hand -- including `close: () => resolve(false)`, which is
+        // what `rejectClose: false` means.
+        const confirmed = await foundry.applications.api.DialogV2.confirm({
+            window: { title: `Delete ${modeLabel} Cache` },
+            content: `<p>Are you sure you want to delete the entire ${modeLabel.toLowerCase()} image cache?</p><p>This will remove ${fileCount} cached ${modeLabel.toLowerCase()} images.</p><p><strong>This action cannot be undone.</strong></p>`,
+            yes: { label: 'Delete', icon: 'fas fa-check' },
+            no: { label: 'Cancel', icon: 'fas fa-times', default: true },
+            rejectClose: false
         });
 
         if (confirmed) {

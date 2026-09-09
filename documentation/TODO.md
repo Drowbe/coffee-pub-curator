@@ -180,7 +180,7 @@ campsite or a wagon. The outcome wanted here is narrower: **turn an image into a
 linked lights and sounds**.
 
 Part of the investigation is Foundry's built-in **vehicle** support, and whether that is the right
-home for the wagon case. Whatever comes of it has to work on Foundry v13 and v14 (`maximum: 14`).
+home for the wagon case. Whatever comes of it has to work on Foundry v13 and v14 (`minimum: 13`, `verified: 14`).
 
 This is an investigation, not an accepted design. Do not start by cloning Token Attacher's model.
 

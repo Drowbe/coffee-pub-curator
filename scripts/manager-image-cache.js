@@ -1355,32 +1355,23 @@ export class ImageCacheManager {
         
         // Check if we already have a working cache
         if (cache.files.size > 0) {
-            const choice = await new Promise((resolve) => {
-                new Dialog({
-                    title: `${modeLabel} Image Replacement`,
-                    content: `<p>You already have ${cache.files.size} images in your ${modeLabel.toLowerCase()} cache.</p><p>Choose your scan type:</p><ul><li><strong>Incremental Update:</strong> Only scan for new/changed images (faster)</li><li><strong>Full Rescan:</strong> Start over and scan everything (slower)</li></ul>`,
-                    buttons: {
-                        incremental: {
-                            icon: '<i class="fas fa-sync-alt"></i>',
-                            label: "Incremental",
-                            callback: () => resolve('incremental')
-                        },
-                        full: {
-                            icon: '<i class="fas fa-redo"></i>',
-                            label: "Full Rescan",
-                            callback: () => resolve('full')
-                        },
-                        cancel: {
-                            icon: '<i class="fas fa-times"></i>',
-                            label: "Cancel",
-                            callback: () => resolve(false)
-                        }
-                    },
-                    default: "incremental"
-                }).render(true);
+            // DialogV2, like the two cache prompts beside it. `wait` returns the
+            // chosen button's action, so the hand-rolled Promise that wrapped the v1
+            // `Dialog` is the method's own return value now. Closing the window is a
+            // cancel, which is what `rejectClose: false` plus a null `close` says.
+            const choice = await foundry.applications.api.DialogV2.wait({
+                window: { title: `${modeLabel} Image Replacement` },
+                content: `<p>You already have ${cache.files.size} images in your ${modeLabel.toLowerCase()} cache.</p><p>Choose your scan type:</p><ul><li><strong>Incremental Update:</strong> Only scan for new/changed images (faster)</li><li><strong>Full Rescan:</strong> Start over and scan everything (slower)</li></ul>`,
+                buttons: [
+                    { action: 'incremental', label: 'Incremental', icon: 'fas fa-sync-alt', default: true },
+                    { action: 'full', label: 'Full Rescan', icon: 'fas fa-redo' },
+                    { action: 'cancel', label: 'Cancel', icon: 'fas fa-times' }
+                ],
+                rejectClose: false,
+                close: () => false
             });
             
-            if (choice === false) {
+            if (choice === false || choice === 'cancel' || choice == null) {
                 BlacksmithUtils.postConsoleAndNotification(MODULE.NAME, `${modeLabel} Image Replacement: Scan cancelled by user`, "", true, false);
                 return;
             }
