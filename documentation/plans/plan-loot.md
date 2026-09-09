@@ -281,7 +281,7 @@ against — so this says "present on 14.367", not "unchanged since v13".
 
 Blacksmith also confirmed `Token#_canView` has exactly one consumer in the entire v13 client — the
 `clickLeft2` entry in the permissions map. Record that as a fact about v13 today, not a guarantee to build
-on; re-verify it against v14.
+on. (Re-verified on 14.367 — see the note above.)
 
 `LootManager.open(tokenDocument)` remains the guarded entry point that both the gesture and the chat card
 call. It re-checks `isLootable` independently of the registry.

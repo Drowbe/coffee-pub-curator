@@ -155,6 +155,20 @@ routing it through the GM would make an absent GM look like an empty room. A win
 so anyone already there re-announces, and announces again when the acting character changes. Departure is
 covered twice — an explicit close message and a `userConnected` hook for a client that vanished.
 
+## One window per body
+
+The loot window's registry is `BlacksmithToolWindowBaseV2`'s, through `openFor` / `openWindowFor` /
+`closeFor`. Curator's own `_windows` map is gone, and with it a bug worth remembering: the entry was written
+*before* the first render and removed only in `_onClose`, so a window whose first render **threw** stayed
+registered — and every later open took the "already open, focus it" branch on an instance that had never
+opened. That body was unlootable until the page was reloaded, which is exactly why it never reproduced: a
+static map dies with the page and takes the evidence with it. `openFor` deletes the entry when a render
+throws.
+
+Registries are per subclass, so a Loot window and another module's window on the same token no longer
+contend for one key. `LootWindow.open` survives only as a thin wrapper, because announcing presence is
+Curator's business and not the base class's.
+
 ## Async writes
 
 Anything writing to a Token, or to an Actor belonging to one, **after an await** must re-check it still
@@ -167,7 +181,16 @@ the window in which the document can be deleted.
 An unlinked token's Actor is synthetic and dies with its token, so a flag write to it lands on the token's
 embedded document — checking the Actor never catches that. Foundry reports the failure as
 `undefined id [...] does not exist in the EmbeddedCollection`, which reads as a collection problem rather
-than a lifetime one. A try/catch is the backstop, not the fix.
+than a lifetime one.
+
+**And a guard before an await cannot cover that await.** This is the part the rule above does not say. A
+synchronous check proves the document was alive at the moment it ran; the deletion can land *inside* the
+`await` that follows, and no guard position fixes that — there is nowhere earlier to stand. So the catch is
+not a backstop for carelessness, it is the only thing that can answer the question at all, and what it has
+to answer is **whether the write failed because the document went away** — which is the outcome we wanted —
+**or for some other reason**, which is not. Both paths in `token-image-utilities.js` and
+`token-image-replacement.js` report those as two different things, because a harness creating and deleting
+tokens in milliseconds hits the first constantly and it is not news.
 
 ## Known limitations
 

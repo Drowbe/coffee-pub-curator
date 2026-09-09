@@ -1,6 +1,12 @@
 # Token and Portrait Image Replacement Architecture
 
-**Audience:** Contributors to the Blacksmith codebase.
+**Audience:** Contributors to Curator. (This system began in Blacksmith and was extracted; the line above
+used to say so, and said it long after it stopped being true.)
+
+**Foundry compatibility:** verified on v14, supported on v13 — `minimum: "13"`, `verified: "14"`. Held on
+v13 until v13 breaks rather than dropped. Nothing in this system uses a global that is absent on 14.367; the
+`FilePicker` it leans on heavily is reached through `foundry.applications.apps.FilePicker.implementation`
+and is present on both.
 
 ## Overview
 The Token / Portrait Image Replacement system allows GMs to replace token and portrait images with alternatives from cached libraries. **Token** and **portrait** modes share the same matching algorithm and UI patterns but use **separate caches** and mode-specific settings. The system uses a unified matching algorithm across all interfaces; the main difference is auto-apply vs. user choice and token vs. portrait target.
@@ -386,14 +392,42 @@ ELSE (browsing mode):
 ## Dependencies
 
 ### External
-- FoundryVTT Application system
+- FoundryVTT Application system — `ApplicationV2`, and `DialogV2` for every prompt. The last three v1
+  `Dialog` calls went in the v14 pass; `Dialog` still exists on 14.367, so that was hygiene rather than a
+  fix, but nothing here should reintroduce it.
+- `foundry.applications.apps.FilePicker.implementation` — every directory scan. Namespaced deliberately:
+  the bare global is a different, older thing.
 - Handlebars templating
 - jQuery for DOM manipulation
 
 ### Internal
 - `const.js`: Module constants
 - `api-core.js`: Logging and settings utilities
-- `manager-hooks.js`: Hook management system
+- `manager-hooks.js`: Hook management — a **thin forwarder** to Blacksmith's `HookManager`, not a fork.
+- `document-liveness.js`: `isTokenAlive` / `isActorAlive`. **Load-bearing here**, because this system writes
+  to tokens after awaits and on delays. See *Writes that land late*, below.
+
+## Writes that land late
+
+Image replacement writes to a token *after* awaiting — storing the original image, then applying the new
+one — and sometimes after a deliberate delay. Both are windows in which the token can be deleted, and a
+write to a deleted token throws into a promise nobody is awaiting.
+
+Two rules, and the second is the one that is easy to miss:
+
+1. **Re-check between writes**, not once at the top. `isTokenAlive` / `isActorAlive` from
+   `document-liveness.js`. A check before scheduling a timer is not a check — it belongs *inside* the
+   callback, because the delay is the window.
+2. **A guard cannot cover the await it precedes.** The check proves the document was alive when it ran; the
+   deletion can land inside the very `await` that follows. There is nowhere earlier to stand. So the
+   `try`/`catch` is not a backstop for sloppiness — it is the only thing that can answer, and what it must
+   answer is *whether the write failed because the document went away*, which is the state we wanted, **or
+   for another reason**, which is a bug. Reporting both as errors buries the second in the first.
+
+The symptom when this is wrong: `undefined id [...] does not exist in the EmbeddedCollection`, surfacing
+from a library frame rather than from the code that scheduled the write. It appears under harnesses that
+create and delete tokens in milliseconds, and almost never in ordinary play — which is why it survived for
+months.
 
 ## Performance Considerations
 

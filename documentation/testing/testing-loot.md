@@ -10,7 +10,11 @@ describes what the system actually does. This file is the practical order to wor
 ## Setup
 
 - [x] World **restarted** (not just refreshed) since `module.json` gained `"socket": true`.
-- [x] Blacksmith on a build with `api.tokens`, `api.inventory`, and `transferItems`.
+- [x] Blacksmith **14.1.0 or newer** — the manifest requires it, and it carries `HookManager.LEGACY_HOOKS`,
+      which remaps retired hook names rather than letting a registration succeed against a name that will
+      never fire.
+- [x] Foundry **v13 or v14**. Verified on v14; v13 stays supported until it breaks, so a v13 pass is still
+      meaningful if you have one to hand — nobody here has a v13 install to check against.
 - [x] A primary party is set for the world (`game.actors.party`), or Send-to-Party is expected to be off.
 - [x] A non-GM player login available, owning **two** characters if possible.
 - [x] `tokenConvertDeadToLoot` on.
