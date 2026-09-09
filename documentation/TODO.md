@@ -310,9 +310,17 @@ Per guide, what still needs somebody to sit at the table and check:
 - **`userguide-image-cache.md`** — the folders-not-files claim is well supported (see the scan
   performance work), but the thirty-second save interval and the delete-cache flow are described from
   the source.
-- **`userguide-settings.md`** — 43 of the 85 visible settings have **no hint text in `lang/en.json`**, so
-  their descriptions here were written rather than quoted. Those are the rows most likely to be subtly
-  wrong. Worth back-filling the hints into `en.json` so the settings tab and the guide agree.
+- **`userguide-settings.md`** — 43 of the 85 visible settings carry no hint text, **deliberately**, so
+  their descriptions in the guide were written rather than quoted from the UI. Those are the rows most
+  likely to be subtly wrong, and the ones to check first.
+
+  **The empty hints are the convention and must not be "fixed".** Sections and headers carry the
+  explanation, and repeating one hint across ten sliders in a set makes the tab harder to scan, not
+  easier — the reader has already been told what the group is for by the heading above it. A hint earns
+  its place on a setting that is *not* obvious from the group it sits in, which is why the two
+  drop-shadow booleans have one and the eight Data Weighting sliders do not.
+
+  This is recorded because it reads as an omission from outside. It was read that way here, once.
 - **`userguide-getting-started.md`**, **`userguide-gm.md`**, **`userguide-dead-tokens.md`** — assembled
   from the other guides and the settings; no claim in them is unique, but the five-minute walkthroughs
   have not been followed start to finish by anyone.
