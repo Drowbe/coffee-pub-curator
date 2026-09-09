@@ -1,5 +1,7 @@
 # Loot Architecture
 
+**Audience:** contributors to Curator.
+
 How corpse looting actually works, as implemented. `../plans/plan-loot.md` records intent and the reasoning
 behind decisions; this document describes the system that exists. Where they disagree, this one is right and
 the plan is stale.

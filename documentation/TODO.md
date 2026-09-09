@@ -252,3 +252,73 @@ transfer becomes a Blacksmith primitive before anyone attempts the workflow on t
     dialog returning a plausible answer.
   - Loot as a different character: open the picker, choose the second character, confirm, and check the item
     lands on that one rather than the first.
+
+## Token / portrait separation — implementation status
+
+Moved out of `architecture/architecture-imagereplacement.md`: an architecture document describes what the
+system does, and a status list describes work, which is this file's job.
+
+The system has been migrated so token and portrait experiences are fully separated while sharing core logic.
+
+### What’s in place
+- **Separate caches**: `portraitCache` and token `cache`; scan, refresh, delete, pause are mode-aware.
+- **Mode toggle**: UI switches between token and portrait; categories, tags, search, and apply target are mode-specific.
+- **Search terms**: `_getSearchTerms(source, mode)` — portrait from actor, token from token.document.
+- **Apply target**: Portrait uses `actor.update({ img })`; token uses `token.update({ texture.src })`.
+- **Settings**: Portrait-specific settings (ignored folders, auto-update, deprioritized/ignored words) and mode-specific thresholds/variability.
+- **Cache key**: Path+filename so same-named files in different folders are distinct.
+- **Global controls**: Mode toggle, Convert Dead, Loot Dead in a global header; mode-specific controls (fuzzy search, update dropped, threshold, scan, delete cache) in the main header with mode-specific labels and notifications.
+
+### Variability
+- **Token**: `tokenImageReplacementVariability` — random selection from top-scoring matches; applied on token drop.
+- **Portrait**: `portraitImageReplacementVariability` — same logic; applied when portraits are updated on drop.
+- **Selection**: `_selectMatchingImage()` finds all matches with the highest score and randomly picks one when variability is on; otherwise best match.
+- **Update dropped**: `portraitImageReplacementUpdateDropped` — portrait-specific toggle to update actor portraits when tokens are created; works independently from token replacement.
+
+### Testing (summary)
+- **Token mode**: Scan/categories/tags/thumbnails/search/apply/delete cache/variability/update dropped all token-only.
+- **Portrait mode**: Same checks for portrait cache and actor target.
+- **Mode switch**: Categories, tags, and cache operations update correctly; selection state preserved as intended.
+- **Global controls**: Mode toggle, Convert Dead, Loot Dead apply to both modes and stay visible.
+
+### Planned: Phase 6 — Bulk migration tool
+- **Goal**: Migrate existing tokens/portraits to use image-replacement cache (match by filename, apply from cache).
+- **Planned pieces**: Migration button (mode-specific), settings (compendiums, include world, backup, dry run), scan world/compendiums, match by filename, apply updates with progress, report (counts, unmatched list, export). Safety: backup option, dry-run preview, confirmation. Not yet implemented.
+
+## User guides — what is written but not walked
+
+Ten guides were written on 2026-09-09 from the settings registrations, the loot testing checklist, and
+the code. **Coverage was chosen over certainty**, per the suite's documentation standard: a missing guide
+gives a reader nothing, while an unverified one gives them something mostly right and a note saying
+which parts to distrust.
+
+Per guide, what still needs somebody to sit at the table and check:
+
+- **`userguide-player.md` — most likely to be wrong, and the one a player actually reads.** Its claims
+  are read off Curator's permission checks rather than seen from a player's client. Every "you cannot do
+  this" needs confirming from a non-GM login: the proximity refusal, the in-combat block, the missing
+  Give and Loot-to-Party controls, and that no quantity editor appears.
+- **`userguide-looting.md`** — written from `testing/testing-loot.md`, which is itself a checked list, so
+  this is the best-supported of the set. The distribute remainder and the bury-approval prompt are worth
+  re-reading against the window.
+- **`userguide-loot-generation.md`** — the Amount / Max Quantity interaction is described from the
+  setting names and the code, not from watching bodies fill. Confirm that Amount is rolls and Max
+  Quantity is per-result.
+- **`userguide-token-images.md`** and **`userguide-tile-placement.md`** — the effect of each Data
+  Weighting slider is described in principle. Nobody has tuned them against a real library and watched
+  the ranking move.
+- **`userguide-image-cache.md`** — the folders-not-files claim is well supported (see the scan
+  performance work), but the thirty-second save interval and the delete-cache flow are described from
+  the source.
+- **`userguide-settings.md`** — 43 of the 85 visible settings have **no hint text in `lang/en.json`**, so
+  their descriptions here were written rather than quoted. Those are the rows most likely to be subtly
+  wrong. Worth back-filling the hints into `en.json` so the settings tab and the guide agree.
+- **`userguide-getting-started.md`**, **`userguide-gm.md`**, **`userguide-dead-tokens.md`** — assembled
+  from the other guides and the settings; no claim in them is unique, but the five-minute walkthroughs
+  have not been followed start to finish by anyone.
+
+Two things found while writing, both fixed: four `-Label`/`-Hint` keys for the drop-shadow settings were
+referenced but missing from `en.json`, so those two settings rendered as raw keys on screen; and
+`documentation/testing/` was in the wrong place — the standard puts `testing/` at the repo root, where
+the publisher cannot reach it.
+
