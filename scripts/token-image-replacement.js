@@ -615,14 +615,6 @@ export class TokenImageReplacementWindow extends BlacksmithWindowBaseV2 {
         this._registerTokenHook();
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
-        this._attachDelegationOnce();
-        this._initializeFilterToggleButton();
-        this._initializeThresholdSlider();
-    }
-
-
     async _findMatches() {
         try {
         // Reset results

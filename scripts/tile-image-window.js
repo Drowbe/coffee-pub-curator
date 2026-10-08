@@ -382,13 +382,6 @@ export class TileImageWindow extends BlacksmithWindowBaseV2 {
         this._initializeParamSliders();
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
-        this._attachDelegationOnce();
-        this._initializeFilterToggleButton();
-        this._initializeParamSliders();
-    }
-
     // ------------------------------------------------------------------
     // render / close
     // ------------------------------------------------------------------
