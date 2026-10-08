@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.0.1]
+
+### Fixed
+- **Removed two dead `activateListeners` methods** (`tile-image-window.js`, `token-image-replacement.js`). Both windows extend Blacksmith's `ApplicationV2`-based window class, which never calls `activateListeners`, so the methods never ran. Their work was already duplicated in `_onFirstRender`/`render`, so nothing changes in behavior.
 
 ## [14.0.0]
 
